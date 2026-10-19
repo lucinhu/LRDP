@@ -306,5 +306,9 @@
   "键盘模拟请使用英文输入法；本地中文请切换“文字输入”。": "Use an English keyboard in simulation mode. For local Chinese input, switch to “Text input”.",
   "隐藏密码": "Hide password",
   "需要提供登录信息": "Credentials required",
-  "需要更新远程密码": "Remote password update required"
+  "需要更新远程密码": "Remote password update required",
+  "粘贴本机文字": "Paste local text",
+  "本机剪贴板没有文字；图片暂不支持，文件请使用文件中转站": "No text in the local clipboard. Images are not supported yet; use File transfer for files.",
+  "已向远程电脑发送粘贴，请确认目标输入框已获得焦点": "Paste sent to the remote computer. Make sure the destination text field has focus.",
+  "无法读取本机剪贴板，请检查系统权限后重试": "Cannot read the local clipboard. Check system permissions and try again."
 }

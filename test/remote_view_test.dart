@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lrdp/models/connection_profile.dart';
 import 'package:lrdp/rdp/rdp_session.dart';
@@ -41,7 +42,81 @@ class RecordingSession extends RdpSession {
       inputs.where((e) => e.$1 == 0).toList();
 }
 
+class ClipboardRecordingSession extends RecordingSession {
+  ClipboardRecordingSession() {
+    features |= 1;
+  }
+  final pasted = <String>[];
+  final announced = <String>[];
+  @override
+  Future<bool> paste(String text) async {
+    pasted.add(text);
+    return true;
+  }
+
+  @override
+  void clipboard(String text) => announced.add(text);
+}
+
 void main() {
+  for (final payload in ['本机复制的中文 😀', '', null]) {
+    testWidgets('paste local clipboard reads text explicitly: $payload', (
+      tester,
+    ) async {
+      final session = ClipboardRecordingSession();
+      addTearDown(session.dispose);
+      final reads = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.getData') {
+            reads.add(call.arguments as String);
+            return payload == null ? null : {'text': payload};
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RemoteView(
+              session: session,
+              reconnect: () {},
+              disconnect: () {},
+              active: true,
+              toggleFullscreen: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // A pending remote update must not overwrite the user's local payload.
+      session.remoteClipboard = '远端原有内容';
+      await tester.tap(find.text('更多'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('粘贴本机文字'));
+      await tester.pumpAndSettle();
+      expect(reads, ['text/plain']);
+      expect(session.announced, isEmpty);
+      expect(
+        session.pasted,
+        payload == null || payload.isEmpty ? [] : [payload],
+      );
+      expect(
+        find.textContaining(
+          payload == null || payload.isEmpty ? '本机剪贴板没有文字' : '已向远程电脑发送粘贴',
+        ),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
   testWidgets(
     'auto size follows the viewport, debounces rotation and holds during IME',
     (tester) async {
@@ -604,6 +679,115 @@ void main() {
     await tester.pump();
     return (session, transform, focus);
   }
+
+  for (final relative in [false, true]) {
+    testWidgets(
+      'physical trackpad retains slow diagonal scroll in mode $relative',
+      (tester) async {
+        final (session, transform, _) = await surface(
+          tester,
+          trackpad: relative,
+        );
+        final original = transform.value.clone();
+        final pointer = TestPointer(51, PointerDeviceKind.trackpad);
+        await tester.sendEventToBinding(
+          pointer.panZoomStart(const Offset(200, 200)),
+        );
+        for (var i = 1; i <= 48; i++) {
+          await tester.sendEventToBinding(
+            pointer.panZoomUpdate(
+              const Offset(200, 200),
+              pan: Offset(i / 2, -i.toDouble()),
+            ),
+          );
+        }
+        await tester.sendEventToBinding(pointer.panZoomEnd());
+        expect(session.mouseEvents, [
+          (0, 0x388, 0, 0),
+          (0, 0x388, 0, 0),
+          (0, 0x588, 0, 0),
+        ]);
+        expect(transform.value, original);
+        // Fractions from the previous sequence must not spill into a new one.
+        session.inputs.clear();
+        await tester.sendEventToBinding(
+          pointer.panZoomStart(const Offset(200, 200)),
+        );
+        await tester.sendEventToBinding(
+          pointer.panZoomUpdate(
+            const Offset(200, 200),
+            pan: const Offset(0, 23),
+          ),
+        );
+        await tester.sendEventToBinding(pointer.panZoomEnd());
+        expect(session.mouseEvents, isEmpty);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+
+  testWidgets('physical trackpad pinch zooms without remote wheel or clicks', (
+    tester,
+  ) async {
+    final (session, transform, _) = await surface(tester);
+    final pointer = TestPointer(51, PointerDeviceKind.trackpad);
+    await tester.sendEventToBinding(
+      pointer.panZoomStart(const Offset(200, 200)),
+    );
+    await tester.sendEventToBinding(
+      pointer.panZoomUpdate(
+        const Offset(200, 200),
+        pan: const Offset(20, 30),
+        scale: 1.5,
+      ),
+    );
+    await tester.sendEventToBinding(pointer.panZoomEnd());
+    expect(transform.value.getMaxScaleOnAxis(), closeTo(1.5, .001));
+    expect(session.mouseEvents, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'physical trackpad stops across background and session switches',
+    (tester) async {
+      final active = ValueNotifier(true);
+      addTearDown(active.dispose);
+      final (session, _, _) = await surface(tester, activity: active);
+      final pointer = TestPointer(51, PointerDeviceKind.trackpad);
+      for (final background in [true, false]) {
+        await tester.sendEventToBinding(
+          pointer.panZoomStart(const Offset(200, 200)),
+        );
+        await tester.sendEventToBinding(
+          pointer.panZoomUpdate(
+            const Offset(200, 200),
+            pan: const Offset(0, 20),
+          ),
+        );
+        if (background) {
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.paused,
+          );
+        } else {
+          active.value = false;
+        }
+        await tester.pump();
+        await tester.sendEventToBinding(
+          pointer.panZoomUpdate(
+            const Offset(200, 200),
+            pan: const Offset(0, 120),
+          ),
+        );
+        await tester.sendEventToBinding(pointer.panZoomEnd());
+        expect(session.mouseEvents, isEmpty);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+      }
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('direct tap maps coordinates and long press sends right button', (
     tester,

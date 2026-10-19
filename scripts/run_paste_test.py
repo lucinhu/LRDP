@@ -17,6 +17,8 @@ parser.add_argument('--library', type=Path)
 parser.add_argument('--asan', action='store_true')
 parser.add_argument('--wine', action='store_true')
 parser.add_argument('--flutter', action='store_true')
+parser.add_argument('--case', choices=('unicode', 'unicode_unsupported', 'normal', 'local',
+    'cancel', 'prefetch', 'reject', 'no_ack', 'no_data'))
 args = parser.parse_args()
 assert sum((args.flutter, args.asan, args.wine)) <= 1
 assert not (args.library and (args.asan or args.wine))
@@ -26,7 +28,8 @@ if args.library:
 library = (args.library or root / ('build/windows-x64/lrdp.dll' if args.wine else 'build/native-asan/liblrdp.so' if args.asan else 'build/native/liblrdp.so')).resolve()
 output = root / 'build/paste-runtime' / mode_name
 output.mkdir(parents=True, exist_ok=True)
-(output / 'VERDICT.json').unlink(missing_ok=True)
+verdict = output / ('VERDICT-' + args.case + '.json' if args.case else 'VERDICT.json')
+verdict.unlink(missing_ok=True)
 flags = shlex.split(subprocess.check_output(['pkg-config', '--cflags', '--libs',
     'freerdp-server3', 'freerdp3', 'winpr3'], text=True))
 fixture = output / 'paste_fixture'
@@ -46,7 +49,10 @@ with tempfile.TemporaryDirectory(prefix='lrdp-paste-test-') as private:
         '-subj', '/CN=localhost', '-keyout', str(key), '-out', str(cert)], check=True, capture_output=True)
     der = subprocess.check_output(['openssl', 'x509', '-in', str(cert), '-outform', 'DER'])
     pin = ':'.join(f'{value:02x}' for value in hashlib.sha256(der).digest())
-    modes = ('unicode', 'unicode_unsupported', 'normal', 'cancel') if args.flutter else ('normal', 'prefetch', 'reject', 'no_ack', 'no_data', 'cancel')
+    modes = ('unicode', 'unicode_unsupported', 'normal', 'local', 'cancel') if args.flutter else ('normal', 'prefetch', 'reject', 'no_ack', 'no_data', 'cancel')
+    if args.case:
+        if args.case not in modes: parser.error('The selected case is not available in this mode')
+        modes = (args.case,)
     for mode in modes:
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
@@ -55,7 +61,11 @@ with tempfile.TemporaryDirectory(prefix='lrdp-paste-test-') as private:
             LRDP_TEST_PIN=pin, LRDP_PASTE_MODE=mode)
         log_path = output / (mode + '.log')
         with log_path.open('w') as log:
-            server = subprocess.Popen([str(fixture), str(port), str(cert), str(key), mode],
+            # Flutter compilation and widget rendering can be slow on loaded
+            # builders. These peer limits do not alter the client's paste timeout.
+            server = subprocess.Popen([str(fixture), str(port), str(cert), str(key),
+                'normal' if mode == 'local' else mode,
+                '180000' if args.flutter else '20000', '45000' if args.flutter else '12000'],
                 env=env, stdout=log, stderr=subprocess.STDOUT)
             try:
                 def listening():
@@ -64,7 +74,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-paste-test-') as private:
                 until(listening, f'{mode}: fixture listener')
                 if args.flutter:
                     subprocess.run(['flutter', 'test', 'test/session_paste_protocol_test.dart',
-                        '--reporter', 'expanded', '--no-pub'], cwd=root, env=env, check=True)
+                        '--reporter', 'expanded', '--no-pub'], cwd=root, env=env, check=True, timeout=240)
                 else:
                     binary = root / ('build/windows-x64/lrdp_paste_test.exe' if args.wine else
                         'build/native-asan/lrdp_paste_test' if args.asan else 'build/native/lrdp_paste_test')
@@ -88,6 +98,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-paste-test-') as private:
                             stderr=subprocess.STDOUT, check=True, timeout=30)
                 assert server.wait(timeout=8) == 0, f'{mode}: peer failed, see {log_path}'
                 report = next(json.loads(line) for line in log_path.read_text().splitlines() if line.startswith('{"mode"'))
+                if mode == 'local': report['entry'] = 'paste_local_clipboard'
                 assert report['passed'], report
                 results.append(report)
                 print(f'PASS: clipboard paste {mode}', flush=True)
@@ -96,5 +107,5 @@ with tempfile.TemporaryDirectory(prefix='lrdp-paste-test-') as private:
                     server.terminate()
                     try: server.wait(timeout=5)
                     except subprocess.TimeoutExpired: server.kill(); server.wait()
-(output / 'VERDICT.json').write_text(json.dumps({'passed': True, 'abi': 5,
+verdict.write_text(json.dumps({'passed': True, 'abi': 5,
     'library_sha256': hashlib.sha256(library.read_bytes()).hexdigest(), 'cases': results}, indent=2) + '\n')

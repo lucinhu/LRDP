@@ -4,6 +4,7 @@
 #include <freerdp/listener.h>
 #include <freerdp/settings.h>
 #include <freerdp/input.h>
+#include <freerdp/update.h>
 #include <freerdp/pointer.h>
 #include <freerdp/channels/wtsvc.h>
 #include <freerdp/channels/channels.h>
@@ -26,6 +27,7 @@ static UINT16 buttons, x, y;
 static unsigned released_scans, released_unicode, released_buttons;
 static unsigned preflight, combined_events;
 static BOOL preflight_drag, preflight_ack;
+static unsigned trackpad_wheels;
 static void check(BOOL condition, const char* message) {
   if (!condition) { failed = TRUE; fprintf(stderr, "FAIL: %s\n", message); }
 }
@@ -33,6 +35,11 @@ static BOOL keyboard(rdpInput* input, UINT16 flags, UINT8 code) {
   (void)input;
   UINT16 scan = (flags & 0x300) | code;
   BOOL up = (flags & KBD_FLAGS_RELEASE) != 0;
+  if (strcmp(mode, "trackpad") == 0) {
+    check(scan == 0x1e, "only the test completion marker is a keyboard event");
+    if (up) marker = TRUE;
+    return !failed;
+  }
   if (scan == 0x30) {
     check(!marker && (up ? transient_down && !transient_up : !transient_down), "transient B is not released twice");
     if (up) transient_up = TRUE; else transient_down = TRUE;
@@ -61,6 +68,16 @@ static BOOL unicode_key(rdpInput* input, UINT16 flags, UINT16 code) {
 }
 static BOOL mouse(rdpInput* input, UINT16 flags, UINT16 px, UINT16 py) {
   (void)input;
+  if (strcmp(mode, "trackpad") == 0) {
+    static const UINT16 expected[] = {
+      0x278, 0x588, 0x278, 0x588, 0x388, 0x478, 0x388, 0x478,
+      0x388, 0x478
+    };
+    check(trackpad_wheels < sizeof(expected) / sizeof(expected[0]) &&
+      flags == expected[trackpad_wheels], "trackpad wheel axis, direction and count");
+    trackpad_wheels++;
+    return !failed;
+  }
   if (flags & PTR_FLAGS_WHEEL) { wheel = TRUE; return TRUE; }
   x = px; y = py;
   UINT16 changed = flags & (PTR_FLAGS_BUTTON1 | PTR_FLAGS_BUTTON2 | PTR_FLAGS_BUTTON3);
@@ -117,16 +134,35 @@ static BOOL accepted(freerdp_listener* listener, freerdp_peer* peer) {
   peer->context->input->MouseEvent = mouse;
   peer->PostConnect = post_connect;
   BOOL blocked = strcmp(mode, "blocked") == 0;
+  BOOL trackpad = strcmp(mode, "trackpad") == 0;
+  BOOL trackpad_frame = FALSE;
   if (blocked) {
     int receive_bytes = 1024;
     check(setsockopt(peer_socket, SOL_SOCKET, SO_RCVBUF, &receive_bytes, sizeof(receive_bytes)) == 0, "small receiver buffer");
   }
   if (ok && peer->Initialize(peer)) {
     UINT64 deadline = GetTickCount64() + 45000;
-    while (!failed && GetTickCount64() < deadline) {
+    while (!failed && !(trackpad && marker) && GetTickCount64() < deadline) {
       if (blocked && marker) { Sleep(20); continue; }
       HANDLE handles[32]; DWORD n = peer->GetEventHandles(peer, handles, 32);
       if (!n || WaitForMultipleObjects(n, handles, FALSE, 20) == WAIT_FAILED || !peer->CheckFileDescriptor(peer)) break;
+      if (trackpad) {
+        if (peer->activated && !trackpad_frame) {
+          BYTE pixels[16 * 16 * 4]; memset(pixels, 0x75, sizeof(pixels));
+          SURFACE_BITS_COMMAND frame = {0};
+          frame.cmdType = CMDTYPE_SET_SURFACE_BITS; frame.destRight = frame.destBottom = 16;
+          frame.bmp.bpp = 32; frame.bmp.width = frame.bmp.height = 16;
+          frame.bmp.bitmapDataLength = sizeof(pixels); frame.bmp.bitmapData = pixels;
+          check(peer->context->update->SurfaceBits(peer->context, &frame), "initial trackpad desktop frame");
+          trackpad_frame = TRUE;
+        }
+        if (trackpad_wheels == 10 && !preflight_ack) {
+          POINTER_POSITION_UPDATE update = {77, 100};
+          check(peer->context->update->pointer->PointerPosition(peer->context, &update), "acknowledge wheel PDUs");
+          preflight_ack = TRUE;
+        }
+        continue;
+      }
       if (!preflight_ack && preflight == 8) {
         POINTER_POSITION_UPDATE update = {77, 98};
         check(preflight_drag && !combined_events, "drag motion and separate move/button PDUs");
@@ -139,6 +175,13 @@ static BOOL accepted(freerdp_listener* listener, freerdp_peer* peer) {
         marker = TRUE; puts("{\"held_acknowledged\":true}"); fflush(stdout);
       }
     }
+  }
+  if (trackpad) {
+    check(marker && preflight_ack && trackpad_wheels == 10, "trackpad completion and exact wheel count");
+    printf("{\"trackpad_passed\":%s,\"wheel_pdus\":%u}\n", failed ? "false" : "true", trackpad_wheels);
+    fflush(stdout);
+    peer->Disconnect(peer); freerdp_peer_context_free(peer); freerdp_peer_free(peer);
+    finished = TRUE; return TRUE;
   }
   if (!blocked) check(marker && !buttons && released_scans == 6 && released_unicode == 3 && released_buttons == 3,
     "all delivered inputs released before transport teardown");
@@ -156,7 +199,7 @@ int main(int argc, char** argv) {
   freerdp_listener* listener = freerdp_listener_new(); if (!listener) return 4;
   listener->PeerAccepted = accepted;
   if (!listener->Open(listener, "127.0.0.1", (UINT16)atoi(argv[1]))) return 5;
-  UINT64 deadline = GetTickCount64() + 30000;
+  UINT64 deadline = GetTickCount64() + (strcmp(mode, "trackpad") == 0 ? 120000 : 30000);
   while (!finished && GetTickCount64() < deadline) {
     HANDLE handles[32]; DWORD n = listener->GetEventHandles(listener, handles, 32);
     if (!n || WaitForMultipleObjects(n, handles, FALSE, 100) == WAIT_FAILED || !listener->CheckFileDescriptor(listener)) break;

@@ -75,6 +75,7 @@ python3 scripts/run_protocol_test.py --avc
 python3 scripts/run_protocol_test.py --avc --flutter
 python3 scripts/run_paste_test.py
 python3 scripts/run_paste_test.py --flutter
+python3 scripts/run_trackpad_test.py
 python3 scripts/run_protocol_test.py --recovery
 python3 scripts/run_cursor_test.py
 python3 scripts/run_cursor_test.py --flutter
@@ -93,6 +94,13 @@ python3 scripts/run_protocol_test.py --release
 窗口绘制验收还需要 Python Pillow（如 Ubuntu 的 `python3-pil` 包）。
 开发时可用 `-DLRDP_USE_SYSTEM_FREERDP=ON` 显式链接系统 FreeRDP 3；发布构建
 应保持默认关闭。文件协议测试另需系统 FreeRDP 3.32.2 的 server/core/WinPR 开发库与 pkg-config；它只把测试服务端链接到系统库，客户端仍是仓库子模块构建的桥接层。`LRDP_NATIVE_LIBRARY` 可为 FFI 测试指定库的绝对路径。
+
+`run_trackpad_test.py` 将 Flutter 桌面触控板手势事件送入生产 worker 与 FreeRDP，
+由独立 TLS 服务端检查竖向/横向滚轮 PDU 的方向和次数，以及捏合、失活后无额外输入。
+事件由测试合成，实体触控板和操作系统驱动仍需单独验收。剪贴板使用方法及当前图片、
+文件范围见 [CLIPBOARD.md](CLIPBOARD.md)。
+只复现“粘贴本机文字”入口可运行 `python3 scripts/run_paste_test.py --flutter --case local`，
+结果写入独立的 `VERDICT-local.json`；不带 `--case` 运行全部对应场景。
 
 ## Windows
 

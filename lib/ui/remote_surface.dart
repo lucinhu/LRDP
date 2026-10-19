@@ -48,6 +48,10 @@ class _RemoteSurfaceState extends State<RemoteSurface>
   double _pairDistance = 1, _wheel = 0, _wheelX = 0;
   String? _pairMode;
   Matrix4 _pairMatrix = Matrix4.identity();
+  int? _panZoomPointer;
+  String? _panZoomMode;
+  Offset _panZoomOrigin = Offset.zero, _trackpadWheel = Offset.zero;
+  Matrix4 _panZoomMatrix = Matrix4.identity();
   bool _mouseInside = false;
   int _serverPositionSerial = 0;
   Size _viewport = Size.zero;
@@ -233,6 +237,7 @@ class _RemoteSurfaceState extends State<RemoteSurface>
     _pairChanged.clear();
     _pairTapEligible = false;
     _multi = true;
+    _endPanZoom();
   }
 
   bool _matrix(Matrix4 value) {
@@ -378,6 +383,73 @@ class _RemoteSurfaceState extends State<RemoteSurface>
       0,
       0,
     );
+  }
+
+  bool get _canPanZoom {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    return widget.active &&
+        widget.session.state == SessionState.connected &&
+        (lifecycle == null || lifecycle == AppLifecycleState.resumed);
+  }
+
+  void _startPanZoom(PointerPanZoomStartEvent event) {
+    if (!_canPanZoom) return;
+    if (!widget.preserveKeyboardFocus) widget.focus.requestFocus();
+    _stopEdgePan();
+    _panZoomPointer = event.pointer;
+    _panZoomMode = widget.pan ? 'zoom' : null;
+    _panZoomOrigin = event.localPosition;
+    _panZoomMatrix = widget.transform.value.clone();
+    _trackpadWheel = Offset.zero;
+  }
+
+  void _updatePanZoom(PointerPanZoomUpdateEvent event) {
+    if (!_canPanZoom || _panZoomPointer != event.pointer) return;
+    final undecided = _panZoomMode == null;
+    if (undecided) {
+      if ((event.scale - 1).abs() > .02) {
+        _panZoomMode = 'zoom';
+      } else if (event.localPan.distance >= 4) {
+        _panZoomMode = 'scroll';
+      }
+    }
+    if (_panZoomMode == 'zoom') {
+      final initialScale = _panZoomMatrix.getMaxScaleOnAxis();
+      final factor =
+          (initialScale * event.scale).clamp(1.0, 5.0) / initialScale;
+      final center = _panZoomOrigin + event.localPan;
+      _matrix(
+        Matrix4.translationValues(center.dx, center.dy, 0)
+          ..multiply(Matrix4.diagonal3Values(factor, factor, 1))
+          ..multiply(
+            Matrix4.translationValues(
+              -_panZoomOrigin.dx,
+              -_panZoomOrigin.dy,
+              0,
+            ),
+          )
+          ..multiply(_panZoomMatrix),
+      );
+    } else if (_panZoomMode == 'scroll') {
+      // Desktop trackpads report a pan/zoom stream, not touch pointers. Keep
+      // sub-step motion so slow gestures scroll, and preserve both axes.
+      final delta = undecided ? event.localPan : event.localPanDelta;
+      _trackpadWheel += Offset(-delta.dx, delta.dy);
+      while (_trackpadWheel.dy.abs() >= 24) {
+        _wheelEvent(_trackpadWheel.dy);
+        _trackpadWheel -= Offset(0, _trackpadWheel.dy.sign * 24);
+      }
+      while (_trackpadWheel.dx.abs() >= 24) {
+        _wheelEvent(_trackpadWheel.dx, horizontal: true);
+        _trackpadWheel -= Offset(_trackpadWheel.dx.sign * 24, 0);
+      }
+    }
+  }
+
+  void _endPanZoom() {
+    _panZoomPointer = null;
+    _panZoomMode = null;
+    _trackpadWheel = Offset.zero;
   }
 
   void _down(PointerDownEvent e) {
@@ -690,6 +762,11 @@ class _RemoteSurfaceState extends State<RemoteSurface>
             onPointerMove: _move,
             onPointerUp: _up,
             onPointerCancel: (_) => _cancel(),
+            onPointerPanZoomStart: _startPanZoom,
+            onPointerPanZoomUpdate: _updatePanZoom,
+            onPointerPanZoomEnd: (event) {
+              if (_panZoomPointer == event.pointer) _endPanZoom();
+            },
             onPointerHover: (e) {
               _recoverHardwareRelease(e);
               // Android can synthesize touch hover before a finger goes down.

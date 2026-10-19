@@ -49,6 +49,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
   final _pressed = <int>{};
   Timer? _clipboardTimer;
   String? _lastClipboard;
+  bool _clipboardBusy = false;
   bool get _pan => _memory.pan;
   set _pan(bool value) => _memory.pan = value;
   bool get _trackpad => _memory.trackpad ?? false;
@@ -157,11 +158,13 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
         !widget.active ||
         !session.profile.clipboard ||
         !session.clipboardSupported ||
+        _clipboardBusy ||
         session.pasteInProgress ||
         session.state != SessionState.connected ||
         WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
       return;
     }
+    _clipboardBusy = true;
     try {
       if (session.remoteClipboard != null) {
         _lastClipboard = session.remoteClipboard;
@@ -186,7 +189,43 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
       }
     } on PlatformException {
       /* Clipboard access can be denied by the OS. */
+    } finally {
+      _clipboardBusy = false;
     }
+  }
+
+  Future<void> _pasteLocalClipboard() async {
+    if (_clipboardBusy || session.pasteInProgress) return;
+    _clipboardBusy = true;
+    String message;
+    try {
+      final text = (await Clipboard.getData('text/plain'))?.text;
+      if (!mounted || !widget.active || session.state != SessionState.connected) {
+        return;
+      }
+      if (text == null || text.isEmpty) {
+        message = context.tr('本机剪贴板没有文字；图片暂不支持，文件请使用文件中转站');
+      } else {
+        // A user-requested local paste takes priority over a pending remote
+        // update. Never replace the local payload with remote clipboard text.
+        session.remoteClipboard = null;
+        _lastClipboard = text;
+        final sent = await session.paste(text);
+        if (!mounted) return;
+        message = sent
+            ? context.tr('已向远程电脑发送粘贴，请确认目标输入框已获得焦点')
+            : context.tr(session.pasteError);
+      }
+    } on PlatformException {
+      if (!mounted) return;
+      message = context.tr('无法读取本机剪贴板，请检查系统权限后重试');
+    } finally {
+      _clipboardBusy = false;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -474,6 +513,14 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                 '同步剪贴板',
                 connected && session.clipboardSupported,
               ),
+              'paste': (
+                Icons.content_paste_go_outlined,
+                '粘贴本机文字',
+                connected &&
+                    session.profile.clipboard &&
+                    session.clipboardSupported &&
+                    !session.pasteInProgress,
+              ),
               'cad': (Icons.security_outlined, 'Ctrl + Alt + Del', connected),
               'win': (Icons.window, 'Windows 键', connected),
               'help': (Icons.gesture_outlined, '触控手势说明', true),
@@ -501,6 +548,8 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
         await showTransfers(context, session);
       case 'clipboard':
         await _syncClipboard(manual: true);
+      case 'paste':
+        await _pasteLocalClipboard();
       case 'cad':
         session.chord([0x1d, 0x38, 0x153]);
       case 'win':

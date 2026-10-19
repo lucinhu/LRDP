@@ -1,9 +1,81 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:lrdp/l10n/app_strings.dart';
+import 'package:lrdp/l10n/messages.dart';
 import 'package:lrdp/ui/profile_editor.dart';
 import 'package:lrdp/ui/theme.dart';
 
 void main() {
+  for (final locale in ['zh-CN', 'zh-TW', 'en']) {
+    for (final width in [390.0, 1200.0]) {
+      testWidgets(
+        'expanded preference labels are inside the clip: $locale $width',
+        (tester) async {
+          tester.view.physicalSize = Size(width, 1800);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.reset);
+          final messages = localizedMessages[locale]!;
+          await tester.pumpWidget(
+            MaterialApp(
+              locale: AppStrings.localeFor(locale),
+              supportedLocales: AppStrings.supportedLocales,
+              localizationsDelegates: const [
+                AppStrings.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              theme: appTheme(Brightness.light),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: const TextScaler.linear(2)),
+                child: child!,
+              ),
+              home: const Scaffold(body: ProfileEditor()),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final title = find.text(messages['连接偏好']!);
+          await tester.ensureVisible(title);
+          await tester.tap(title);
+          await tester.pumpAndSettle();
+          final group = find.widgetWithText(TextFormField, messages['分组']!);
+          await tester.ensureVisible(group);
+          await tester.tap(group);
+          await tester.pumpAndSettle();
+          for (final source in ['远程分辨率', '分组']) {
+            final label = find.text(messages[source]!);
+            await tester.ensureVisible(label);
+            await tester.pumpAndSettle();
+            final render = tester.renderObject<RenderBox>(label);
+            final bounds = MatrixUtils.transformRect(
+              render.getTransformTo(null),
+              Offset.zero & render.size,
+            );
+            RenderObject? ancestor = render.parent;
+            while (ancestor != null && ancestor is! RenderClipRect) {
+              ancestor = ancestor.parent;
+            }
+            expect(ancestor, isA<RenderClipRect>());
+            final clip = ancestor! as RenderClipRect;
+            final clipBounds = MatrixUtils.transformRect(
+              clip.getTransformTo(null),
+              Offset.zero & clip.size,
+            );
+            expect(bounds.top, greaterThanOrEqualTo(clipBounds.top));
+            expect(bounds.left, greaterThanOrEqualTo(clipBounds.left));
+            expect(bounds.bottom, lessThanOrEqualTo(clipBounds.bottom));
+          }
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+        },
+      );
+    }
+  }
+
   testWidgets('phone save stays reachable above the keyboard with large text', (
     tester,
   ) async {

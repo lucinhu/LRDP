@@ -320,6 +320,10 @@ const localizedMessages = <String, Map<String, String>>{
     "隐藏密码": "隐藏密码",
     "需要提供登录信息": "需要提供登录信息",
     "需要更新远程密码": "需要更新远程密码",
+    "粘贴本机文字": "粘贴本机文字",
+    "本机剪贴板没有文字；图片暂不支持，文件请使用文件中转站": "本机剪贴板没有文字；图片暂不支持，文件请使用文件中转站",
+    "已向远程电脑发送粘贴，请确认目标输入框已获得焦点": "已向远程电脑发送粘贴，请确认目标输入框已获得焦点",
+    "无法读取本机剪贴板，请检查系统权限后重试": "无法读取本机剪贴板，请检查系统权限后重试",
   },
   "zh-TW": {
     "IPv6 地址格式不正确": "IPv6 地址格式不正確",
@@ -641,6 +645,10 @@ const localizedMessages = <String, Map<String, String>>{
     "隐藏密码": "隱藏密碼",
     "需要提供登录信息": "需要提供登入資訊",
     "需要更新远程密码": "需要更新遠端密碼",
+    "粘贴本机文字": "貼上本機文字",
+    "本机剪贴板没有文字；图片暂不支持，文件请使用文件中转站": "本機剪貼簿沒有文字；暫不支援圖片，檔案請使用檔案中轉站",
+    "已向远程电脑发送粘贴，请确认目标输入框已获得焦点": "已向遠端電腦傳送貼上，請確認目標輸入框已取得焦點",
+    "无法读取本机剪贴板，请检查系统权限后重试": "無法讀取本機剪貼簿，請檢查系統權限後再試",
   },
   "en": {
     "IPv6 地址格式不正确": "Invalid IPv6 address",
@@ -1016,5 +1024,12 @@ const localizedMessages = <String, Map<String, String>>{
     "隐藏密码": "Hide password",
     "需要提供登录信息": "Credentials required",
     "需要更新远程密码": "Remote password update required",
+    "粘贴本机文字": "Paste local text",
+    "本机剪贴板没有文字；图片暂不支持，文件请使用文件中转站":
+        "No text in the local clipboard. Images are not supported yet; use File transfer for files.",
+    "已向远程电脑发送粘贴，请确认目标输入框已获得焦点":
+        "Paste sent to the remote computer. Make sure the destination text field has focus.",
+    "无法读取本机剪贴板，请检查系统权限后重试":
+        "Cannot read the local clipboard. Check system permissions and try again.",
   },
 };

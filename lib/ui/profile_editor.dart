@@ -232,7 +232,9 @@ class _ProfileEditorState extends State<ProfileEditor> {
             const Divider(),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
-              childrenPadding: const EdgeInsets.only(bottom: 12),
+              // Floating input labels paint above their field bounds. Leave
+              // room inside the expansion clip, including at large text sizes.
+              childrenPadding: const EdgeInsets.fromLTRB(4, 16, 4, 12),
               title: Text(context.tr("连接偏好")),
               subtitle: Text(
                 '${context.tr(_resolution)} · ${_nla ? 'NLA' : 'TLS'}',
