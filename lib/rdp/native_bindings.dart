@@ -153,6 +153,38 @@ class NativeBindings {
         Int32 Function(Pointer<NativeSession>, Pointer<Utf8>),
         int Function(Pointer<NativeSession>, Pointer<Utf8>)
       >('lrdp_clipboard');
+  late final pasteImage = library
+      .lookupFunction<
+        Int32 Function(
+          Pointer<NativeSession>,
+          Pointer<Uint8>,
+          Size,
+          Pointer<Uint8>,
+          Size,
+        ),
+        int Function(
+          Pointer<NativeSession>,
+          Pointer<Uint8>,
+          int,
+          Pointer<Uint8>,
+          int,
+        )
+      >('lrdp_paste_image');
+  late final readImage = library
+      .lookupFunction<
+        Int32 Function(
+          Pointer<NativeSession>,
+          Pointer<Uint8>,
+          Size,
+          Pointer<Int32>,
+        ),
+        int Function(
+          Pointer<NativeSession>,
+          Pointer<Uint8>,
+          int,
+          Pointer<Int32>,
+        )
+      >('lrdp_read_image');
   late final paste = library
       .lookupFunction<
         Int32 Function(Pointer<NativeSession>, Pointer<Utf8>),

@@ -333,6 +333,53 @@ static void error(FlMethodCall* call, const char* message) {
       FL_METHOD_RESPONSE(fl_method_error_response_new("video-unavailable", message, nullptr));
   fl_method_call_respond(call, response, nullptr);
 }
+static void clipboard_read(GtkClipboard*, GtkSelectionData* selection, gpointer data) {
+  g_autoptr(FlMethodCall) call = FL_METHOD_CALL(data);
+  const gint size = gtk_selection_data_get_length(selection);
+  if (size <= 0) { respond(call, nullptr); return; }
+  if (size > 16 * 1024 * 1024) { error(call, "Image exceeds 16 MiB"); return; }
+  g_autoptr(FlValue) value = fl_value_new_map();
+  fl_value_set_string_take(value, "kind", fl_value_new_int(1));
+  fl_value_set_string_take(value, "bytes", fl_value_new_uint8_list(
+      gtk_selection_data_get_data(selection), static_cast<size_t>(size)));
+  respond(call, value);
+}
+static void clipboard_method(FlMethodChannel*, FlMethodCall* call, gpointer) {
+  GtkClipboard* clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+  const char* name = fl_method_call_get_name(call);
+  if (g_str_equal(name, "read")) {
+    // Request encoded PNG; do not decode an unbounded image in GTK first.
+    gtk_clipboard_request_contents(clipboard, gdk_atom_intern_static_string("image/png"),
+                                   clipboard_read, g_object_ref(call));
+    return;
+  }
+  if (!g_str_equal(name, "write")) {
+    g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+    fl_method_call_respond(call, response, nullptr);
+    return;
+  }
+  FlValue* args = fl_method_call_get_args(call);
+  if (!args || fl_value_get_type(args) != FL_VALUE_TYPE_MAP) { error(call, "Invalid image"); return; }
+  FlValue *w = fl_value_lookup_string(args, "width"), *h = fl_value_lookup_string(args, "height"),
+          *rgba = fl_value_lookup_string(args, "rgba");
+  if (!w || !h || !rgba || fl_value_get_type(w) != FL_VALUE_TYPE_INT ||
+      fl_value_get_type(h) != FL_VALUE_TYPE_INT || fl_value_get_type(rgba) != FL_VALUE_TYPE_UINT8_LIST) {
+    error(call, "Invalid image"); return;
+  }
+  const gint64 width = fl_value_get_int(w), height = fl_value_get_int(h);
+  if (width < 1 || height < 1 || width > 4096 || height > 4096 || width * height > 4194304 ||
+      fl_value_get_length(rgba) != static_cast<size_t>(width * height * 4)) {
+    error(call, "Invalid image dimensions"); return;
+  }
+  GBytes* bytes = g_bytes_new(fl_value_get_uint8_list(rgba), fl_value_get_length(rgba));
+  GdkPixbuf* pixbuf = gdk_pixbuf_new_from_bytes(bytes, GDK_COLORSPACE_RGB, TRUE, 8,
+                                               width, height, width * 4);
+  g_bytes_unref(bytes);
+  if (!pixbuf) { error(call, "Cannot create clipboard image"); return; }
+  gtk_clipboard_set_image(clipboard, pixbuf);
+  g_object_unref(pixbuf);
+  respond(call, nullptr);
+}
 static void method(FlMethodChannel*, FlMethodCall* call, gpointer data) {
   auto* self = LRDP_NATIVE_PLUGIN(data);
   const char* name = fl_method_call_get_name(call);
@@ -484,5 +531,8 @@ void lrdp_native_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
   g_autoptr(FlMethodChannel) window_channel = fl_method_channel_new(
       fl_plugin_registrar_get_messenger(registrar), "dev.lrdp/window", FL_METHOD_CODEC(codec));
   fl_method_channel_set_method_call_handler(window_channel, method, g_object_ref(self), g_object_unref);
+  g_autoptr(FlMethodChannel) clipboard_channel = fl_method_channel_new(
+      fl_plugin_registrar_get_messenger(registrar), "dev.lrdp/clipboard_image", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(clipboard_channel, clipboard_method, nullptr, nullptr);
   g_object_unref(self);
 }

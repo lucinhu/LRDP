@@ -399,10 +399,35 @@ git add third_party/FreeRDP
 `LRDP_WITH_H264=OFF` 可显式关闭解码，但只支持 H.264 的服务将无法显示桌面。
 Apple 构建步骤仅完成脚本接入，仍需在 Mac 实际验证；MSVC 也需匹配架构和工具链。
 
-桥接库保持 ABI v5，当前有 24 个导出；新增五个原生帧读取接口，旧接口签名保持兼容。
+桥接库保持 ABI v5，当前有 26 个导出；包含五个原生帧读取接口与两个新增图片剪贴板接口，旧接口签名保持兼容。
 Linux/Android 原生纹理需要匹配的平台插件与新库；没有可用纹理后端时继续使用兼容画面路径。
 粘贴协议验收包含成功、提前请求数据、拒绝、无确认、无数据及取消六种情况：
 `run_paste_test.py` 的 `--flutter`、`--asan`、`--wine` 分别运行 Flutter、内存检查和 Windows PE 客户端。
+
+图片剪贴板不增加外部 Flutter 依赖，平台通过 `dev.lrdp/clipboard_image` 交换有界图片数据，
+原生 CLIPRDR 代码仍在 `native/`。FreeRDP 子模块保持原样。功能位 `16` 表示适配器提供图片接口，
+不代表服务端或远程目标应用接受图片。Dart 按功能位延迟查找新增符号；构建分发时仍应保持完整应用、插件与原生库匹配。
+
+```sh
+cmake --build build/native --parallel 3
+ctest --test-dir build/native --output-on-failure
+flutter test
+python3 scripts/run_image_clipboard_test.py
+python3 scripts/run_image_clipboard_test.py --flutter
+python3 scripts/run_linux_clipboard_test.py
+# 主入口 Release 构建后，用实际安装库复验协议：
+python3 scripts/run_image_clipboard_test.py --library build/linux/x64/release/bundle/lib/liblrdp.so
+python3 scripts/run_image_clipboard_test.py --large --library build/linux/x64/release/bundle/lib/liblrdp.so
+```
+
+图片协议测试生成独立 PNG/DIB 金样，在私有回环 TLS 核对格式、数据、按键、拒绝/超时/取消、
+反向接收和过期响应；Flutter 模式另验证生产 worker 和实际菜单入口，操作系统剪贴板在该测试中被替代。
+Linux 系统测试另起私有 Xvnc，独立 GTK 进程提供/读取图片，运行实际平台插件，
+不读取个人桌面或剪贴板。Android 设备可运行 `integration_test/clipboard_image_test.dart`，
+验证真实 ClipboardManager/FileProvider 的重复读写；结果不能替代 ARM64 真机或远程服务端互操作验收。
+在已启动且核对过的隔离 AVD 上，可运行 `python3 scripts/run_android_clipboard_test.py --device api25`
+或选择 `api36`；脚本固定使用 ADB 5038 / emulator-5556，核对设备白名单，安装/清理集成 APK。
+不要与同一 Android 工程的 Release 构建同时运行。
 
 ```sh
 python3 scripts/package_source.py

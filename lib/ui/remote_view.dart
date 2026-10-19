@@ -1,8 +1,11 @@
 import '../l10n/app_strings.dart';
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_selector/file_selector.dart';
+import '../rdp/clipboard_picture.dart';
 import '../rdp/key_mapping.dart';
 import '../rdp/rdp_session.dart';
 import '../rdp/session_recovery.dart';
@@ -14,6 +17,7 @@ import 'remote_surface.dart';
 import 'remote_view_memory.dart';
 import 'mobile_keyboard.dart';
 import 'floating_controls.dart';
+import 'image_clipboard.dart';
 
 class RemoteView extends StatefulWidget {
   const RemoteView({
@@ -164,9 +168,46 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
         WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
       return;
     }
+    final target = session;
+    final connection = target.connectedAt;
+    bool current() =>
+        mounted &&
+        widget.active &&
+        identical(session, target) &&
+        target.state == SessionState.connected &&
+        target.connectedAt == connection;
     _clipboardBusy = true;
     try {
-      if (session.remoteClipboard != null) {
+      if (target.remotePicture case final pending?) {
+        var consumed = false;
+        try {
+          final picture = await ClipboardPicture.decode(
+            pending.bytes,
+            kind: pending.kind,
+          );
+          if (current() &&
+              target.remotePicture == pending &&
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed) {
+            consumed = await ImageClipboard.write(
+              picture,
+              isCurrent: () =>
+                  current() &&
+                  target.remotePicture == pending &&
+                  WidgetsBinding.instance.lifecycleState ==
+                      AppLifecycleState.resumed,
+            );
+            if (consumed) _lastClipboard = null;
+          }
+        } on Exception {
+          consumed = true;
+          rethrow;
+        } finally {
+          if (consumed && target.remotePicture == pending) {
+            target.discardRemotePicture();
+          }
+        }
+      } else if (session.remoteClipboard != null) {
         _lastClipboard = session.remoteClipboard;
         session.remoteClipboard = null;
         await Clipboard.setData(ClipboardData(text: _lastClipboard!));
@@ -189,6 +230,10 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
       }
     } on PlatformException {
       /* Clipboard access can be denied by the OS. */
+    } on MissingPluginException {
+      /* Older platform runners can still use text clipboard operations. */
+    } on Exception {
+      /* Invalid image encodings never replace the system clipboard. */
     } finally {
       _clipboardBusy = false;
     }
@@ -200,15 +245,18 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
     String message;
     try {
       final text = (await Clipboard.getData('text/plain'))?.text;
-      if (!mounted || !widget.active || session.state != SessionState.connected) {
+      if (!mounted ||
+          !widget.active ||
+          session.state != SessionState.connected) {
         return;
       }
       if (text == null || text.isEmpty) {
-        message = context.tr('本机剪贴板没有文字；图片暂不支持，文件请使用文件中转站');
+        message = context.tr('本机剪贴板没有文字；图片请使用“粘贴本机图片”，文件请使用文件中转站');
       } else {
         // A user-requested local paste takes priority over a pending remote
         // update. Never replace the local payload with remote clipboard text.
         session.remoteClipboard = null;
+        session.discardRemotePicture();
         _lastClipboard = text;
         final sent = await session.paste(text);
         if (!mounted) return;
@@ -226,6 +274,100 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _pastePicture({bool fromFile = false}) async {
+    if (_clipboardBusy ||
+        session.pasteInProgress ||
+        !session.profile.clipboard ||
+        !session.imageClipboardSupported) {
+      return;
+    }
+    final target = session;
+    final connection = target.connectedAt;
+    final desktop = {
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+      TargetPlatform.macOS,
+    }.contains(Theme.of(context).platform);
+    bool current() =>
+        mounted &&
+        widget.active &&
+        identical(session, target) &&
+        target.state == SessionState.connected &&
+        target.connectedAt == connection;
+    _clipboardBusy = true;
+    String? message;
+    try {
+      // Preserve the local text snapshot so the automatic text poll does not
+      // immediately replace an image published by this explicit operation.
+      if (desktop) {
+        try {
+          _lastClipboard = (await Clipboard.getData(
+            Clipboard.kTextPlain,
+          ))?.text;
+        } on PlatformException {
+          /* Text permission need not block image selection. */
+        }
+      }
+      if (!current() || !mounted) return;
+      ClipboardPicture? picture;
+      if (fromFile) {
+        final file = await openFile(
+          acceptedTypeGroups: [
+            XTypeGroup(
+              label: context.tr('图片'),
+              extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'],
+              mimeTypes: [
+                'image/png',
+                'image/jpeg',
+                'image/webp',
+                'image/bmp',
+                'image/gif',
+              ],
+              uniformTypeIdentifiers: ['public.image'],
+            ),
+          ],
+        );
+        if (file == null || !current()) return;
+        if (await file.length() > ClipboardPicture.maxBytes) {
+          throw const FormatException('图片数据最大 16 MiB');
+        }
+        final bytes = BytesBuilder(copy: false);
+        await for (final block in file.openRead()) {
+          if (bytes.length + block.length > ClipboardPicture.maxBytes) {
+            throw const FormatException('图片数据最大 16 MiB');
+          }
+          bytes.add(block);
+        }
+        picture = await ClipboardPicture.decode(bytes.takeBytes());
+      } else {
+        picture = await ImageClipboard.read();
+      }
+      if (!current() || !mounted) return;
+      if (picture == null) {
+        message = context.tr('本机剪贴板没有图片，可使用“选择图片粘贴”');
+      } else {
+        target.remoteClipboard = null;
+        target.discardRemotePicture();
+        final sent = await target.pastePicture(picture);
+        if (!current() || !mounted) return;
+        message = context.tr(
+          sent ? '图片已传输并发送粘贴，请在远程应用中确认' : '图片未确认送达，请确认服务端和目标应用支持图片粘贴',
+        );
+      }
+    } on FormatException catch (e) {
+      if (mounted) message = context.tr(e.message.toString());
+    } on Exception {
+      if (mounted) message = context.tr('无法读取图片，请检查剪贴板权限或选择图片文件');
+    } finally {
+      _clipboardBusy = false;
+    }
+    if (mounted && widget.active && message != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   @override
@@ -521,6 +663,22 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                     session.clipboardSupported &&
                     !session.pasteInProgress,
               ),
+              'pasteImage': (
+                Icons.image_outlined,
+                '粘贴本机图片',
+                connected &&
+                    session.profile.clipboard &&
+                    session.imageClipboardSupported &&
+                    !session.pasteInProgress,
+              ),
+              'imageFile': (
+                Icons.add_photo_alternate_outlined,
+                '选择图片粘贴',
+                connected &&
+                    session.profile.clipboard &&
+                    session.imageClipboardSupported &&
+                    !session.pasteInProgress,
+              ),
               'cad': (Icons.security_outlined, 'Ctrl + Alt + Del', connected),
               'win': (Icons.window, 'Windows 键', connected),
               'help': (Icons.gesture_outlined, '触控手势说明', true),
@@ -550,6 +708,10 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
         await _syncClipboard(manual: true);
       case 'paste':
         await _pasteLocalClipboard();
+      case 'pasteImage':
+        await _pastePicture();
+      case 'imageFile':
+        await _pastePicture(fromFile: true);
       case 'cad':
         session.chord([0x1d, 0x38, 0x153]);
       case 'win':

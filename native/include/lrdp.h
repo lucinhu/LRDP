@@ -42,7 +42,9 @@ LRDP_API int lrdp_end_reason(lrdp_session*);
 LRDP_API uint32_t lrdp_error_code(lrdp_session*);
 /* Bits: 0 text clipboard ready, 1 dynamic display control ready,
  * 2 an AVC420/AVC444 surface command was successfully decoded,
- * 3 server negotiated Unicode keyboard input. */
+ * 3 server negotiated Unicode keyboard input,
+ * 4 this adapter provides bounded PNG/DIB clipboard operations (not a promise
+ * that the server or destination application supports images). */
 LRDP_API int lrdp_features(lrdp_session*);
 /* Fields: 0 error, 1 SHA256 fingerprint, 2 received clipboard (consumed),
  * 3 paste status: idle/pending/sent/rejected/timeout/cancelled.
@@ -93,6 +95,16 @@ LRDP_API int lrdp_clipboard(lrdp_session*, const char* text);
  * Returns 1 if accepted; poll field 3 for completion. No automatic retries.
  * Regular clipboard writes return 0 while a paste is pending. */
 LRDP_API int lrdp_paste(lrdp_session*, const char* text);
+/* Additive ABI v5 extension. Caller owns bytes; accepted data is copied.
+ * PNG and packed 24/32-bit DIB must describe the same dimensions. Each is
+ * bounded to 16 MiB, 4096 per axis and 4 Mi pixels. Uses the same single paste
+ * slot/status as text and performs no automatic retry. */
+LRDP_API int lrdp_paste_image(lrdp_session*, const uint8_t* png, size_t png_size,
+                             const uint8_t* dib, size_t dib_size);
+/* Latest incoming image; kind 1=PNG, 2=packed DIB. Returns 0 if absent,
+ * negative required capacity without consuming, or positive copied bytes.
+ * Peek with NULL/0; successful reads consume. No borrowed pointer escapes. */
+LRDP_API int lrdp_read_image(lrdp_session*, uint8_t*, size_t, int32_t* kind);
 LRDP_API void lrdp_stop(lrdp_session*);
 /* Joins the network thread. Must only be called by the owning isolate. */
 LRDP_API void lrdp_destroy(lrdp_session*);

@@ -5,6 +5,14 @@
         android:allowBackup="false"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <provider
+            android:name=".ClipboardImageProvider"
+            android:authorities="${applicationId}.clipboard_provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/clipboard_paths" />
+        </provider>
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -275,8 +275,8 @@ class _ProfileEditorState extends State<ProfileEditor> {
                   contentPadding: EdgeInsets.zero,
                   value: _clipboard,
                   onChanged: (v) => setState(() => _clipboard = v),
-                  title: Text(context.tr("共享文字剪贴板")),
-                  subtitle: Text(context.tr("仅在当前会话激活时同步，最大 1 MiB")),
+                  title: Text(context.tr("共享剪贴板")),
+                  subtitle: Text(context.tr("文字与图片；仅在当前会话激活时同步")),
                 ),
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,

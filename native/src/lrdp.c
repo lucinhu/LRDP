@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include "clipboard_image.h"
 
 #define MAX_CURSOR 384
 #define MAX_DIM 4096
@@ -42,6 +43,12 @@
 enum { PASTE_IDLE, PASTE_PENDING, PASTE_SENT, PASTE_REJECTED, PASTE_TIMEOUT, PASTE_CANCELLED };
 typedef struct { int type, a, b, c; } input_event;
 typedef struct { rdpContext base; lrdp_session* owner; } lrdp_context;
+typedef struct { BYTE *png, *dib; size_t png_size, dib_size; } clipboard_image;
+static void free_clip_image(clipboard_image* image) {
+  if (image) { free(image->png); free(image->dib); free(image); }
+}
+#define LRDP_PNG_FORMAT 0xc001
+#define LRDP_PNG_MIME_FORMAT 0xc002
 struct lrdp_session {
   freerdp* instance;
   HANDLE thread, stop, wake;
@@ -59,6 +66,13 @@ struct lrdp_session {
   char* clipboard_in;
   char* clipboard_out;
   char* clipboard_pending;
+  clipboard_image *image_out, *image_pending;
+  BYTE* image_in;
+  size_t image_in_size;
+  int image_in_kind;
+  BOOL remote_request_pending;
+  UINT32 remote_format, remote_kind, requested_kind;
+  UINT64 remote_epoch, requested_epoch;
   BOOL clipboard_waiting, clipboard_pending_paste, clipboard_out_paste;
   BOOL paste_ready, paste_keys_sent, paste_data_served;
   int paste_status;
@@ -281,19 +295,23 @@ static int verify_pinned(freerdp* f, const BYTE* data, size_t length,
   free(pem); return rc;
 }
 static UINT clip_announce(CliprdrClientContext* c) {
+  CLIPRDR_FORMAT formats[] = {{CF_DIB, NULL}, {LRDP_PNG_FORMAT, "PNG"},
+                             {LRDP_PNG_MIME_FORMAT, "image/png"}};
   CLIPRDR_FORMAT fmt = { CF_UNICODETEXT, NULL };
   CLIPRDR_FORMAT_LIST list = {0};
   lrdp_session* s = c->custom;
   EnterCriticalSection(&s->lock);
   BOOL has_text = s->clipboard_out != NULL;
+  BOOL has_image = s->image_out != NULL;
   LeaveCriticalSection(&s->lock);
-  list.numFormats = has_text ? 1 : 0; list.formats = has_text ? &fmt : NULL;
+  list.numFormats = has_image ? 3 : has_text ? 1 : 0;
+  list.formats = has_image ? formats : has_text ? &fmt : NULL;
   return c->ClientFormatList(c, &list);
 }
 static UINT clip_ready(CliprdrClientContext* c, const CLIPRDR_MONITOR_READY* ready) {
   (void)ready;
   lrdp_session* s = c->custom;
-  EnterCriticalSection(&s->lock); s->features |= 1; LeaveCriticalSection(&s->lock);
+  EnterCriticalSection(&s->lock); s->features |= 1 | 16; LeaveCriticalSection(&s->lock);
   CLIPRDR_GENERAL_CAPABILITY_SET general = {0};
   general.capabilitySetType = CB_CAPSTYPE_GENERAL;
   general.capabilitySetLength = CB_CAPSTYPE_GENERAL_LEN;
@@ -326,18 +344,30 @@ static UINT clip_list(CliprdrClientContext* c, const CLIPRDR_FORMAT_LIST* list) 
   response.common.msgFlags = CB_RESPONSE_OK;
   UINT rc = c->ClientFormatListResponse(c, &response);
   if (rc) return rc;
+  UINT32 format = 0, kind = 0, priority = 0;
   for (UINT32 i = 0; i < list->numFormats; i++) {
-    if (list->formats[i].formatId == CF_UNICODETEXT) {
-      CLIPRDR_FORMAT_DATA_REQUEST request = {0}; request.requestedFormatId = CF_UNICODETEXT;
-      return c->ClientFormatDataRequest(c, &request);
-    }
+    const CLIPRDR_FORMAT* f = &list->formats[i];
+    UINT32 next = f->formatName && (!strcmp(f->formatName, "PNG") ||
+      !strcmp(f->formatName, "image/png")) ? 4 : f->formatId == CF_DIBV5 ? 3 :
+      f->formatId == CF_DIB ? 2 : f->formatId == CF_UNICODETEXT ? 1 : 0;
+    if (next > priority) { priority = next; format = f->formatId;
+      kind = next == 4 ? 1 : next >= 2 ? 2 : 0; }
   }
+  lrdp_session* s = c->custom;
+  EnterCriticalSection(&s->lock);
+  s->remote_epoch++;
+  s->remote_format = format; s->remote_kind = kind;
+  free(s->clipboard_in); s->clipboard_in = NULL;
+  free(s->image_in); s->image_in = NULL; s->image_in_size = 0;
+  LeaveCriticalSection(&s->lock);
+  SetEvent(s->wake);
   return CHANNEL_RC_OK;
 }
 static UINT clip_request(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_REQUEST* req) {
   lrdp_session* s = c->custom;
   CLIPRDR_FORMAT_DATA_RESPONSE response = {0};
   WCHAR* wide = NULL;
+  BYTE* image = NULL;
   EnterCriticalSection(&s->lock);
   if (req->requestedFormatId == CF_UNICODETEXT && s->clipboard_out) {
     size_t count = 0;
@@ -347,22 +377,57 @@ static UINT clip_request(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_REQU
       response.common.dataLen = ((UINT32)count + 1) * 2;
       response.requestedFormatData = (BYTE*)wide;
     }
+  } else if (s->image_out) {
+    const clipboard_image* source = s->image_out;
+    BOOL png = req->requestedFormatId == LRDP_PNG_FORMAT || req->requestedFormatId == LRDP_PNG_MIME_FORMAT;
+    size_t size = png ? source->png_size : req->requestedFormatId == CF_DIB ? source->dib_size : 0;
+    if (size && (image = malloc(size))) {
+      memcpy(image, png ? source->png : source->dib, size);
+      response.common.msgFlags = CB_RESPONSE_OK;
+      response.common.dataLen = (UINT32)size;
+      response.requestedFormatData = image;
+    }
   }
   LeaveCriticalSection(&s->lock);
-  if (!wide) response.common.msgFlags = CB_RESPONSE_FAIL;
+  if (!wide && !image) response.common.msgFlags = CB_RESPONSE_FAIL;
   UINT rc = c->ClientFormatDataResponse(c, &response);
   EnterCriticalSection(&s->lock);
   if (s->clipboard_out_paste && s->clipboard_out_paste_serial == s->paste_serial &&
       s->paste_status == PASTE_PENDING) {
-    if (rc == CHANNEL_RC_OK && wide) {
+    if (rc == CHANNEL_RC_OK && (wide || image)) {
       s->paste_data_served = TRUE;
       if (s->paste_keys_sent) s->paste_status = PASTE_SENT;
     } else s->paste_status = PASTE_REJECTED;
   }
   LeaveCriticalSection(&s->lock);
-  free(wide); return rc;
+  free(wide); free(image); return rc;
 }
 static UINT clip_response(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_RESPONSE* r) {
+  lrdp_session* s = c->custom;
+  EnterCriticalSection(&s->lock);
+  BOOL current = s->remote_request_pending && s->requested_epoch == s->remote_epoch;
+  UINT32 kind = s->requested_kind;
+  UINT64 epoch = s->requested_epoch;
+  s->remote_request_pending = FALSE;
+  LeaveCriticalSection(&s->lock);
+  SetEvent(s->wake);
+  if (!current) return CHANNEL_RC_OK;
+  if (kind) {
+    if (!(r->common.msgFlags & CB_RESPONSE_OK) ||
+        !lrdp_image_dimensions(r->requestedFormatData, r->common.dataLen, (int)kind, NULL, NULL))
+      return CHANNEL_RC_OK;
+    BYTE* copy = malloc(r->common.dataLen);
+    if (!copy) return CHANNEL_RC_NO_MEMORY;
+    memcpy(copy, r->requestedFormatData, r->common.dataLen);
+    EnterCriticalSection(&s->lock);
+    if (epoch == s->remote_epoch) {
+      free(s->image_in); s->image_in = copy; copy = NULL;
+      s->image_in_size = r->common.dataLen; s->image_in_kind = (int)kind;
+    }
+    LeaveCriticalSection(&s->lock);
+    free(copy);
+    return CHANNEL_RC_OK;
+  }
   if (!(r->common.msgFlags & CB_RESPONSE_OK) || r->common.dataLen > MAX_CLIP ||
       (r->common.dataLen & 1) || !r->requestedFormatData) return CHANNEL_RC_OK;
   size_t units = r->common.dataLen / 2;
@@ -374,10 +439,12 @@ static UINT clip_response(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_RES
   else text = ConvertWCharNToUtf8Alloc(wide, length, NULL);
   if (text && strlen(text) > MAX_CLIP) { free(text); return CHANNEL_RC_OK; }
   if (text) {
-    lrdp_session* s = c->custom;
     EnterCriticalSection(&s->lock);
-    free(s->clipboard_in); s->clipboard_in = text;
+    if (epoch == s->remote_epoch) {
+      free(s->clipboard_in); s->clipboard_in = text; text = NULL;
+    }
     LeaveCriticalSection(&s->lock);
+    free(text);
   }
   return CHANNEL_RC_OK;
 }
@@ -436,7 +503,7 @@ static void channel_disconnected(void* context, const ChannelDisconnectedEventAr
   rdpContext* c = context; lrdp_session* s = owner(c);
   if (strcmp(e->name, CLIPRDR_SVC_CHANNEL_NAME) == 0) {
     EnterCriticalSection(&s->lock);
-    s->clip = NULL; s->features &= ~1;
+    s->clip = NULL; s->features &= ~(1 | 16);
     LeaveCriticalSection(&s->lock);
   }
   else if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0) {
@@ -555,6 +622,7 @@ static BOOL process_clipboard(lrdp_session* s) {
     s->paste_status = PASTE_TIMEOUT;
     if (s->clipboard_pending_paste) {
       free(s->clipboard_pending); s->clipboard_pending = NULL;
+      free_clip_image(s->image_pending); s->image_pending = NULL;
       s->clipboard_pending_paste = FALSE;
     }
   }
@@ -562,9 +630,10 @@ static BOOL process_clipboard(lrdp_session* s) {
   /* Format responses have no operation ID. Keep at most one announcement in
    * flight so a late ACK cannot paste
    * text from a different operation. Never reset this barrier on a timeout. */
-  if (!s->clipboard_waiting && s->clipboard_pending && (s->features & 1) && s->clip) {
+  if (!s->clipboard_waiting && (s->clipboard_pending || s->image_pending) && (s->features & 1) && s->clip) {
     free(s->clipboard_out); s->clipboard_out = s->clipboard_pending;
     s->clipboard_pending = NULL;
+    free_clip_image(s->image_out); s->image_out = s->image_pending; s->image_pending = NULL;
     s->clipboard_out_paste = s->clipboard_pending_paste;
     s->clipboard_out_paste_serial = s->clipboard_pending_paste ? s->paste_serial : 0;
     s->clipboard_pending_paste = FALSE;
@@ -573,8 +642,19 @@ static BOOL process_clipboard(lrdp_session* s) {
     clip = s->clip;
   }
   BOOL paste = s->paste_status == PASTE_PENDING && s->paste_ready && !s->paste_keys_sent;
+  CLIPRDR_FORMAT_DATA_REQUEST remote_request = {0};
+  CliprdrClientContext* request_clip = NULL;
+  /* Responses have no ID. Keep one request in flight, discard replies from
+   * superseded format lists, then request only the latest offered content. */
+  if (s->clip && s->remote_format && !s->remote_request_pending) {
+    remote_request.requestedFormatId = s->remote_format;
+    s->remote_format = 0;
+    s->requested_kind = s->remote_kind; s->requested_epoch = s->remote_epoch;
+    s->remote_request_pending = TRUE; request_clip = s->clip;
+  }
   LeaveCriticalSection(&s->lock);
   if (clip && clip_announce(clip) != CHANNEL_RC_OK) return FALSE;
+  if (request_clip && request_clip->ClientFormatDataRequest(request_clip, &remote_request) != CHANNEL_RC_OK) return FALSE;
   if (paste) {
     BOOL ok = send_key(s, 0, 0x1d, FALSE);
     /* Always attempt releases, even if a transport failure interrupted down. */
@@ -907,12 +987,21 @@ int lrdp_input(lrdp_session* s, int type, int a, int b, int c) {
   s->queue[s->head] = (input_event){type, a, b, c}; s->head = next;
   LeaveCriticalSection(&s->lock); SetEvent(s->wake); return 1;
 }
+/* Caller holds lock. A deliberate local publication supersedes older remote
+ * responses, but must preserve the one-request barrier until its reply arrives. */
+static void local_clipboard_owner(lrdp_session* s) {
+  s->remote_epoch++; s->remote_format = 0;
+  free(s->clipboard_in); s->clipboard_in = NULL;
+  free(s->image_in); s->image_in = NULL; s->image_in_size = 0;
+}
 int lrdp_clipboard(lrdp_session* s, const char* text) {
   if (!s || !text || strlen(text) > MAX_CLIP) return 0;
   char* copy = _strdup(text); if (!copy) return 0;
   EnterCriticalSection(&s->lock);
   if (s->paste_status == PASTE_PENDING) { LeaveCriticalSection(&s->lock); free(copy); return 0; }
+  local_clipboard_owner(s);
   free(s->clipboard_pending); s->clipboard_pending = copy;
+  free_clip_image(s->image_pending); s->image_pending = NULL;
   s->clipboard_pending_paste = FALSE;
   LeaveCriticalSection(&s->lock); SetEvent(s->wake); return 1;
 }
@@ -925,13 +1014,51 @@ int lrdp_paste(lrdp_session* s, const char* text) {
       (s->clipboard_waiting && GetTickCount64() - s->clipboard_announced_at >= 5000)) {
     LeaveCriticalSection(&s->lock); free(copy); return 0;
   }
+  local_clipboard_owner(s);
   free(s->clipboard_pending); s->clipboard_pending = copy;
+  free_clip_image(s->image_pending); s->image_pending = NULL;
   s->clipboard_pending_paste = TRUE;
   s->paste_serial++;
   s->paste_ready = s->paste_keys_sent = s->paste_data_served = FALSE;
   s->paste_status = PASTE_PENDING;
   s->paste_deadline = GetTickCount64() + 5000;
   LeaveCriticalSection(&s->lock); SetEvent(s->wake); return 1;
+}
+int lrdp_paste_image(lrdp_session* s, const uint8_t* png, size_t png_size,
+                      const uint8_t* dib, size_t dib_size) {
+  uint32_t pw, ph, dw, dh;
+  if (!s || !lrdp_image_dimensions(png, png_size, 1, &pw, &ph) ||
+      !lrdp_image_dimensions(dib, dib_size, 2, &dw, &dh) || pw != dw || ph != dh) return 0;
+  clipboard_image* image = calloc(1, sizeof(*image));
+  if (!image) return 0;
+  image->png = malloc(png_size); image->dib = malloc(dib_size);
+  if (!image->png || !image->dib) { free_clip_image(image); return 0; }
+  memcpy(image->png, png, png_size); memcpy(image->dib, dib, dib_size);
+  image->png_size = png_size; image->dib_size = dib_size;
+  EnterCriticalSection(&s->lock);
+  if (s->state != LRDP_CONNECTED || !(s->features & 16) || !s->clip ||
+      s->paste_status == PASTE_PENDING ||
+      (s->clipboard_waiting && GetTickCount64() - s->clipboard_announced_at >= 5000)) {
+    LeaveCriticalSection(&s->lock); free_clip_image(image); return 0;
+  }
+  local_clipboard_owner(s);
+  free(s->clipboard_pending); s->clipboard_pending = NULL;
+  free_clip_image(s->image_pending); s->image_pending = image;
+  s->clipboard_pending_paste = TRUE;
+  s->paste_serial++;
+  s->paste_ready = s->paste_keys_sent = s->paste_data_served = FALSE;
+  s->paste_status = PASTE_PENDING; s->paste_deadline = GetTickCount64() + 5000;
+  LeaveCriticalSection(&s->lock); SetEvent(s->wake); return 1;
+}
+int lrdp_read_image(lrdp_session* s, uint8_t* out, size_t capacity, int32_t* kind) {
+  if (!s) return 0;
+  EnterCriticalSection(&s->lock);
+  size_t size = s->image_in_size;
+  if (!size) { LeaveCriticalSection(&s->lock); return 0; }
+  if (!out || !kind || capacity < size) { LeaveCriticalSection(&s->lock); return -(int)size; }
+  memcpy(out, s->image_in, size); *kind = s->image_in_kind;
+  free(s->image_in); s->image_in = NULL; s->image_in_size = 0;
+  LeaveCriticalSection(&s->lock); return (int)size;
 }
 void lrdp_stop(lrdp_session* s) {
   if (!s) return;
@@ -958,6 +1085,7 @@ void lrdp_destroy(lrdp_session* s) {
   if (s->wake) CloseHandle(s->wake);
   lrdp_video_store_retire(s->video);
   free(s->cursor_pixels); free(s->clipboard_in); free(s->clipboard_out); free(s->clipboard_pending);
+  free_clip_image(s->image_out); free_clip_image(s->image_pending); free(s->image_in);
   lrdp_audio_gate_free(s->audio);
   DeleteCriticalSection(&s->lock); free(s);
 }

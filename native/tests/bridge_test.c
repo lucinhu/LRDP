@@ -25,6 +25,10 @@ static int lifecycle(const char* transfer_directory) {
     CHECK(lrdp_read(s, 99, paste_status, sizeof(paste_status)) == -1);
     CHECK(!lrdp_paste(s, "not connected"));
     CHECK(!lrdp_paste(s, NULL)); CHECK(!lrdp_paste(s, ""));
+    CHECK(!lrdp_paste_image(s, NULL, 0, NULL, 0));
+    CHECK(!lrdp_paste_image(NULL, NULL, 0, NULL, 0));
+    CHECK(lrdp_read_image(s, NULL, 0, NULL) == 0);
+    CHECK(lrdp_read_image(NULL, NULL, 0, NULL) == 0);
     CHECK(!lrdp_set(s, "unknown", "1"));
     CHECK(!lrdp_audio_active(s, -1)); CHECK(!lrdp_audio_active(s, 2));
     CHECK(lrdp_audio_active(s, 0)); CHECK(lrdp_audio_active(s, 1));

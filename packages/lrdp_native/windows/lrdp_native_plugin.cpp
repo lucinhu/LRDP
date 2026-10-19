@@ -55,6 +55,61 @@ struct ScheduledVideo {
   std::chrono::steady_clock::time_point next{};
 };
 
+void ClipboardImage(HWND window, const flutter::MethodCall<EncodableValue>& call,
+                    std::unique_ptr<flutter::MethodResult<EncodableValue>> result) {
+  const bool read = call.method_name() == "read";
+  if (!read && call.method_name() != "write") { result->NotImplemented(); return; }
+  const UINT png_format = RegisterClipboardFormatW(L"PNG");
+  constexpr size_t limit = 16 * 1024 * 1024;
+  if (!png_format || !OpenClipboard(window)) {
+    result->Error("clipboard-unavailable", "Cannot open clipboard"); return;
+  }
+  struct Close { ~Close() { CloseClipboard(); } } close;
+  if (read) {
+    UINT format = IsClipboardFormatAvailable(png_format) ? png_format :
+      IsClipboardFormatAvailable(CF_DIBV5) ? CF_DIBV5 : CF_DIB;
+    if (!IsClipboardFormatAvailable(format)) { result->Success(); return; }
+    HANDLE handle = GetClipboardData(format);
+    const SIZE_T size = handle ? GlobalSize(handle) : 0;
+    if (!size || size > limit) { result->Error("clipboard-unavailable", "Invalid image size"); return; }
+    const auto* bytes = static_cast<const uint8_t*>(GlobalLock(handle));
+    if (!bytes) { result->Error("clipboard-unavailable", "Cannot read image"); return; }
+    std::vector<uint8_t> copy(bytes, bytes + size);
+    GlobalUnlock(handle);
+    result->Success(EncodableValue(EncodableMap{
+      {EncodableValue("kind"), EncodableValue(format == png_format ? 1 : 2)},
+      {EncodableValue("bytes"), EncodableValue(std::move(copy))}}));
+    return;
+  }
+  const auto* args = call.arguments() ? std::get_if<EncodableMap>(call.arguments()) : nullptr;
+  const auto* png_value = Argument(args, "png");
+  const auto* dib_value = Argument(args, "dib");
+  const auto* png = png_value ? std::get_if<std::vector<uint8_t>>(png_value) : nullptr;
+  const auto* dib = dib_value ? std::get_if<std::vector<uint8_t>>(dib_value) : nullptr;
+  if (!png || !dib || png->empty() || dib->empty() || png->size() > limit || dib->size() > limit) {
+    result->Error("clipboard-unavailable", "Invalid image size"); return;
+  }
+  auto allocate = [](const std::vector<uint8_t>& bytes) -> HGLOBAL {
+    HGLOBAL handle = GlobalAlloc(GMEM_MOVEABLE, bytes.size());
+    if (!handle) return nullptr;
+    void* data = GlobalLock(handle);
+    if (!data) { GlobalFree(handle); return nullptr; }
+    memcpy(data, bytes.data(), bytes.size()); GlobalUnlock(handle); return handle;
+  };
+  HGLOBAL png_handle = allocate(*png), dib_handle = allocate(*dib);
+  bool ok = png_handle && dib_handle && EmptyClipboard();
+  if (ok) {
+    if (SetClipboardData(png_format, png_handle)) png_handle = nullptr;
+    else ok = false;
+    if (SetClipboardData(CF_DIB, dib_handle)) dib_handle = nullptr;
+    else ok = false;
+  }
+  if (png_handle) GlobalFree(png_handle);
+  if (dib_handle) GlobalFree(dib_handle);
+  if (ok) result->Success();
+  else result->Error("clipboard-unavailable", "Cannot publish clipboard image");
+}
+
 class VideoPlugin : public flutter::Plugin {
  public:
   explicit VideoPlugin(flutter::PluginRegistrarWindows* registrar,
@@ -66,7 +121,12 @@ class VideoPlugin : public flutter::Plugin {
         channel_(registrar->messenger(), "dev.lrdp/video",
                  &flutter::StandardMethodCodec::GetInstance()),
         window_channel_(registrar->messenger(), "dev.lrdp/window",
+                 &flutter::StandardMethodCodec::GetInstance()),
+        clipboard_channel_(registrar->messenger(), "dev.lrdp/clipboard_image",
                  &flutter::StandardMethodCodec::GetInstance()) {
+    clipboard_channel_.SetMethodCallHandler([this](const auto& call, auto result) {
+      ClipboardImage(window_, call, std::move(result));
+    });
     channel_.SetMethodCallHandler([this](const auto& call, auto result) {
       Handle(call, std::move(result));
     });
@@ -109,6 +169,7 @@ class VideoPlugin : public flutter::Plugin {
     if (FlutterDesktopMessengerIsAvailable(messenger_)) {
       channel_.SetMethodCallHandler(nullptr);
       window_channel_.SetMethodCallHandler(nullptr);
+      clipboard_channel_.SetMethodCallHandler(nullptr);
     }
     {
       std::lock_guard<std::mutex> guard(mutex_);
@@ -259,6 +320,7 @@ class VideoPlugin : public flutter::Plugin {
   FlutterDesktopMessengerRef messenger_;
   flutter::MethodChannel<EncodableValue> channel_;
   flutter::MethodChannel<EncodableValue> window_channel_;
+  flutter::MethodChannel<EncodableValue> clipboard_channel_;
   std::map<int64_t, ScheduledVideo> videos_;
   std::mutex mutex_;
   std::condition_variable wake_;

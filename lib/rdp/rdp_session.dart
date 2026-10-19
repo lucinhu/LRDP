@@ -12,6 +12,7 @@ import 'native_bindings.dart';
 import 'rdp_cursor.dart';
 import 'native_video.dart';
 import 'frame_rate.dart';
+import 'clipboard_picture.dart';
 
 enum SessionState {
   idle,
@@ -32,6 +33,9 @@ enum SessionEndReason {
   protocol,
   configuration,
 }
+
+Uint8List _encodeClipboardDib((int, int, Uint8List) image) =>
+    ClipboardPicture.encodeDib(image.$1, image.$2, image.$3);
 
 class _WorkerConnection {
   final events = ReceivePort();
@@ -82,9 +86,18 @@ class RdpSession extends ChangeNotifier {
   int features = 0;
   bool get displayResizeSupported => features & 2 != 0;
   bool get clipboardSupported => features & 1 != 0;
+  bool get imageClipboardSupported => features & 16 != 0;
   bool get unicodeInputSupported => features & 8 != 0;
   bool get hasDecodedAvc => features & 4 != 0;
   String? remoteClipboard;
+  ({Uint8List bytes, int kind})? remotePicture;
+  void discardRemotePicture() {
+    if (remotePicture != null) {
+      remotePicture = null;
+      _commands?.send(['imageClipboardAck']);
+    }
+  }
+
   String? transferDirectory;
   _WorkerConnection? _worker;
   SendPort? get _commands =>
@@ -237,6 +250,7 @@ class RdpSession extends ChangeNotifier {
     cursor.inversion?.dispose();
     cursor = const RdpCursor();
     remoteClipboard = null;
+    remotePicture = null;
     connectedAt = null;
     state = SessionState.connecting;
     endReason = SessionEndReason.none;
@@ -283,6 +297,8 @@ class RdpSession extends ChangeNotifier {
             if (!isActive) {
               _releaseVideo();
               _cancelPastes();
+              discardRemotePicture();
+              remoteClipboard = null;
             }
             if (state == SessionState.connected) connectedAt = DateTime.now();
             _updateAutomaticResolution();
@@ -294,7 +310,22 @@ class RdpSession extends ChangeNotifier {
           case 'video':
             unawaited(_attachVideo(event['ticket'] as int, epoch));
           case 'clipboard':
+            discardRemotePicture();
+            if (pasteInProgress) break;
             remoteClipboard = event['text'] as String;
+            notifyListeners();
+          case 'clipboardImage':
+            if (pasteInProgress) {
+              _commands?.send(['imageClipboardAck']);
+              break;
+            }
+            remoteClipboard = null;
+            remotePicture = (
+              bytes: (event['bytes'] as TransferableTypedData)
+                  .materialize()
+                  .asUint8List(),
+              kind: event['kind'] as int,
+            );
             notifyListeners();
           case 'features':
             if (displayResizeSupported && (event['value'] as int) & 2 == 0) {
@@ -545,10 +576,59 @@ class RdpSession extends ChangeNotifier {
     final id = ++_pasteId;
     final result = Completer<bool>();
     _pastes[id] = result;
+    remoteClipboard = null;
+    discardRemotePicture();
     pasteError = '';
     _commands!.send(['paste', id, text]);
     notifyListeners();
     return result.future;
+  }
+
+  Future<bool> pastePicture(ClipboardPicture picture) async {
+    if (state != SessionState.connected ||
+        !imageClipboardSupported ||
+        _commands == null ||
+        pasteInProgress) {
+      pasteError = '图片剪贴板暂不可用，请稍候或重新连接';
+      return false;
+    }
+    final epoch = _epoch;
+    final id = ++_pasteId;
+    final result = Completer<bool>();
+    _pastes[id] = result;
+    remoteClipboard = null;
+    discardRemotePicture();
+    pasteError = '';
+    notifyListeners();
+    try {
+      final dib = await compute(_encodeClipboardDib, (
+        picture.width,
+        picture.height,
+        picture.rgba,
+      ));
+      if (epoch != _epoch ||
+          state != SessionState.connected ||
+          !_pastes.containsKey(id)) {
+        final pending = _pastes.remove(id);
+        if (pending != null && !pending.isCompleted) pending.complete(false);
+        return false;
+      }
+      _commands!.send([
+        'pasteImage',
+        id,
+        TransferableTypedData.fromList([picture.png]),
+        TransferableTypedData.fromList([dib]),
+      ]);
+      return await result.future;
+    } catch (_) {
+      final pending = _pastes.remove(id);
+      if (pending != null && !pending.isCompleted) pending.complete(false);
+      if (epoch == _epoch && !_disposed) {
+        pasteError = '无法准备图片，图片未发送';
+        notifyListeners();
+      }
+      return false;
+    }
   }
 
   void resize(int width, int height) =>
@@ -564,6 +644,7 @@ class RdpSession extends ChangeNotifier {
 
   Future<void> close() {
     ++_epoch;
+    remotePicture = null;
     _resizeTimer?.cancel();
     _resizeTimer = null;
     _releaseVideo();
@@ -632,6 +713,7 @@ void _sessionWorker(Map<String, dynamic> init) {
   }
 
   var audioAllowed = init['audioAllowed'] as bool? ?? !Platform.isAndroid;
+  bool imageInFlight = false;
   var previousAudioStatus = '';
   int? pasteRequest;
   final unicode = Queue<(int, int)>();
@@ -818,6 +900,43 @@ void _sessionWorker(Map<String, dynamic> init) {
             } finally {
               calloc.free(value);
             }
+          case 'imageClipboardAck':
+            imageInFlight = false;
+          case 'pasteImage':
+            final id = msg[1] as int;
+            final png = (msg[2] as TransferableTypedData)
+                .materialize()
+                .asUint8List();
+            final dib = (msg[3] as TransferableTypedData)
+                .materialize()
+                .asUint8List();
+            final pngBuffer = calloc<Uint8>(png.length),
+                dibBuffer = calloc<Uint8>(dib.length);
+            try {
+              pngBuffer.asTypedList(png.length).setAll(0, png);
+              dibBuffer.asTypedList(dib.length).setAll(0, dib);
+              if (pasteRequest == null &&
+                  api!.pasteImage(
+                        session,
+                        pngBuffer,
+                        png.length,
+                        dibBuffer,
+                        dib.length,
+                      ) ==
+                      1) {
+                pasteRequest = id;
+              } else {
+                events.send({
+                  'type': 'pasteResult',
+                  'id': id,
+                  'ok': false,
+                  'message': '图片剪贴板暂不可用，请稍候或重新连接',
+                });
+              }
+            } finally {
+              calloc.free(pngBuffer);
+              calloc.free(dibBuffer);
+            }
           case 'paste':
             final id = msg[1] as int;
             final value = (msg[2] as String).toNativeUtf8();
@@ -905,6 +1024,28 @@ void _sessionWorker(Map<String, dynamic> init) {
         unicode.removeFirst();
       }
       if (!visible) return;
+      if (!imageInFlight && features & 16 != 0) {
+        final needed = -api.readImage(session, nullptr, 0, nullptr);
+        if (needed > 0 && needed <= ClipboardPicture.maxBytes) {
+          final data = calloc<Uint8>(needed), kind = calloc<Int32>();
+          try {
+            final count = api.readImage(session, data, needed, kind);
+            if (count > 0) {
+              imageInFlight = true;
+              events.send({
+                'type': 'clipboardImage',
+                'kind': kind.value,
+                'bytes': TransferableTypedData.fromList([
+                  data.asTypedList(count),
+                ]),
+              });
+            }
+          } finally {
+            calloc.free(data);
+            calloc.free(kind);
+          }
+        }
+      }
       if (!cursorInFlight) {
         final bytes = api.cursor(
           session,

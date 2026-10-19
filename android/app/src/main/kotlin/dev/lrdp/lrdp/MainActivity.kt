@@ -10,6 +10,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    private var clipboardImages: ClipboardImageBridge? = null
     private var audioChannel: MethodChannel? = null
     private var displayChannel: MethodChannel? = null
     private var displayToken: Long? = null
@@ -23,6 +24,10 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        clipboardImages?.close()
+        clipboardImages = ClipboardImageBridge(this, flutterEngine.dartExecutor.binaryMessenger) {
+            resumed && !isFinishing && !isDestroyed
+        }
         volumeControlStream = AudioManager.STREAM_MUSIC
         displayChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.lrdp/display").also { channel ->
             channel.setMethodCallHandler { call, result ->
@@ -161,6 +166,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        clipboardImages?.close()
+        clipboardImages = null
         frameRateLimit = null
         applyDisplayPreference()
         displayChannel?.setMethodCallHandler(null)
