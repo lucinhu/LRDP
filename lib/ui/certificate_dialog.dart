@@ -1,3 +1,4 @@
+import '../l10n/app_strings.dart';
 import 'package:flutter/material.dart';
 
 typedef CertificateAcceptance = ({bool remember});
@@ -32,7 +33,9 @@ class _CertificateDialogState extends State<CertificateDialog> {
       color: Theme.of(context).colorScheme.primary,
     ),
     title: Text(
-      widget.previousFingerprint.isEmpty ? '确认远程电脑的身份' : '远程电脑的证书发生变化',
+      widget.previousFingerprint.isEmpty
+          ? context.tr("确认远程电脑的身份")
+          : context.tr("远程电脑的证书发生变化"),
     ),
     content: SizedBox(
       width: 460,
@@ -40,7 +43,11 @@ class _CertificateDialogState extends State<CertificateDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('系统无法自动验证 ${widget.address}。请通过可信渠道核对 SHA-256 指纹后再连接。'),
+          Text(
+            context.tr("系统无法自动验证 {0}。请通过可信渠道核对 SHA-256 指纹后再连接。", [
+              widget.address,
+            ]),
+          ),
           const SizedBox(height: 16),
           SelectableText(
             widget.fingerprint,
@@ -48,7 +55,7 @@ class _CertificateDialogState extends State<CertificateDialog> {
           ),
           if (widget.previousFingerprint.isNotEmpty) ...[
             const SizedBox(height: 12),
-            const Text('原指纹', style: TextStyle(fontSize: 12)),
+            Text(context.tr("原指纹"), style: TextStyle(fontSize: 12)),
             SelectableText(
               widget.previousFingerprint,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
@@ -59,8 +66,11 @@ class _CertificateDialogState extends State<CertificateDialog> {
             contentPadding: EdgeInsets.zero,
             value: _remember,
             onChanged: (value) => setState(() => _remember = value!),
-            title: const Text('在此设备记住这个指纹'),
-            subtitle: const Text('证书变化时会再次询问', style: TextStyle(fontSize: 12)),
+            title: Text(context.tr("在此设备记住这个指纹")),
+            subtitle: Text(
+              context.tr("证书变化时会再次询问"),
+              style: TextStyle(fontSize: 12),
+            ),
           ),
         ],
       ),
@@ -68,7 +78,7 @@ class _CertificateDialogState extends State<CertificateDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('取消连接'),
+        child: Text(context.tr("取消连接")),
       ),
       FilledButton(
         onPressed: widget.fingerprint.isEmpty
@@ -76,7 +86,7 @@ class _CertificateDialogState extends State<CertificateDialog> {
             : () => Navigator.pop<CertificateAcceptance>(context, (
                 remember: _remember,
               )),
-        child: const Text('指纹匹配，继续'),
+        child: Text(context.tr("指纹匹配，继续")),
       ),
     ],
   );

@@ -213,7 +213,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('发送文字'));
+    await tester.tap(find.text('键盘'));
     await tester.pumpAndSettle();
     tester.view.viewInsets = const FakeViewPadding(bottom: 350);
     await tester.pumpAndSettle();

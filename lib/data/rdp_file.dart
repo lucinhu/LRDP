@@ -47,6 +47,11 @@ class RdpFile {
       domain: values['domain'] ?? '',
       width: dimension('desktopwidth', 1280),
       height: dimension('desktopheight', 800),
+      automaticResolution:
+          values['dynamic resolution'] == '1' ||
+          (!values.containsKey('dynamic resolution') &&
+              !values.containsKey('desktopwidth') &&
+              !values.containsKey('desktopheight')),
       clipboard: values['redirectclipboard'] != '0',
       audio: values['audiomode'] == '0',
       nla: values['enablecredsspsupport'] != '0',
@@ -61,6 +66,7 @@ class RdpFile {
       'domain:s:${clean(p.domain)}',
       'desktopwidth:i:${p.width}',
       'desktopheight:i:${p.height}',
+      'dynamic resolution:i:${p.automaticResolution ? 1 : 0}',
       'session bpp:i:32',
       'redirectclipboard:i:${p.clipboard ? 1 : 0}',
       'audiomode:i:${p.audio ? 0 : 2}',

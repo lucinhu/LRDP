@@ -18,6 +18,10 @@ Windows 对固定插件的 `MethodResult::Success(nullptr)` 调用做一处兼�
 `native/cmake/dynamic_color_compat.cmake` 校验原文件 SHA-256，只在构建目录生成
 使用 `Success()` 的副本，普通 Flutter Windows 构建和交叉构建均使用这份副本。
 
+界面支持简体中文、繁体中文和英语，默认跟随系统。翻译目录修改后运行
+`python3 scripts/generate_localizations.py`，再运行本地化测试；生成的同步消息数据已经
+提交，普通构建无需额外生成步骤。语言扩展与参数规则见 `docs/LOCALIZATION.md`。
+
 ## Linux
 
 H.264 默认开启。先构建固定版本的最小静态 FFmpeg（需要 Make；x86 SIMD 建议安装 NASM）：
@@ -43,6 +47,15 @@ KWallet Secret Service）。不可用时不会将密码写入明文文件。
 
 Linux 打包脚本检查主程序入口、ABI v5，以及安装目录的 Dart AOT 是否早于源码，
 拒绝将集成测试入口或旧原生库打入用户包。打包前需等待构建及安装阶段完成。
+发布前还要求当前主入口通过实际鼠标、全屏与窗口恢复检查，以及输入停止检查。
+运行环境需要 Xvnc、freerdp-shadow-cli3、xdotool 和 Openbox；Openbox 仅用于私有测试显示：
+
+```sh
+python3 scripts/run_linux_mouse_test.py --window-manager /usr/bin/openbox
+python3 scripts/run_input_stop_test.py --library build/linux/x64/release/bundle/lib/liblrdp.so
+bash scripts/package_linux.sh
+```
+
 窗口图标通过 `glib-compile-resources` 嵌入可执行文件。解压分发包后运行
 `./install-desktop.sh`，可将当前路径注册到当前用户的应用菜单并显示 LRDP 图标，
 无需 root。注册后应保留解压目录的位置。图标源文件和重新生成步骤见
@@ -68,6 +81,7 @@ python3 scripts/run_cursor_test.py --flutter
 python3 scripts/run_logoff_test.py
 python3 scripts/run_file_test.py
 python3 scripts/run_frame_rate_test.py
+python3 scripts/run_resolution_test.py
 python3 scripts/run_audio_test.py --build build/native
 python3 scripts/run_protocol_test.py --live-ui
 python3 scripts/run_protocol_test.py --release

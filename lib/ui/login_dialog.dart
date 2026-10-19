@@ -1,3 +1,4 @@
+import '../l10n/app_strings.dart';
 import 'package:flutter/material.dart';
 import '../models/connection_profile.dart';
 
@@ -31,7 +32,7 @@ class _LoginDialogState extends State<LoginDialog> {
   }
 
   String? _valid(String? value) =>
-      value?.contains('\u0000') == true ? '登录信息包含无效字符' : null;
+      value?.contains('\u0000') == true ? context.tr('登录信息包含无效字符') : null;
   void _connect() {
     if (!_form.currentState!.validate()) return;
     Navigator.pop<LoginDetails>(context, (
@@ -45,7 +46,9 @@ class _LoginDialogState extends State<LoginDialog> {
   Widget build(BuildContext context) => AlertDialog(
     scrollable: true,
     title: Text(
-      '${widget.issue == null ? '连接到' : '重新登录'} ${widget.profile.name}',
+      context.tr(widget.issue == null ? '连接到 {0}' : '重新登录 {0}', [
+        widget.profile.name,
+      ]),
     ),
     content: SizedBox(
       width: 380,
@@ -61,7 +64,7 @@ class _LoginDialogState extends State<LoginDialog> {
             ),
             if (widget.issue case final issue?) ...[
               const SizedBox(height: 12),
-              Text(issue),
+              Text(context.tr(issue)),
             ],
             const SizedBox(height: 20),
             TextFormField(
@@ -71,9 +74,9 @@ class _LoginDialogState extends State<LoginDialog> {
               enableSuggestions: false,
               autocorrect: false,
               textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(labelText: '用户名'),
+              decoration: InputDecoration(labelText: context.tr("用户名")),
               validator: (value) => value == null || value.trim().isEmpty
-                  ? '请输入用户名'
+                  ? context.tr('请输入用户名')
                   : _valid(value),
             ),
             const SizedBox(height: 16),
@@ -84,7 +87,7 @@ class _LoginDialogState extends State<LoginDialog> {
               autocorrect: false,
               textInputAction: TextInputAction.next,
               validator: _valid,
-              decoration: const InputDecoration(labelText: '域（选填）'),
+              decoration: InputDecoration(labelText: context.tr("域（选填）")),
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -95,12 +98,12 @@ class _LoginDialogState extends State<LoginDialog> {
               enableSuggestions: false,
               autocorrect: false,
               validator: _valid,
-              decoration: const InputDecoration(labelText: '密码'),
+              decoration: InputDecoration(labelText: context.tr("密码")),
               onFieldSubmitted: (_) => _connect(),
             ),
             const SizedBox(height: 12),
-            const Text(
-              '本次输入仅用于当前会话。需要在设备上保存时，请使用“编辑连接”。',
+            Text(
+              context.tr("本次输入仅用于当前会话。需要在设备上保存时，请使用“编辑连接”。"),
               style: TextStyle(fontSize: 12),
             ),
           ],
@@ -110,12 +113,12 @@ class _LoginDialogState extends State<LoginDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('取消'),
+        child: Text(context.tr("取消")),
       ),
       FilledButton(
         key: const Key('submitLogin'),
         onPressed: _connect,
-        child: const Text('连接'),
+        child: Text(context.tr("连接")),
       ),
     ],
   );

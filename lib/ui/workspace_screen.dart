@@ -1,7 +1,9 @@
+import '../l10n/app_strings.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +23,7 @@ import 'transfer_dialog.dart';
 import 'adaptive.dart';
 import 'certificate_dialog.dart';
 import 'login_dialog.dart';
+import 'session_fullscreen.dart';
 
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({
@@ -53,11 +56,23 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   final _opening = <String>{};
   final _deleting = <String>{};
   String _section = '全部连接';
-  String get _sectionTitle =>
-      _section.startsWith('group:') ? _section.substring(6) : _section;
+  String get _sectionTitle => _section.startsWith('group:')
+      ? _section.substring(6)
+      : context.tr(_section);
   String? _active;
   String? _phoneGroup;
   bool _list = true, _fullscreen = false;
+  final _windowFullscreen = SessionFullscreen();
+  TargetPlatform _fullscreenPlatform = defaultTargetPlatform;
+  Timer? _restoreFullscreen;
+  void _activate(String id) => setState(() {
+    _active = id;
+    _fullscreen = store.openFullscreen;
+  });
+  void _leaveSession() => setState(() {
+    _active = null;
+    _fullscreen = false;
+  });
   ProfileStore get store => widget.store;
 
   AppLifecycleState? _lifecycle;
@@ -95,10 +110,38 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     _lifecycle = state;
     _updateAvailability();
     if (_foreground) _showNextCertificate();
+    if (_foreground) {
+      _windowFullscreen.set(
+        _active != null && _fullscreen,
+        Theme.of(context).platform,
+        refresh: true,
+      );
+    }
+  }
+
+  @override
+  void didChangeMetrics() {
+    _restoreFullscreen?.cancel();
+    if (!_mobile ||
+        !mounted ||
+        _active == null ||
+        !_fullscreen ||
+        View.of(context).viewInsets.bottom > 0) {
+      return;
+    }
+    // Android requires at least one second after the IME closes before hiding
+    // bars again (SystemChrome contract). Never dismiss the IME to do this.
+    _restoreFullscreen = Timer(const Duration(milliseconds: 1100), () {
+      if (mounted && _foreground && _active != null && _fullscreen) {
+        _windowFullscreen.set(true, _fullscreenPlatform, refresh: true);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _restoreFullscreen?.cancel();
+    _windowFullscreen.set(false, _fullscreenPlatform);
     WidgetsBinding.instance.removeObserver(this);
     _audioFocus.dispose();
     _search.dispose();
@@ -119,10 +162,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     super.dispose();
   }
 
-  void _message(String message) {
+  void _message(String message, [List<Object?> values = const []]) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+        SnackBar(
+          content: Text(context.tr(message, values)),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -139,7 +185,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         password = await store.password(profile);
       }
     } catch (_) {
-      _message('系统安全存储不可用，请重新输入密码');
+      _message("系统安全存储不可用，请重新输入密码");
     }
     if (!mounted) return;
     final result = await editProfile(
@@ -157,7 +203,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         await _connect(result.profile, password: result.password);
       }
     } catch (e) {
-      _message('保存失败：$e');
+      _message("保存失败：{0}", [e]);
     }
   }
 
@@ -182,7 +228,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             : existing.profile.hasSameSessionSettings(p) &&
                   password == credentials?.password)) {
       if (password != null) _requestedProfiles[p.id] = requested;
-      setState(() => _active = p.id);
+      _activate(p.id);
       return;
     }
     String fingerprint = existing?.profile.address == p.address
@@ -204,7 +250,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       if (fingerprint.isEmpty) fingerprint = await store.fingerprint(requested);
     } catch (_) {
       password ??= '';
-      _message('安全存储暂不可用，本次可使用临时凭据');
+      _message("安全存储暂不可用，本次可使用临时凭据");
     }
     if (!mounted ||
         _deleting.contains(p.id) ||
@@ -263,8 +309,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     session.addListener(() => _sessionChanged(session));
     setState(() {
       _active = p.id;
+      _fullscreen = store.openFullscreen;
       _recorded.remove(p.id);
     });
+    // Let the remote surface report its actual available size before the first
+    // handshake, including safe areas, navigation and session controls.
+    if (p.automaticResolution) await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || _sessions[p.id] != session || _deleting.contains(p.id)) {
+      return;
+    }
     await session.connect(password: password, acceptedFingerprint: fingerprint);
   }
 
@@ -330,7 +383,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         unawaited(
           store
               .update(current.copyWith(lastConnectedAt: DateTime.now()))
-              .catchError((Object e) => _message('无法保存连接时间：$e')),
+              .catchError((Object e) => _message("无法保存连接时间：{0}", [e])),
         );
       }
     }
@@ -387,7 +440,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       try {
         await store.trust(session.profile, session.fingerprint);
       } catch (_) {
-        _message('无法保存至系统安全存储，仅在本次会话中信任');
+        _message("无法保存至系统安全存储，仅在本次会话中信任");
       }
     }
     if (!mounted || _sessions[session.profile.id] != session) return;
@@ -454,8 +507,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     try {
       final file = await openFile(
         acceptedTypeGroups: [
-          const XTypeGroup(
-            label: 'RDP 连接',
+          XTypeGroup(
+            label: context.tr("RDP 连接"),
             extensions: ['rdp'],
             uniformTypeIdentifiers: ['public.data'],
           ),
@@ -480,7 +533,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         await _connect(result.profile, password: result.password);
       }
     } catch (e) {
-      _message('导入失败：$e');
+      _message("导入失败：{0}", [e]);
     }
   }
 
@@ -492,14 +545,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       }.contains(Theme.of(context).platform)) {
         final text = RdpFile.encode(p);
         await Clipboard.setData(ClipboardData(text: text));
-        _message('RDP 配置已复制，可粘贴保存为 .rdp 文件。配置不包含密码。');
+        _message("RDP 配置已复制，可粘贴保存为 .rdp 文件。配置不包含密码。");
         return;
       }
       final location = await getSaveLocation(
         suggestedName:
             '${p.name.replaceAll(RegExp(r'[^\w\u4e00-\u9fff-]'), '_')}.rdp',
         acceptedTypeGroups: [
-          const XTypeGroup(label: 'RDP 连接', extensions: ['rdp']),
+          XTypeGroup(label: context.tr("RDP 连接"), extensions: ['rdp']),
         ],
       );
       if (location == null) return;
@@ -507,9 +560,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         utf8.encode(RdpFile.encode(p)),
         mimeType: 'application/x-rdp',
       ).saveTo(location.path);
-      _message('已导出连接配置，文件不包含密码');
+      _message("已导出连接配置，文件不包含密码");
     } catch (e) {
-      _message('导出失败：$e');
+      _message("导出失败：{0}", [e]);
     }
   }
 
@@ -517,16 +570,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('删除「${p.name}」？'),
-        content: const Text('同时移除此设备保存的密码与证书指纹。文件中转站中的文件会保留在本地。'),
+        title: Text(context.tr("删除「{0}」？", [p.name])),
+        content: Text(context.tr("同时移除此设备保存的密码与证书指纹。文件中转站中的文件会保留在本地。")),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: Text(context.tr("取消")),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('删除连接'),
+            child: Text(context.tr("删除连接")),
           ),
         ],
       ),
@@ -537,7 +590,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       await _closeSession(p.id);
       await store.remove(p);
     } catch (e) {
-      _message('删除失败：$e');
+      _message("删除失败：{0}", [e]);
     } finally {
       _deleting.remove(p.id);
     }
@@ -574,7 +627,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             ),
           );
         } catch (e) {
-          _message('无法打开文件中转站：$e');
+          _message("无法打开文件中转站：{0}", [e]);
         }
       case 'delete':
         await _delete(p);
@@ -582,7 +635,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         try {
           await store.update(p.copyWith(favorite: !p.favorite));
         } catch (e) {
-          _message('保存失败：$e');
+          _message("保存失败：{0}", [e]);
         }
     }
   }
@@ -593,6 +646,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     builder: (context, _) {
       final wide = MediaQuery.sizeOf(context).width >= 980;
       final session = _active == null ? null : _sessions[_active];
+      final immersive = session != null && _fullscreen;
+      _fullscreenPlatform = Theme.of(context).platform;
+      _windowFullscreen.set(immersive, _fullscreenPlatform);
       if (_phoneGroup != null &&
           !store.profiles.any((p) => p.group == _phoneGroup)) {
         _phoneGroup = null;
@@ -606,10 +662,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         canPop: session == null,
         onPopInvokedWithResult: (popped, result) {
           if (!popped) {
-            setState(() {
-              _active = null;
-              _fullscreen = false;
-            });
+            _leaveSession();
           }
         },
         child: Scaffold(
@@ -617,7 +670,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               ? FloatingActionButton.extended(
                   onPressed: _edit,
                   icon: const Icon(Icons.add),
-                  label: const Text('添加电脑'),
+                  label: Text(context.tr("添加电脑")),
                 )
               : null,
           bottomNavigationBar: phone && session == null
@@ -633,25 +686,25 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                     _section = ['全部连接', '我的收藏', '最近使用', '设置'][index];
                     _search.clear();
                   }),
-                  destinations: const [
+                  destinations: [
                     NavigationDestination(
                       icon: Icon(Icons.computer_outlined),
                       selectedIcon: Icon(Icons.computer),
-                      label: '电脑',
+                      label: context.tr("电脑"),
                     ),
                     NavigationDestination(
                       icon: Icon(Icons.star_border_rounded),
                       selectedIcon: Icon(Icons.star_rounded),
-                      label: '收藏',
+                      label: context.tr("收藏"),
                     ),
                     NavigationDestination(
                       icon: Icon(Icons.history),
-                      label: '最近',
+                      label: context.tr("最近"),
                     ),
                     NavigationDestination(
                       icon: Icon(Icons.settings_outlined),
                       selectedIcon: Icon(Icons.settings),
-                      label: '设置',
+                      label: context.tr("设置"),
                     ),
                   ],
                 )
@@ -665,22 +718,23 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   child: SafeArea(child: _sidebar(drawer: true)),
                 ),
           body: SafeArea(
+            top: !immersive,
+            bottom: !immersive,
             child: Row(
               children: [
-                if (wide && !_fullscreen)
-                  SizedBox(width: 236, child: _sidebar()),
+                if (wide && !immersive) SizedBox(width: 236, child: _sidebar()),
                 Expanded(
                   child: Column(
                     children: [
                       if (phone &&
+                          !immersive &&
                           !(session != null &&
                               MediaQuery.viewInsetsOf(context).bottom > 0 &&
                               MediaQuery.sizeOf(context).height < 500))
                         _phoneHeader(session)
-                      else if (!phone && !_fullscreen)
+                      else if (!phone && !immersive)
                         _topbar(wide),
-                      if (!phone && _sessions.isNotEmpty && !_fullscreen)
-                        _tabs(),
+                      if (!phone && _sessions.isNotEmpty && !immersive) _tabs(),
                       Expanded(
                         child: session == null
                             ? (_section == '设置' ? _settings() : _library())
@@ -690,6 +744,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                 memory: _viewMemories[session.profile.id],
                                 recovery: _recoveries[session.profile.id],
                                 active: true,
+                                leave: _leaveSession,
                                 frameRateLimit: store.frameRateLimit,
                                 fullscreen: _fullscreen,
                                 toggleFullscreen: () =>
@@ -717,11 +772,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       children: [
         if (session != null)
           IconButton(
-            tooltip: '返回电脑列表（保持连接）',
-            onPressed: () => setState(() {
-              _active = null;
-              _fullscreen = false;
-            }),
+            tooltip: context.tr("返回电脑列表（保持连接）"),
+            onPressed: _leaveSession,
             icon: const Icon(Icons.arrow_back),
           )
         else
@@ -732,7 +784,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         Expanded(
           child: Text(
             session?.profile.name ??
-                (_section == '全部连接' ? '我的电脑' : _sectionTitle),
+                (_section == '全部连接' ? context.tr('我的电脑') : _sectionTitle),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleLarge,
@@ -741,12 +793,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         if (session == null)
           IconButton(
             onPressed: _import,
-            tooltip: '导入 .rdp',
+            tooltip: context.tr("导入 .rdp"),
             icon: const Icon(Icons.file_download_outlined),
           ),
         if (_sessions.isNotEmpty)
           IconButton(
-            tooltip: '切换会话',
+            tooltip: context.tr("切换会话"),
             onPressed: _phoneSessions,
             icon: Badge(
               label: Text('${_sessions.length}'),
@@ -771,7 +823,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
               child: Text(
-                '正在进行的会话',
+                context.tr("正在进行的会话"),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
@@ -807,7 +859,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       ),
     );
     if (selected != null && mounted && _sessions.containsKey(selected)) {
-      setState(() => _active = selected);
+      _activate(selected);
     }
   }
 
@@ -850,7 +902,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                 Padding(
                   padding: EdgeInsets.only(left: 14),
                   child: Text(
-                    '分组',
+                    context.tr("分组"),
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 11,
@@ -875,7 +927,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                         Padding(
                           padding: EdgeInsets.all(14),
                           child: Text(
-                            '添加连接后，分组将在这里显示',
+                            context.tr("添加连接后，分组将在这里显示"),
                             style: TextStyle(
                               color: Theme.of(
                                 context,
@@ -950,7 +1002,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    label,
+                    target?.startsWith('group:') == true
+                        ? label
+                        : context.tr(label),
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: selected
@@ -992,7 +1046,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             builder: (context) => IconButton(
               onPressed: () => Scaffold.of(context).openDrawer(),
               icon: const Icon(Icons.menu_rounded),
-              tooltip: '导航',
+              tooltip: context.tr("导航"),
             ),
           ),
         Icon(
@@ -1004,7 +1058,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         ),
         const SizedBox(width: 10),
         Text(
-          _active == null ? '连接管理' : '远程会话',
+          _active == null ? context.tr("连接管理") : context.tr("远程会话"),
           style: const TextStyle(fontSize: 13),
         ),
         const Spacer(),
@@ -1015,13 +1069,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             ThemeMode.light => Icons.light_mode_outlined,
             ThemeMode.dark => Icons.dark_mode_outlined,
           }),
-          tooltip: '外观',
+          tooltip: context.tr("外观"),
           itemBuilder: (_) => [
             for (final mode in ThemeMode.values)
               CheckedPopupMenuItem(
                 value: mode,
                 checked: store.themeMode == mode,
-                child: Text(_themeLabel(mode)),
+                child: Text(context.tr(_themeLabel(mode))),
               ),
           ],
         ),
@@ -1038,9 +1092,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       padding: const EdgeInsets.symmetric(horizontal: 12),
       children: [
         TextButton.icon(
-          onPressed: () => setState(() => _active = null),
+          onPressed: _leaveSession,
           icon: const Icon(Icons.grid_view, size: 16),
-          label: const Text('连接库'),
+          label: Text(context.tr("连接库")),
         ),
         for (final entry in _sessions.entries)
           Padding(
@@ -1052,7 +1106,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               borderRadius: BorderRadius.circular(8),
               child: InkWell(
                 borderRadius: BorderRadius.circular(8),
-                onTap: () => setState(() => _active = entry.key),
+                onTap: () => _activate(entry.key),
                 child: Row(
                   children: [
                     const SizedBox(width: 12),
@@ -1072,7 +1126,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                     IconButton(
                       onPressed: () => _closeSession(entry.key),
                       icon: const Icon(Icons.close, size: 14),
-                      tooltip: '关闭会话',
+                      tooltip: context.tr("关闭会话"),
                       constraints: const BoxConstraints(minWidth: 30),
                       padding: EdgeInsets.zero,
                     ),
@@ -1140,7 +1194,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                         FilledButton.icon(
                           onPressed: _edit,
                           icon: const Icon(Icons.add, size: 18),
-                          label: const Text('添加电脑'),
+                          label: Text(context.tr("添加电脑")),
                         ),
                     ],
                   ),
@@ -1151,7 +1205,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),
                       child: Text(
-                        store.loadError!,
+                        context.tr(store.loadError!),
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.error,
                         ),
@@ -1177,7 +1231,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                           Icons.file_download_outlined,
                           size: 16,
                         ),
-                        label: const Text('导入 .rdp'),
+                        label: Text(context.tr("导入 .rdp")),
                       ),
                       if (!compact) ...[
                         const SizedBox(width: 12),
@@ -1189,7 +1243,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                 : Icons.view_list_outlined,
                             size: 19,
                           ),
-                          tooltip: '切换显示方式',
+                          tooltip: context.tr("切换显示方式"),
                         ),
                       ],
                     ],
@@ -1199,7 +1253,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                     controller: _search,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
-                      hintText: '搜索名称、地址或用户名…',
+                      hintText: context.tr("搜索名称、地址或用户名…"),
                       prefixIcon: const Icon(Icons.search, size: 20),
                       suffixIcon: _search.text.isEmpty
                           ? null
@@ -1209,7 +1263,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                 setState(() {});
                               },
                               icon: const Icon(Icons.close, size: 17),
-                              tooltip: '清空搜索',
+                              tooltip: context.tr("清空搜索"),
                             ),
                     ),
                   ),
@@ -1259,7 +1313,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   runSpacing: 8,
                   children: [
                     Text(
-                      '${store.profiles.length} 台电脑  ·  ${_sessions.values.where((s) => s.state == SessionState.connected).length} 个活动会话',
+                      context.tr("{0} 台电脑  ·  {1} 个活动会话", [
+                        store.profiles.length,
+                        _sessions.values
+                            .where((s) => s.state == SessionState.connected)
+                            .length,
+                      ]),
                       style: TextStyle(
                         fontSize: 11,
                         color: Theme.of(context).colorScheme.outline,
@@ -1294,7 +1353,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             ),
             SizedBox(width: 7),
             Text(
-              '快速连接',
+              context.tr("快速连接"),
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
@@ -1315,8 +1374,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   fontSize: 14,
                 ),
                 onSubmitted: (value) => _edit(address: value),
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.go,
+                autocorrect: false,
+                enableSuggestions: false,
                 decoration: InputDecoration(
-                  hintText: '主机名或 IP 地址:端口',
+                  labelText: context.tr("电脑地址与端口"),
+                  hintText: '192.168.1.10:3389',
                   hintStyle: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -1339,7 +1403,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('连接'),
+                  Text(context.tr("连接")),
                   if (!compact) ...[
                     const SizedBox(width: 15),
                     const Icon(Icons.arrow_forward_rounded, size: 17),
@@ -1349,12 +1413,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             ),
           ],
         ),
+        Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text(context.tr("端口选填，例如 :3390；不填时使用 3389")),
+        ),
         if (compact) ...[
           const SizedBox(height: 12),
           TextButton.icon(
             onPressed: _edit,
             icon: const Icon(Icons.add),
-            label: const Text('添加电脑'),
+            label: Text(context.tr("添加电脑")),
           ),
         ],
       ],
@@ -1381,15 +1449,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       ),
     );
     final menu = PopupMenuButton<String>(
-      tooltip: '连接操作',
+      tooltip: context.tr("连接操作"),
       onSelected: (action) => _menu(action, p),
       icon: const Icon(Icons.more_horiz, size: 20),
       itemBuilder: (_) => [
-        const PopupMenuItem(value: 'edit', child: Text('编辑连接')),
-        const PopupMenuItem(value: 'files', child: Text('文件中转站')),
+        PopupMenuItem(value: 'edit', child: Text(context.tr("编辑连接"))),
+        PopupMenuItem(value: 'files', child: Text(context.tr("文件中转站"))),
         PopupMenuItem(
           value: 'favorite',
-          child: Text(p.favorite ? '取消收藏' : '加入收藏'),
+          child: Text(p.favorite ? context.tr("取消收藏") : context.tr("加入收藏")),
         ),
         PopupMenuItem(
           value: 'export',
@@ -1398,11 +1466,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   TargetPlatform.android,
                   TargetPlatform.iOS,
                 }.contains(Theme.of(context).platform)
-                ? '复制 RDP 配置'
-                : '导出 .rdp',
+                ? context.tr("复制 RDP 配置")
+                : context.tr("导出 .rdp"),
           ),
         ),
-        const PopupMenuItem(value: 'delete', child: Text('删除连接')),
+        PopupMenuItem(value: 'delete', child: Text(context.tr("删除连接"))),
       ],
     );
     return Card(
@@ -1447,7 +1515,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                     const SizedBox(width: 8),
                     TextButton(
                       onPressed: () => _connect(p),
-                      child: Text(live ? '打开会话' : '连接'),
+                      child: Text(live ? context.tr("打开会话") : context.tr("连接")),
                     ),
                     menu,
                   ],
@@ -1514,9 +1582,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                         ],
                         Text(
                           live
-                              ? '已连接'
+                              ? context.tr("已连接")
                               : p.lastConnectedAt == null
-                              ? '尚未连接'
+                              ? context.tr("尚未连接")
                               : _relativeTime(p.lastConnectedAt!),
                           style: TextStyle(
                             fontSize: 10,
@@ -1540,10 +1608,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
 
   String _relativeTime(DateTime time) {
     final diff = DateTime.now().difference(time);
-    if (diff.inMinutes < 1) return '刚刚使用';
-    if (diff.inHours < 1) return '${diff.inMinutes} 分钟前';
-    if (diff.inDays < 1) return '${diff.inHours} 小时前';
-    return '${diff.inDays} 天前';
+    if (diff.inMinutes < 1) return context.tr('刚刚使用');
+    if (diff.inHours < 1) return context.tr('{0} 分钟前', [diff.inMinutes]);
+    if (diff.inDays < 1) return context.tr('{0} 小时前', [diff.inHours]);
+    return context.tr('{0} 天前', [diff.inDays]);
   }
 
   (String, String) get _emptyMessage {
@@ -1580,10 +1648,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             ),
           ),
           const SizedBox(height: 20),
-          Text(_emptyMessage.$1, style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            context.tr(_emptyMessage.$1),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 9),
           Text(
-            _emptyMessage.$2,
+            context.tr(_emptyMessage.$2),
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Theme.of(context).colorScheme.outline,
@@ -1603,7 +1674,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               store.profiles.isEmpty ? Icons.add : Icons.computer_outlined,
               size: 18,
             ),
-            label: Text(store.profiles.isEmpty ? '添加电脑' : '查看全部连接'),
+            label: Text(
+              store.profiles.isEmpty
+                  ? context.tr("添加电脑")
+                  : context.tr("查看全部连接"),
+            ),
           ),
         ],
       ),
@@ -1627,12 +1702,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                 onChanged: (_) => setState(() {}),
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
-                  hintText: '搜索名称、地址或用户名…',
+                  hintText: context.tr("搜索名称、地址或用户名…"),
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _search.text.isEmpty
                       ? null
                       : IconButton(
-                          tooltip: '清空搜索',
+                          tooltip: context.tr("清空搜索"),
                           icon: const Icon(Icons.close),
                           onPressed: () => setState(() => _search.clear()),
                         ),
@@ -1642,7 +1717,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               OutlinedButton.icon(
                 onPressed: () => _edit(address: _search.text.trim()),
                 icon: const Icon(Icons.bolt_rounded),
-                label: const Text('输入地址，快速连接'),
+                label: Text(context.tr("输入地址，快速连接")),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
                 ),
@@ -1650,7 +1725,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               if (store.loadError != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
-                  child: Text(store.loadError!),
+                  child: Text(context.tr(store.loadError!)),
                 ),
             ],
           ),
@@ -1666,7 +1741,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: ChoiceChip(
-                      label: const Text('所有分组'),
+                      label: Text(context.tr("所有分组")),
                       selected: _phoneGroup == null,
                       onSelected: (_) => setState(() => _phoneGroup = null),
                     ),
@@ -1690,7 +1765,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
             child: Text(
-              '${visible.length} 台电脑 · 点按连接',
+              context.tr("{0} 台电脑 · 点按连接", [visible.length]),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -1723,9 +1798,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       await save();
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('设置未能保存，请检查存储空间后重试')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr("设置未能保存，请检查存储空间后重试"))),
+        );
       }
     }
   }
@@ -1733,23 +1808,55 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   Widget _settings() => ListView(
     padding: EdgeInsets.all(phoneLayout(context) ? 16 : 32),
     children: [
-      Text('设置', style: Theme.of(context).textTheme.headlineSmall),
+      Text(context.tr("设置"), style: Theme.of(context).textTheme.headlineSmall),
       const SizedBox(height: 28),
       Card(
         child: Column(
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
+              child: DropdownButtonFormField<String>(
+                key: ValueKey('language-${store.language}'),
+                initialValue: store.language,
+                isExpanded: true,
+                decoration: InputDecoration(labelText: context.tr('语言')),
+                items: [
+                  for (final entry in AppStrings.languageNames.entries)
+                    DropdownMenuItem(
+                      value: entry.key,
+                      child: Text(
+                        entry.key == 'system'
+                            ? context.tr(entry.value)
+                            : entry.value,
+                      ),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    _saveSetting(() => store.setLanguage(value));
+                  }
+                },
+              ),
+            ),
+            SwitchListTile.adaptive(
+              value: store.openFullscreen,
+              title: Text(context.tr('进入会话时全屏')),
+              subtitle: Text(context.tr('连接后隐藏系统栏和导航，使用悬浮工具操作')),
+              onChanged: (value) =>
+                  _saveSetting(() => store.setOpenFullscreen(value)),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: DropdownButtonFormField<ThemeMode>(
                 key: ValueKey('theme-${store.themeMode.name}'),
                 initialValue: store.themeMode,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: '主题模式'),
+                decoration: InputDecoration(labelText: context.tr("主题模式")),
                 items: [
                   for (final mode in ThemeMode.values)
                     DropdownMenuItem(
                       value: mode,
-                      child: Text(_themeLabel(mode)),
+                      child: Text(context.tr(_themeLabel(mode))),
                     ),
                 ],
                 onChanged: (mode) {
@@ -1763,8 +1870,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               value: store.useSystemColors,
               onChanged: (value) =>
                   _saveSetting(() => store.setSystemColors(value)),
-              title: const Text('使用系统配色'),
-              subtitle: const Text('采用系统主题色；不可用时使用默认配色'),
+              title: Text(context.tr("使用系统配色")),
+              subtitle: Text(context.tr("采用系统主题色；不可用时使用默认配色")),
               secondary: const Icon(Icons.palette_outlined),
             ),
             const Divider(height: 1),
@@ -1774,16 +1881,20 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                 key: ValueKey('frame-rate-${store.frameRateLimit}'),
                 initialValue: store.frameRateLimit,
                 isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: '画面帧率上限',
-                  helperText: '实际帧率取决于远端、网络和屏幕刷新率。高帧率会增加耗电。',
+                decoration: InputDecoration(
+                  labelText: context.tr("画面帧率上限"),
+                  helperText: context.tr("实际帧率取决于远端、网络和屏幕刷新率。高帧率会增加耗电。"),
                   helperMaxLines: 3,
                 ),
                 items: [
                   for (final rate in ProfileStore.frameRateOptions)
                     DropdownMenuItem(
                       value: rate,
-                      child: Text(rate == 0 ? '自动（跟随屏幕）' : '$rate 帧/秒'),
+                      child: Text(
+                        rate == 0
+                            ? context.tr("自动（跟随屏幕）")
+                            : context.tr("{0} 帧/秒", [rate]),
+                      ),
                     ),
                 ],
                 onChanged: (rate) {
@@ -1794,33 +1905,37 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               ),
             ),
             const Divider(height: 1),
-            const ListTile(
+            ListTile(
               leading: Icon(Icons.enhanced_encryption_outlined),
-              title: Text('凭据与信任'),
-              subtitle: Text('密码和已确认的证书指纹存储在系统安全存储中。导出的 .rdp 文件不包含密码。'),
+              title: Text(context.tr("凭据与信任")),
+              subtitle: Text(
+                context.tr("密码和已确认的证书指纹存储在系统安全存储中。导出的 .rdp 文件不包含密码。"),
+              ),
             ),
           ],
         ),
       ),
       const SizedBox(height: 20),
-      const Card(
+      Card(
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '关于 LRDP',
+                context.tr("关于 LRDP"),
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               ),
               SizedBox(height: 12),
               Text(
-                'LRDP 0.1.0 开发预览版',
+                context.tr("LRDP 0.1.0 开发预览版"),
                 style: TextStyle(fontSize: 13, height: 1.9),
               ),
               SizedBox(height: 16),
               Text(
-                '远程控制：点按左键，长按右键；可切换触控板模式或平移缩放画面。\n桌面键盘：Ctrl + Alt + Home 将键盘控制返回本地。',
+                context.tr(
+                  "远程控制：点按左键，长按右键；可切换触控板模式或平移缩放画面。\n桌面键盘：Ctrl + Alt + Home 将键盘控制返回本地。",
+                ),
                 style: TextStyle(fontSize: 12, height: 1.8),
               ),
             ],
@@ -1835,7 +1950,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
           applicationVersion: '0.1.0',
         ),
         icon: const Icon(Icons.description_outlined),
-        label: const Text('开源许可'),
+        label: Text(context.tr("开源许可")),
       ),
     ],
   );

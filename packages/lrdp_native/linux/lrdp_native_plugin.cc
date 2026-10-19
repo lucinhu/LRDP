@@ -337,6 +337,18 @@ static void method(FlMethodChannel*, FlMethodCall* call, gpointer data) {
   auto* self = LRDP_NATIVE_PLUGIN(data);
   const char* name = fl_method_call_get_name(call);
   FlValue* args = fl_method_call_get_args(call);
+  if (g_str_equal(name, "fullscreen")) {
+    GtkWidget* window = gtk_widget_get_toplevel(self->view);
+    if (!GTK_IS_WINDOW(window) || !args || fl_value_get_type(args) != FL_VALUE_TYPE_BOOL) {
+      error(call, "Invalid fullscreen request");
+      return;
+    }
+    if (fl_value_get_bool(args)) gtk_window_fullscreen(GTK_WINDOW(window));
+    else gtk_window_unfullscreen(GTK_WINDOW(window));
+    g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+    fl_method_call_respond(call, response, nullptr);
+    return;
+  }
   if (g_str_equal(name, "diagnostics")) {
     g_autoptr(FlValue) result = fl_value_new_map();
     fl_value_set_string_take(result, "registered",
@@ -469,5 +481,8 @@ void lrdp_native_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
   g_autoptr(FlMethodChannel) channel = fl_method_channel_new(
       fl_plugin_registrar_get_messenger(registrar), "dev.lrdp/video", FL_METHOD_CODEC(codec));
   fl_method_channel_set_method_call_handler(channel, method, g_object_ref(self), g_object_unref);
+  g_autoptr(FlMethodChannel) window_channel = fl_method_channel_new(
+      fl_plugin_registrar_get_messenger(registrar), "dev.lrdp/window", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(window_channel, method, g_object_ref(self), g_object_unref);
   g_object_unref(self);
 }

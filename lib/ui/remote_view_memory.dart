@@ -7,6 +7,8 @@ class RemoteViewMemory {
   bool pan = false;
   bool keyboardSimulation = false;
   bool pasteText = false;
+  bool controlsCollapsed = false;
+  Offset controlsPosition = const Offset(1, 0);
   final surface = RemoteSurfaceMemory();
 }
 

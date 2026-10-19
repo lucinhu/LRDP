@@ -7,6 +7,31 @@ import 'package:lrdp/models/connection_profile.dart';
 import 'package:lrdp/rdp/key_mapping.dart';
 
 void main() {
+  test('automatic size is default and fixed profiles keep their intent', () {
+    const p = ConnectionProfile(id: 'size', name: 'Size', host: 'host');
+    expect(p.automaticResolution, isTrue);
+    expect(ConnectionProfile.fromJson(p.toJson()).automaticResolution, isTrue);
+    final fixed = p.copyWith(automaticResolution: false, width: 1920);
+    expect(
+      ConnectionProfile.fromJson(fixed.toJson()).automaticResolution,
+      isFalse,
+    );
+    expect(p.hasSameSessionSettings(fixed), isFalse);
+    final legacy = fixed.toJson()..remove('automaticResolution');
+    expect(ConnectionProfile.fromJson(legacy).automaticResolution, isFalse);
+    for (final profile in [p, fixed]) {
+      final imported = RdpFile.decode(
+        Uint8List.fromList(utf8.encode(RdpFile.encode(profile))),
+      );
+      expect(imported.automaticResolution, profile.automaticResolution);
+    }
+    ConnectionProfile import(String fields) => RdpFile.decode(
+      Uint8List.fromList(utf8.encode('full address:s:host\r\n$fields')),
+    );
+    expect(import('').automaticResolution, isTrue);
+    expect(import('desktopwidth:i:1920\r\n').automaticResolution, isFalse);
+    expect(import('dynamic resolution:i:0\r\n').automaticResolution, isFalse);
+  });
   test('audio is opt in, persists, imports and requires a new session', () {
     const p = ConnectionProfile(id: 'audio', name: 'Audio', host: '192.0.2.1');
     expect(p.audio, isFalse);

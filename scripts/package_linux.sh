@@ -46,10 +46,11 @@ if not aot.exists() or aot.stat().st_mtime < max(path.stat().st_mtime for path i
     raise SystemExit('Installed Dart AOT predates application sources; rebuild/install first')
 mouse = json.loads((root / 'build/linux-mouse-runtime/VERDICT.json').read_text())
 if (mouse.get('passed') is not True or mouse.get('entrypoint') != 'lib/main.dart Linux Release' or
+        mouse.get('os_fullscreen_verified') is not True or
         mouse.get('library_sha256') != hashlib.sha256((bundle / 'lib/liblrdp.so').read_bytes()).hexdigest() or
         mouse.get('aot_sha256') != hashlib.sha256(aot.read_bytes()).hexdigest() or
         mouse.get('plugin_sha256') != hashlib.sha256(plugin.read_bytes()).hexdigest()):
-    raise SystemExit('Run the actual main Release OS mouse regression against this bundle first')
+    raise SystemExit('Run the main Release OS mouse/fullscreen regression with --window-manager first')
 print('PASS: release main entry, native texture plugin, ABI v5, current Dart AOT and OS mouse regression')
 PY_CHECK
 package_name="lrdp-$app_version-linux-x64"

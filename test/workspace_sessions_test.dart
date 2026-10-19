@@ -150,6 +150,10 @@ void main() {
   }
 
   Future<void> library(WidgetTester tester) async {
+    if (find.byKey(const Key('expandSessionControls')).evaluate().isNotEmpty) {
+      await tester.tap(find.byKey(const Key('expandSessionControls')));
+      await tester.pumpAndSettle();
+    }
     await tester.tap(find.byTooltip('返回电脑列表（保持连接）'));
     await tester.pumpAndSettle();
   }
@@ -174,7 +178,7 @@ void main() {
     await mount(tester, store, sessions);
     await open(tester, original.name);
     await tester.tap(find.text('触控板'));
-    await tester.tap(find.text('缩放'));
+    await tester.tap(find.text('移动画面'));
     await tester.pumpAndSettle();
     final surface = tester.widget<RemoteSurface>(find.byType(RemoteSurface));
     surface.transform.value = Matrix4.diagonal3Values(3, 3, 1)
@@ -254,7 +258,7 @@ void main() {
     final sessions = <TestSession>[];
     await mount(tester, store, sessions, desktop: true);
     await open(tester, original.name);
-    for (final label in ['直接触控', '控制电脑']) {
+    for (final label in ['触屏', '移动画面']) {
       await tester.ensureVisible(find.text(label));
       await tester.tap(find.text(label));
       await tester.pumpAndSettle();
@@ -268,13 +272,15 @@ void main() {
       );
     await tester.pump();
     final matrix = first.transform.value.clone();
-    await tester.tap(find.text('连接库'));
+    await library(tester);
     await tester.pumpAndSettle();
     await open(tester, other.name);
     final second = tester.widget<RemoteSurface>(find.byType(RemoteSurface));
     expect(second.trackpad, isFalse);
     expect(second.pan, isFalse);
     expect(second.transform.value.getMaxScaleOnAxis(), 1);
+    await tester.tap(find.text('退出全屏'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text(original.name));
     await tester.pumpAndSettle();
     final restored = tester.widget<RemoteSurface>(find.byType(RemoteSurface));

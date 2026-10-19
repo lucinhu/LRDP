@@ -91,6 +91,45 @@ class RdpSession extends ChangeNotifier {
       _worker?.stopping == false ? _worker?.commands : null;
   bool _disposed = false, _decoding = false, _cursorDecoding = false;
   int _epoch = 0;
+  (int, int)? _viewportSize, _requestedSize;
+  Timer? _resizeTimer;
+
+  /// Logical pixels keep remote controls readable on high density phones.
+  /// Width must be even for the display-control channel. Native allocation
+  /// limits also apply to the initial handshake, not only later resize requests.
+  void setViewportSize(int width, int height) {
+    if (_disposed || width <= 0 || height <= 0) return;
+    final size = (width.clamp(200, 4096) & ~1, height.clamp(200, 4096));
+    if (_viewportSize == size) return;
+    _viewportSize = size;
+    _resizeTimer?.cancel();
+    _resizeTimer = null;
+    _updateAutomaticResolution();
+  }
+
+  void matchViewportResolution() {
+    if (_viewportSize case final size?) resize(size.$1, size.$2);
+  }
+
+  void _updateAutomaticResolution() {
+    if (_disposed ||
+        !profile.automaticResolution ||
+        !_visible ||
+        state != SessionState.connected ||
+        !displayResizeSupported) {
+      _resizeTimer?.cancel();
+      _resizeTimer = null;
+      return;
+    }
+    final size = _viewportSize;
+    if (size == null || size == _requestedSize || _resizeTimer != null) return;
+    _resizeTimer = Timer(const Duration(milliseconds: 400), () {
+      _resizeTimer = null;
+      _requestedSize = size;
+      resize(size.$1, size.$2);
+    });
+  }
+
   bool _visible = true;
   int _frameRate = 60;
   int get targetFrameRate => _frameRate;
@@ -126,6 +165,7 @@ class RdpSession extends ChangeNotifier {
   void setVisible(bool value) {
     if (_visible == value) return;
     _visible = value;
+    _updateAutomaticResolution();
     _commands?.send(['visible', value]);
     if (_video case final video?) unawaited(video.setVisible(value));
   }
@@ -185,6 +225,8 @@ class RdpSession extends ChangeNotifier {
     String acceptedFingerprint = '',
   }) async {
     final epoch = ++_epoch;
+    _resizeTimer?.cancel();
+    _resizeTimer = null;
     _releaseVideo();
     _cancelPastes();
     await _stopWorker();
@@ -243,6 +285,7 @@ class RdpSession extends ChangeNotifier {
               _cancelPastes();
             }
             if (state == SessionState.connected) connectedAt = DateTime.now();
+            _updateAutomaticResolution();
             notifyListeners();
           case 'cursor':
             _decodeCursor(event, epoch);
@@ -254,7 +297,11 @@ class RdpSession extends ChangeNotifier {
             remoteClipboard = event['text'] as String;
             notifyListeners();
           case 'features':
+            if (displayResizeSupported && (event['value'] as int) & 2 == 0) {
+              _requestedSize = null;
+            }
             features = event['value'] as int;
+            _updateAutomaticResolution();
             notifyListeners();
           case 'audioStatus':
             audioStatus = event['value'] as String;
@@ -280,9 +327,15 @@ class RdpSession extends ChangeNotifier {
         notifyListeners();
       }
     });
+    final settings = profile.toJson();
+    _requestedSize = profile.automaticResolution ? _viewportSize : null;
+    if (_requestedSize case final size?) {
+      settings['width'] = size.$1;
+      settings['height'] = size.$2;
+    }
     final init = <String, dynamic>{
       'events': worker.events.sendPort,
-      'profile': profile.toJson(),
+      'profile': settings,
       'directory': protocolDirectory,
       'password': password,
       'fingerprint': acceptedFingerprint,
@@ -511,6 +564,8 @@ class RdpSession extends ChangeNotifier {
 
   Future<void> close() {
     ++_epoch;
+    _resizeTimer?.cancel();
+    _resizeTimer = null;
     _releaseVideo();
     _cancelPastes();
     endReason = SessionEndReason.local;

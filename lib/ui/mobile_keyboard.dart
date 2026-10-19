@@ -1,3 +1,4 @@
+import '../l10n/app_strings.dart';
 import 'package:flutter/material.dart';
 import '../rdp/key_mapping.dart';
 import '../rdp/rdp_session.dart';
@@ -277,7 +278,7 @@ class _MobileKeyboardState extends State<MobileKeyboard>
               ? Theme.of(context).colorScheme.onPrimaryContainer
               : null,
         ),
-        child: Text(label),
+        child: Text(context.tr(label)),
       ),
     );
   }
@@ -309,14 +310,16 @@ class _MobileKeyboardState extends State<MobileKeyboard>
                       TextButton(
                         key: const Key('remoteKeySpace'),
                         onPressed: _sending ? null : () => _keyAction(0x39),
-                        child: const Text('空格'),
+                        child: Text(context.tr("空格")),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
                   key: const Key('remoteExtraKeys'),
-                  tooltip: _extraKeys ? '收起特殊按键' : '展开特殊按键',
+                  tooltip: _extraKeys
+                      ? context.tr("收起特殊按键")
+                      : context.tr("展开特殊按键"),
                   onPressed: () => setState(() => _extraKeys = !_extraKeys),
                   icon: Icon(_extraKeys ? Icons.expand_less : Icons.more_horiz),
                 ),
@@ -365,7 +368,7 @@ class _MobileKeyboardState extends State<MobileKeyboard>
                       style: TextButton.styleFrom(
                         minimumSize: const Size(52, 48),
                       ),
-                      child: Text(entry.key),
+                      child: Text(context.tr(entry.key)),
                     ),
                 ],
               ),
@@ -375,7 +378,7 @@ class _MobileKeyboardState extends State<MobileKeyboard>
             child: Row(
               children: [
                 IconButton(
-                  tooltip: '收起键盘',
+                  tooltip: context.tr("收起键盘"),
                   onPressed: _sending ? null : widget.close,
                   icon: const Icon(Icons.keyboard_hide_outlined),
                 ),
@@ -385,25 +388,25 @@ class _MobileKeyboardState extends State<MobileKeyboard>
                     MenuItemButton(
                       focusNode: _textModeFocus,
                       onPressed: () => _mode(false),
-                      child: const Text('文字输入'),
+                      child: Text(context.tr("文字输入")),
                     ),
                     MenuItemButton(
                       onPressed: () => _mode(false, paste: true),
-                      child: const Text('粘贴输入'),
+                      child: Text(context.tr("粘贴输入")),
                     ),
                     MenuItemButton(
                       onPressed: () => _mode(true),
-                      child: const Text('键盘模拟'),
+                      child: Text(context.tr("键盘模拟")),
                     ),
                   ],
                   builder: (context, controller, _) => IconButton(
                     key: const Key('remoteInputMode'),
                     focusNode: _modeFocus,
                     tooltip: _simulateKeys
-                        ? '输入模式：键盘模拟'
+                        ? context.tr("输入模式：键盘模拟")
                         : _pasteText
-                        ? '输入模式：粘贴输入'
-                        : '输入模式：文字输入',
+                        ? context.tr("输入模式：粘贴输入")
+                        : context.tr("输入模式：文字输入"),
                     onPressed: _sending
                         ? null
                         : () {
@@ -459,8 +462,10 @@ class _MobileKeyboardState extends State<MobileKeyboard>
                           smartDashesType: SmartDashesType.disabled,
                           smartQuotesType: SmartQuotesType.disabled,
                           decoration: InputDecoration(
-                            labelText: _simulateKeys ? '键盘模拟 · 输入即发送' : '文字输入',
-                            hintText: '输入中文后发送',
+                            labelText: _simulateKeys
+                                ? context.tr("键盘模拟 · 输入即发送")
+                                : context.tr("文字输入"),
+                            hintText: context.tr("输入中文后发送"),
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 10,
@@ -471,19 +476,19 @@ class _MobileKeyboardState extends State<MobileKeyboard>
                       if (_simulateKeys)
                         TextButton(
                           onPressed: _showKeyboard,
-                          child: const Text('显示键盘'),
+                          child: Text(context.tr("显示键盘")),
                         ),
                     ],
                   ),
                 ),
                 if (_simulateKeys) ...[
                   IconButton(
-                    tooltip: '退格',
+                    tooltip: context.tr("退格"),
                     onPressed: () => _keyAction(0x0e),
                     icon: const Icon(Icons.backspace_outlined),
                   ),
                   IconButton(
-                    tooltip: '回车',
+                    tooltip: context.tr("回车"),
                     onPressed: () => _keyAction(0x1c),
                     icon: const Icon(Icons.keyboard_return),
                   ),
@@ -497,8 +502,8 @@ class _MobileKeyboardState extends State<MobileKeyboard>
                         IconButton.filled(
                           key: const Key('pasteRemoteText'),
                           tooltip: value.text.codeUnits.length > 16384
-                              ? '内容过长，请分段发送'
-                              : '发送文字',
+                              ? context.tr("内容过长，请分段发送")
+                              : context.tr("发送文字"),
                           onPressed:
                               !_sending &&
                                   value.text.isNotEmpty &&
@@ -522,15 +527,18 @@ class _MobileKeyboardState extends State<MobileKeyboard>
             ),
           ),
           if (_simulateKeys && MediaQuery.sizeOf(context).height >= 500)
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: Text('使用英文键盘；中文由远程输入法转换', style: TextStyle(fontSize: 12)),
+              child: Text(
+                context.tr("使用英文键盘；中文由远程输入法转换"),
+                style: TextStyle(fontSize: 12),
+              ),
             ),
           if (_error case final error?)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               child: Text(
-                error,
+                context.tr(error),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.error,
                   fontSize: 12,

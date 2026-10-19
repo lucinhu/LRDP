@@ -1,3 +1,4 @@
+import '../l10n/app_strings.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'adaptive.dart';
 import 'remote_surface.dart';
 import 'remote_view_memory.dart';
 import 'mobile_keyboard.dart';
+import 'floating_controls.dart';
 
 class RemoteView extends StatefulWidget {
   const RemoteView({
@@ -26,6 +28,7 @@ class RemoteView extends StatefulWidget {
     this.configure,
     this.memory,
     this.frameRateLimit = 0,
+    this.leave,
   });
   final RdpSession session;
   final RemoteViewMemory? memory;
@@ -34,6 +37,7 @@ class RemoteView extends StatefulWidget {
   final VoidCallback reconnect, disconnect, toggleFullscreen;
   final bool active, fullscreen;
   final int frameRateLimit;
+  final VoidCallback? leave;
   @override
   State<RemoteView> createState() => _RemoteViewState();
 }
@@ -50,6 +54,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
   bool get _trackpad => _memory.trackpad ?? false;
   set _trackpad(bool value) => _memory.trackpad = value;
   bool _keyboard = false;
+  bool _controlsBeforeKeyboard = false;
   final _displayToken = DisplayRefresh.allocate();
   (bool, int)? _displayRequest;
   RdpSession get session => widget.session;
@@ -186,6 +191,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    if (_keyboard) _memory.controlsCollapsed = _controlsBeforeKeyboard;
     WidgetsBinding.instance.removeObserver(this);
     session.removeListener(_updateDisplayRequest);
     unawaited(DisplayRefresh.request(_displayToken, active: false, limit: 0));
@@ -206,6 +212,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
         HardwareKeyboard.instance.isControlPressed &&
         HardwareKeyboard.instance.isAltPressed) {
       _focus.unfocus();
+      setState(() => _memory.controlsCollapsed = false);
       return KeyEventResult.handled;
     }
     final scan = rdpScancode(event.physicalKey);
@@ -224,7 +231,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('发送文字'),
+        title: Text(context.tr("发送文字")),
         scrollable: true,
         contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
         content: SizedBox(
@@ -254,291 +261,178 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
       return LayoutBuilder(
         builder: (context, bounds) => Column(
           children: [
-            if (!phone)
-              Material(
-                color: Theme.of(context).colorScheme.surface,
-                child: SizedBox(
-                  height: 54,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, viewport) {
+                  if (widget.active &&
+                      !_keyboard &&
+                      MediaQuery.viewInsetsOf(context).bottom == 0) {
+                    session.setViewportSize(
+                      viewport.maxWidth.round(),
+                      viewport.maxHeight.round(),
+                    );
+                  }
+                  return Stack(
+                    fit: StackFit.expand,
                     children: [
-                      _tool(
-                        connected ? Icons.circle : Icons.circle_outlined,
-                        connected ? '已连接' : '会话状态',
-                        null,
-                        color: connected ? const Color(0xFF3B9B73) : null,
+                      Material(
+                        color: const Color(0xFF0C1512),
+                        child: connected && session.hasVideo
+                            ? TextFieldTapRegion(
+                                enabled: phone && _keyboard,
+                                child: Focus(
+                                  focusNode: _focus,
+                                  onKeyEvent: _key,
+                                  child: RemoteSurface(
+                                    session: session,
+                                    focus: _focus,
+                                    transform: _transform,
+                                    trackpad: _trackpad,
+                                    pan: _pan,
+                                    active: widget.active,
+                                    preserveKeyboardFocus: phone && _keyboard,
+                                    memory: _memory.surface,
+                                  ),
+                                ),
+                              )
+                            : _status(context),
                       ),
-                      const VerticalDivider(indent: 16, endIndent: 16),
-                      _tool(
-                        Icons.keyboard_outlined,
-                        '发送文字',
-                        connected ? _sendText : null,
-                      ),
-                      _tool(
-                        Icons.content_paste_outlined,
-                        '同步剪贴板',
-                        connected && session.clipboardSupported
-                            ? () => _syncClipboard(manual: true)
-                            : null,
-                      ),
-                      _tool(
-                        Icons.folder_copy_outlined,
-                        session.profile.fileTransfer
-                            ? '文件中转站'
-                            : '请在连接偏好开启文件传输后重新连接',
-                        session.transferDirectory == null
-                            ? null
-                            : () => showTransfers(context, session),
-                      ),
-                      _tool(
-                        Icons.security_outlined,
-                        'Ctrl + Alt + Del',
-                        connected
-                            ? () => session.chord([0x1d, 0x38, 0x153])
-                            : null,
-                      ),
-                      _tool(
-                        Icons.window,
-                        'Windows 键',
-                        connected ? () => session.chord([0x15b]) : null,
-                      ),
-                      _tool(
-                        _trackpad
-                            ? Icons.touch_app_outlined
-                            : Icons.mouse_outlined,
-                        _trackpad ? '触控板模式' : '直接触控',
-                        () => setState(() => _trackpad = !_trackpad),
-                      ),
-                      _tool(
-                        _pan ? Icons.pan_tool_alt_outlined : Icons.ads_click,
-                        _pan ? '平移画面' : '控制电脑',
-                        () => setState(() => _pan = !_pan),
-                      ),
-                      _tool(
-                        Icons.fit_screen,
-                        '适应窗口',
-                        () => _transform.value = Matrix4.identity(),
-                      ),
-                      _tool(
-                        Icons.aspect_ratio,
-                        session.displayResizeSupported
-                            ? '匹配窗口分辨率'
-                            : '服务器未开放动态分辨率',
-                        connected && session.displayResizeSupported
-                            ? () {
-                                final size = MediaQuery.sizeOf(context);
-                                session.resize(
-                                  size.width.round(),
-                                  (size.height - 150).round(),
-                                );
-                              }
-                            : null,
-                      ),
-                      _tool(
-                        widget.fullscreen
-                            ? Icons.fullscreen_exit
-                            : Icons.fullscreen,
-                        '专注模式',
-                        widget.toggleFullscreen,
-                      ),
-                      _tool(
-                        Icons.power_settings_new,
-                        '断开连接',
-                        widget.disconnect,
-                        color: Theme.of(context).colorScheme.error,
+                      TextFieldTapRegion(
+                        enabled: phone && _keyboard,
+                        child: FloatingControls(
+                          memory: _memory,
+                          title: session.profile.name,
+                          actions: [
+                            _action(
+                              Icons.arrow_back,
+                              context.tr("电脑列表"),
+                              widget.leave,
+                              tooltip: context.tr("返回电脑列表（保持连接）"),
+                            ),
+                            _action(
+                              Icons.keyboard_outlined,
+                              context.tr("键盘"),
+                              connected
+                                  ? () {
+                                      if (phone) {
+                                        setState(() {
+                                          _controlsBeforeKeyboard =
+                                              _memory.controlsCollapsed;
+                                          _keyboard = true;
+                                          _memory.controlsCollapsed = true;
+                                        });
+                                      } else {
+                                        _sendText();
+                                      }
+                                    }
+                                  : null,
+                            ),
+                            _action(
+                              _trackpad
+                                  ? Icons.mouse_outlined
+                                  : Icons.touch_app_outlined,
+                              _trackpad ? context.tr("触控板") : context.tr("触屏"),
+                              () => setState(() {
+                                _trackpad = !_trackpad;
+                                _pan = false;
+                              }),
+                            ),
+                            _action(
+                              _pan
+                                  ? Icons.pan_tool_outlined
+                                  : Icons.pinch_outlined,
+                              _pan ? context.tr("控制电脑") : context.tr("移动画面"),
+                              () => setState(() => _pan = !_pan),
+                            ),
+                            _action(Icons.fit_screen, context.tr("适应屏幕"), () {
+                              _transform.value = Matrix4.identity();
+                              setState(() => _pan = false);
+                            }),
+                            _action(
+                              widget.fullscreen
+                                  ? Icons.fullscreen_exit
+                                  : Icons.fullscreen,
+                              widget.fullscreen
+                                  ? context.tr("退出全屏")
+                                  : context.tr("全屏"),
+                              widget.toggleFullscreen,
+                            ),
+                            _action(
+                              Icons.more_horiz,
+                              context.tr("更多"),
+                              _phoneMore,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
-                  ),
-                ),
-              ),
-            Expanded(
-              child: Material(
-                color: const Color(0xFF0C1512),
-                child: connected && session.hasVideo
-                    ? TextFieldTapRegion(
-                        enabled: phone && _keyboard,
-                        child: Focus(
-                          focusNode: _focus,
-                          onKeyEvent: _key,
-                          child: RemoteSurface(
-                            session: session,
-                            focus: _focus,
-                            transform: _transform,
-                            trackpad: _trackpad,
-                            pan: _pan,
-                            active: widget.active,
-                            preserveKeyboardFocus: phone && _keyboard,
-                            memory: _memory.surface,
-                          ),
-                        ),
-                      )
-                    : _status(context),
+                  );
+                },
               ),
             ),
-            if (!phone)
-              Container(
-                height: 30,
-                color: const Color(0xFF13231C),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.lock_outline,
-                      color: Color(0xFFA4B6AC),
-                      size: 12,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '${session.profile.address}  ·  ${session.profile.nla ? 'NLA / TLS' : 'TLS'}',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFFA4B6AC),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                    if (session.hasVideo)
-                      Text(
-                        '${session.desktopWidth} × ${session.desktopHeight}',
-                        style: const TextStyle(
-                          color: Color(0xFFA4B6AC),
-                          fontSize: 11,
-                        ),
-                      ),
-                    if (MediaQuery.sizeOf(context).width > 650)
-                      const Text(
-                        '    Ctrl + Alt + Home 释放键盘',
-                        style: TextStyle(
-                          color: Color(0xFFA4B6AC),
-                          fontSize: 11,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
             if (phone && _keyboard && connected)
-              // Large text and an IME can leave less room than a composer plus
-              // its error needs. Scroll locally so every control stays reachable.
               ConstrainedBox(
                 constraints: BoxConstraints(
-                  // Keep a touchable desktop above even a large error panel.
                   maxHeight:
                       bounds.maxHeight - math.min(72, bounds.maxHeight * .35),
                 ),
                 child: SingleChildScrollView(
                   primary: false,
-                  child: MobileKeyboard(
-                    session: session,
-                    simulateKeys: _memory.keyboardSimulation,
-                    pasteText: _memory.pasteText,
-                    onPasteTextChanged: (paste) => _memory.pasteText = paste,
-                    onModeChanged: (keys) => _memory.keyboardSimulation = keys,
-                    shortcuts: bounds.maxHeight > 320,
-                    close: () {
-                      FocusScope.of(context).unfocus();
-                      setState(() => _keyboard = false);
-                    },
+                  child: SafeArea(
+                    top: false,
+                    child: MobileKeyboard(
+                      session: session,
+                      simulateKeys: _memory.keyboardSimulation,
+                      pasteText: _memory.pasteText,
+                      onPasteTextChanged: (paste) => _memory.pasteText = paste,
+                      onModeChanged: (keys) =>
+                          _memory.keyboardSimulation = keys,
+                      shortcuts: bounds.maxHeight > 320,
+                      close: () {
+                        FocusScope.of(context).unfocus();
+                        setState(() {
+                          _keyboard = false;
+                          _memory.controlsCollapsed = _controlsBeforeKeyboard;
+                        });
+                      },
+                    ),
                   ),
                 ),
-              )
-            else if (phone)
-              _phoneDock(connected),
+              ),
           ],
         ),
       );
     },
   );
 
-  Widget _phoneDock(bool connected) => Material(
-    color: Theme.of(context).colorScheme.surface,
-    child: Row(
-      children: [
-        _dockItem(
-          Icons.keyboard_outlined,
-          '键盘',
-          connected ? () => setState(() => _keyboard = true) : null,
-        ),
-        _dockItem(
-          _trackpad ? Icons.mouse_outlined : Icons.touch_app_outlined,
-          _trackpad ? '触控板' : '触屏',
-          () => setState(() {
-            _trackpad = !_trackpad;
-            _pan = false;
-          }),
-        ),
-        _dockItem(
-          _pan ? Icons.pan_tool_outlined : Icons.pinch_outlined,
-          _pan ? '移动画面' : '缩放',
-          () {
-            setState(() => _pan = !_pan);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(_pan ? '单指移动画面，双指捏合缩放；再次点按可控制电脑' : '已返回远程控制'),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          },
-          selected: _pan,
-        ),
-        _dockItem(Icons.folder_outlined, '文件', () {
-          if (session.transferDirectory != null) {
-            showTransfers(context, session);
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('请在编辑连接 → 连接偏好开启文件传输，然后重新连接')),
-            );
-          }
-        }),
-        _dockItem(Icons.more_horiz, '更多', _phoneMore),
-      ],
-    ),
-  );
-
-  Widget _dockItem(
+  Widget _action(
     IconData icon,
     String label,
-    VoidCallback? action, {
-    bool selected = false,
-  }) => Expanded(
-    child: Semantics(
-      button: true,
-      enabled: action != null,
-      selected: selected,
-      child: InkWell(
-        onTap: action,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 64),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 24,
-                  color: action == null
-                      ? Theme.of(context).disabledColor
-                      : selected
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: action == null
-                        ? Theme.of(context).disabledColor
-                        : null,
-                  ),
-                ),
-              ],
+    VoidCallback? callback, {
+    String? tooltip,
+  }) => SizedBox(
+    width: 68,
+    child: Tooltip(
+      message: tooltip ?? label,
+      child: TextButton(
+        onPressed: callback,
+        style: TextButton.styleFrom(
+          minimumSize: const Size(64, 64),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 23),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12),
             ),
-          ),
+          ],
         ),
       ),
     ),
@@ -567,8 +461,13 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
               'fit': (Icons.fit_screen, '适应屏幕', true),
               'resize': (
                 Icons.aspect_ratio,
-                '匹配手机分辨率',
+                '匹配画面分辨率',
                 connected && session.displayResizeSupported,
+              ),
+              'files': (
+                Icons.folder_outlined,
+                '文件中转站',
+                session.transferDirectory != null,
               ),
               'clipboard': (
                 Icons.content_paste_outlined,
@@ -583,7 +482,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
               ListTile(
                 minTileHeight: 56,
                 leading: Icon(entry.value.$1),
-                title: Text(entry.value.$2),
+                title: Text(context.tr(entry.value.$2)),
                 enabled: entry.value.$3,
                 onTap: () => Navigator.pop(context, entry.key),
               ),
@@ -597,11 +496,9 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
         _transform.value = Matrix4.identity();
         setState(() => _pan = false);
       case 'resize':
-        final size = MediaQuery.sizeOf(context);
-        session.resize(
-          size.width.round(),
-          (size.height - MediaQuery.paddingOf(context).vertical - 120).round(),
-        );
+        session.matchViewportResolution();
+      case 'files':
+        await showTransfers(context, session);
       case 'clipboard':
         await _syncClipboard(manual: true);
       case 'cad':
@@ -615,12 +512,14 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
           context: context,
           showDragHandle: true,
           useSafeArea: true,
-          builder: (context) => const SafeArea(
+          builder: (context) => SafeArea(
             top: false,
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
               child: Text(
-                '触控板：单指移动光标，轻点左键。\n触屏：轻点画面上的位置。\n双指轻点或长按后松开：鼠标右键。\n双击后按住并移动：拖拽，松手结束。\n双指上下或左右滑动：滚动页面。\n双指捏合：缩放画面。\n放大后光标靠近边缘：自动移动视野。\n缩放按钮：切换为单指移动画面。\n键盘：本机输入法选词后点发送；上方有常用快捷键。\n返回列表会保持当前连接、缩放位置和操作模式。',
+                context.tr(
+                  "触控板：单指移动光标，轻点左键。\n触屏：轻点画面上的位置。\n双指轻点或长按后松开：鼠标右键。\n双击后按住并移动：拖拽，松手结束。\n双指上下或左右滑动：滚动页面。\n双指捏合：缩放画面。\n放大后光标靠近边缘：自动移动视野。\n移动画面按钮：切换为单指移动画面。\n键盘：本机输入法选词后点发送；上方有常用快捷键。\n返回列表会保持当前连接、缩放位置和操作模式。",
+                ),
                 style: TextStyle(fontSize: 15, height: 2),
               ),
             ),
@@ -628,20 +527,6 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
         );
     }
   }
-
-  Widget _tool(
-    IconData icon,
-    String label,
-    VoidCallback? callback, {
-    Color? color,
-  }) => Tooltip(
-    message: label,
-    child: TextButton.icon(
-      onPressed: callback,
-      icon: Icon(icon, size: 17, color: color),
-      label: Text(label, style: TextStyle(fontSize: 12, color: color)),
-    ),
-  );
 
   Widget _status(BuildContext context) {
     final recovery = widget.recovery;
@@ -670,15 +555,17 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
             Text(
               recovering
                   ? (recovery.suspended
-                        ? '回到应用后继续重连'
+                        ? context.tr("回到应用后继续重连")
                         : recovery.pending
-                        ? '网络中断，${recovery.remainingSeconds} 秒后重连'
-                        : '正在重新连接…')
+                        ? context.tr("网络中断，{0} 秒后重连", [
+                            recovery.remainingSeconds,
+                          ])
+                        : context.tr("正在重新连接…"))
                   : waiting
                   ? (session.state == SessionState.connecting
-                        ? '正在建立安全连接…'
-                        : '等待远程画面…')
-                  : issue.title,
+                        ? context.tr("正在建立安全连接…")
+                        : context.tr("等待远程画面…"))
+                  : context.tr(issue.title),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 22,
@@ -687,14 +574,18 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 12),
             SelectableText(
-              waiting ? session.profile.address : issue.message,
+              waiting ? session.profile.address : context.tr(issue.message),
               textAlign: TextAlign.center,
               style: const TextStyle(color: Color(0xFFACBEB3), fontSize: 13),
             ),
             if (recovering) ...[
               const SizedBox(height: 12),
               Text(
-                '第 ${recovery.attempts + (recovery.pending || recovery.suspended ? 1 : 0)} / ${SessionRecovery.maxAttempts} 次重试',
+                context.tr("第 {0} / {1} 次重试", [
+                  recovery.attempts +
+                      (recovery.pending || recovery.suspended ? 1 : 0),
+                  SessionRecovery.maxAttempts,
+                ]),
                 style: const TextStyle(color: Color(0xFFACBEB3)),
               ),
               const SizedBox(height: 16),
@@ -707,22 +598,22 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                     FilledButton.icon(
                       onPressed: recovery.retryNow,
                       icon: const Icon(Icons.refresh),
-                      label: const Text('立即重连'),
+                      label: Text(context.tr("立即重连")),
                     ),
                   OutlinedButton(
                     onPressed: recovery.cancel,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                     ),
-                    child: const Text('取消重连'),
+                    child: Text(context.tr("取消重连")),
                   ),
                 ],
               ),
             ] else if (!waiting) ...[
               if (recovery?.exhausted ?? false) ...[
                 const SizedBox(height: 12),
-                const Text(
-                  '自动重连已达上限，请检查网络后重试',
+                Text(
+                  context.tr("自动重连已达上限，请检查网络后重试"),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Color(0xFFACBEB3)),
                 ),
@@ -742,7 +633,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                           ? Icons.login
                           : Icons.refresh,
                     ),
-                    label: Text(issue.actionLabel),
+                    label: Text(context.tr(issue.actionLabel)),
                   ),
                   if (widget.configure != null &&
                       issue.action != SessionAction.settings)
@@ -751,7 +642,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white,
                       ),
-                      child: const Text('编辑连接'),
+                      child: Text(context.tr("编辑连接")),
                     ),
                 ],
               ),
@@ -760,15 +651,21 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                 const SizedBox(height: 16),
                 ExpansionTile(
                   key: const Key('connectionDiagnostics'),
-                  title: const Text(
-                    '技术详情',
+                  title: Text(
+                    context.tr("技术详情"),
                     style: TextStyle(color: Color(0xFFACBEB3), fontSize: 13),
                   ),
                   iconColor: const Color(0xFFACBEB3),
                   collapsedIconColor: const Color(0xFFACBEB3),
                   children: [
                     SelectableText(
-                      '${session.profile.address}\n代码：0x${session.errorCode.toRadixString(16).padLeft(8, '0')}\n${session.error.length > 4096 ? session.error.substring(0, 4096) : session.error}',
+                      context.tr("{0}\n代码：0x{1}\n{2}", [
+                        session.profile.address,
+                        session.errorCode.toRadixString(16).padLeft(8, '0'),
+                        session.error.length > 4096
+                            ? session.error.substring(0, 4096)
+                            : session.error,
+                      ]),
                       style: const TextStyle(
                         color: Color(0xFFACBEB3),
                         fontSize: 12,

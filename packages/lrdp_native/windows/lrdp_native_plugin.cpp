@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <map>
 #include <thread>
+#include <windows.h>
 
 #include "video_texture.h"
 
@@ -60,11 +61,42 @@ class VideoPlugin : public flutter::Plugin {
                        FlutterDesktopTextureRegistrarRef textures,
                        FlutterDesktopMessengerRef messenger)
       : textures_(textures),
+        window_(GetAncestor(registrar->GetView()->GetNativeWindow(), GA_ROOT)),
         messenger_(FlutterDesktopMessengerAddRef(messenger)),
         channel_(registrar->messenger(), "dev.lrdp/video",
+                 &flutter::StandardMethodCodec::GetInstance()),
+        window_channel_(registrar->messenger(), "dev.lrdp/window",
                  &flutter::StandardMethodCodec::GetInstance()) {
     channel_.SetMethodCallHandler([this](const auto& call, auto result) {
       Handle(call, std::move(result));
+    });
+    window_channel_.SetMethodCallHandler([this](const auto& call, auto result) {
+      const auto* enabled = call.arguments() ? std::get_if<bool>(call.arguments()) : nullptr;
+      if (call.method_name() != "fullscreen") { result->NotImplemented(); return; }
+      if (!enabled || !IsWindow(window_)) { result->Error("window-unavailable", "Invalid window"); return; }
+      if (*enabled != fullscreen_) {
+        if (*enabled) {
+          placement_.length = sizeof(placement_);
+          MONITORINFO monitor{};
+          monitor.cbSize = sizeof(monitor);
+          if (!GetWindowPlacement(window_, &placement_) ||
+              !GetMonitorInfo(MonitorFromWindow(window_, MONITOR_DEFAULTTONEAREST), &monitor)) {
+            result->Error("window-unavailable", "Cannot read window placement"); return;
+          }
+          style_ = GetWindowLongPtr(window_, GWL_STYLE);
+          SetWindowLongPtr(window_, GWL_STYLE, style_ & ~WS_OVERLAPPEDWINDOW);
+          SetWindowPos(window_, HWND_TOP, monitor.rcMonitor.left, monitor.rcMonitor.top,
+            monitor.rcMonitor.right - monitor.rcMonitor.left,
+            monitor.rcMonitor.bottom - monitor.rcMonitor.top, SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+        } else {
+          SetWindowLongPtr(window_, GWL_STYLE, style_);
+          SetWindowPlacement(window_, &placement_);
+          SetWindowPos(window_, nullptr, 0, 0, 0, 0,
+            SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+        }
+        fullscreen_ = *enabled;
+      }
+      result->Success();
     });
     ticker_ = std::thread([this] { Tick(); });
   }
@@ -74,8 +106,10 @@ class VideoPlugin : public flutter::Plugin {
     // plugin registrars. SetCallback dereferences that pointer even when the
     // requested callback is null. The registrar destroys its handler table
     // immediately after the plugins, so no channel call is needed at shutdown.
-    if (FlutterDesktopMessengerIsAvailable(messenger_))
+    if (FlutterDesktopMessengerIsAvailable(messenger_)) {
       channel_.SetMethodCallHandler(nullptr);
+      window_channel_.SetMethodCallHandler(nullptr);
+    }
     {
       std::lock_guard<std::mutex> guard(mutex_);
       stopping_ = true;
@@ -218,8 +252,13 @@ class VideoPlugin : public flutter::Plugin {
   }
 
   FlutterDesktopTextureRegistrarRef textures_;
+  HWND window_;
+  WINDOWPLACEMENT placement_{};
+  LONG_PTR style_ = 0;
+  bool fullscreen_ = false;
   FlutterDesktopMessengerRef messenger_;
   flutter::MethodChannel<EncodableValue> channel_;
+  flutter::MethodChannel<EncodableValue> window_channel_;
   std::map<int64_t, ScheduledVideo> videos_;
   std::mutex mutex_;
   std::condition_variable wake_;

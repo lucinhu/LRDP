@@ -50,6 +50,7 @@ class ConnectionProfile {
     this.favorite = false,
     this.width = 1280,
     this.height = 800,
+    this.automaticResolution = true,
     this.clipboard = true,
     this.audio = false,
     this.autoReconnect = true,
@@ -64,7 +65,7 @@ class ConnectionProfile {
   final String sharedDirectory;
   final int port, width, height;
   final bool favorite, clipboard, audio, nla, rememberPassword;
-  final bool fileTransfer, autoReconnect;
+  final bool fileTransfer, autoReconnect, automaticResolution;
   final DateTime? lastConnectedAt;
   String get address => Endpoint(host, port).address;
 
@@ -78,6 +79,7 @@ class ConnectionProfile {
         domain,
         width,
         height,
+        automaticResolution,
         clipboard,
         audio,
         autoReconnect,
@@ -92,6 +94,7 @@ class ConnectionProfile {
         other.domain,
         other.width,
         other.height,
+        other.automaticResolution,
         other.clipboard,
         other.audio,
         other.autoReconnect,
@@ -118,6 +121,7 @@ class ConnectionProfile {
     bool? favorite,
     int? width,
     int? height,
+    bool? automaticResolution,
     bool? clipboard,
     bool? audio,
     bool? autoReconnect,
@@ -137,6 +141,7 @@ class ConnectionProfile {
     favorite: favorite ?? this.favorite,
     width: width ?? this.width,
     height: height ?? this.height,
+    automaticResolution: automaticResolution ?? this.automaticResolution,
     clipboard: clipboard ?? this.clipboard,
     audio: audio ?? this.audio,
     autoReconnect: autoReconnect ?? this.autoReconnect,
@@ -158,6 +163,7 @@ class ConnectionProfile {
     'favorite': favorite,
     'width': width,
     'height': height,
+    'automaticResolution': automaticResolution,
     'clipboard': clipboard,
     'audio': audio,
     'autoReconnect': autoReconnect,
@@ -188,6 +194,10 @@ class ConnectionProfile {
       favorite: json['favorite'] as bool? ?? false,
       width: width,
       height: height,
+      // Older saved profiles explicitly stored a fixed size. Keep that choice.
+      automaticResolution:
+          json['automaticResolution'] as bool? ??
+          !(json.containsKey('width') || json.containsKey('height')),
       clipboard: json['clipboard'] as bool? ?? true,
       audio: json['audio'] as bool? ?? false,
       autoReconnect: json['autoReconnect'] as bool? ?? true,

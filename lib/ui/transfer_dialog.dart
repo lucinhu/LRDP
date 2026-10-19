@@ -1,3 +1,4 @@
+import '../l10n/app_strings.dart';
 import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -58,7 +59,7 @@ class _TransferDialogState extends State<TransferDialog> {
       if (mounted) {
         setState(() {
           _entries = [];
-          _error = '无法读取目录：$e';
+          _error = context.tr('无法读取目录：{0}', [e]);
         });
       }
     }
@@ -73,7 +74,7 @@ class _TransferDialogState extends State<TransferDialog> {
     try {
       await action();
     } catch (e) {
-      if (mounted) setState(() => _error = '操作未完成：$e');
+      if (mounted) setState(() => _error = context.tr('操作未完成：{0}', [e]));
     } finally {
       if (mounted) {
         setState(() {
@@ -88,7 +89,7 @@ class _TransferDialogState extends State<TransferDialog> {
     final files = await openFiles();
     for (final file in files) {
       if (!mounted) break;
-      setState(() => _activity = '正在放入 ${file.name}…');
+      setState(() => _activity = context.tr('正在放入 {0}…', [file.name]));
       await folder.importFile(
         file.name,
         file.openRead(),
@@ -122,7 +123,9 @@ class _TransferDialogState extends State<TransferDialog> {
             p.equals(p.absolute(location.path), p.absolute(source.path))) {
           return;
         }
-        if (mounted) setState(() => _activity = '正在导出 ${entry.name}…');
+        if (mounted) {
+          setState(() => _activity = context.tr('正在导出 {0}…', [entry.name]));
+        }
         await source.copy(location.path);
       }
     });
@@ -162,22 +165,24 @@ class _TransferDialogState extends State<TransferDialog> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '文件中转站',
+                      context.tr("文件中转站"),
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
                   IconButton(
                     onPressed: _busy ? null : () => Navigator.pop(context),
                     icon: const Icon(Icons.close),
-                    tooltip: '关闭',
+                    tooltip: context.tr("关闭"),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               Text(
                 widget.sharingEnabled
-                    ? '连接后，在远程 Windows 文件资源管理器中打开以下路径，即可双向复制文件。服务器需允许磁盘重定向。'
-                    : '请先在连接偏好中开启文件传输，再连接远程电脑。你可以提前把文件放入这里。',
+                    ? context.tr(
+                        "连接后，在远程 Windows 文件资源管理器中打开以下路径，即可双向复制文件。服务器需允许磁盘重定向。",
+                      )
+                    : context.tr("请先在连接偏好中开启文件传输，再连接远程电脑。你可以提前把文件放入这里。"),
               ),
               Row(
                 children: [
@@ -191,7 +196,7 @@ class _TransferDialogState extends State<TransferDialog> {
                       }
                     },
                     icon: const Icon(Icons.copy, size: 18),
-                    tooltip: '复制远程路径',
+                    tooltip: context.tr("复制远程路径"),
                   ),
                 ],
               ),
@@ -210,12 +215,12 @@ class _TransferDialogState extends State<TransferDialog> {
                   FilledButton.icon(
                     onPressed: _busy ? null : _upload,
                     icon: const Icon(Icons.upload_file),
-                    label: const Text('放入本地文件'),
+                    label: Text(context.tr("放入本地文件")),
                   ),
                   IconButton(
                     onPressed: _busy ? null : _refresh,
                     icon: const Icon(Icons.refresh),
-                    tooltip: '刷新收到的文件',
+                    tooltip: context.tr("刷新收到的文件"),
                   ),
                   if (_relative.isNotEmpty)
                     TextButton.icon(
@@ -227,7 +232,7 @@ class _TransferDialogState extends State<TransferDialog> {
                                   : p.dirname(_relative),
                             ),
                       icon: const Icon(Icons.arrow_upward),
-                      label: const Text('上一级'),
+                      label: Text(context.tr("上一级")),
                     ),
                 ],
               ),
@@ -255,9 +260,9 @@ class _TransferDialogState extends State<TransferDialog> {
                 child: _entries == null
                     ? const Center(child: CircularProgressIndicator())
                     : _entries!.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Text(
-                          '这里还没有文件\n放入本地文件，或从远程电脑复制文件到此处。',
+                          context.tr("这里还没有文件\n放入本地文件，或从远程电脑复制文件到此处。"),
                           textAlign: TextAlign.center,
                         ),
                       )
@@ -278,7 +283,9 @@ class _TransferDialogState extends State<TransferDialog> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(
-                              entry.directory ? '文件夹' : _size(entry.bytes),
+                              entry.directory
+                                  ? context.tr("文件夹")
+                                  : _size(entry.bytes),
                             ),
                             onTap: entry.directory && !_busy
                                 ? () => _enter(entry.path)
@@ -295,7 +302,9 @@ class _TransferDialogState extends State<TransferDialog> {
                                             ? Icons.ios_share
                                             : Icons.save_alt,
                                       ),
-                                      tooltip: _mobile ? '保存或分享' : '另存到本地',
+                                      tooltip: _mobile
+                                          ? context.tr("保存或分享")
+                                          : context.tr("另存到本地"),
                                     ),
                                   ),
                           );
@@ -303,8 +312,8 @@ class _TransferDialogState extends State<TransferDialog> {
                       ),
               ),
               const SizedBox(height: 6),
-              const Text(
-                '文件保留在本地；关闭文件传输并重新连接后，远程电脑将无法访问此目录。',
+              Text(
+                context.tr("文件保留在本地；关闭文件传输并重新连接后，远程电脑将无法访问此目录。"),
                 style: TextStyle(fontSize: 12),
               ),
             ],
@@ -324,13 +333,13 @@ class _TransferDialogState extends State<TransferDialog> {
               children: [
                 Expanded(
                   child: Text(
-                    '文件中转站',
+                    context.tr("文件中转站"),
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
                 IconButton(
                   onPressed: _busy ? null : () => Navigator.pop(context),
-                  tooltip: '关闭',
+                  tooltip: context.tr("关闭"),
                   icon: const Icon(Icons.close),
                 ),
               ],
@@ -343,9 +352,9 @@ class _TransferDialogState extends State<TransferDialog> {
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
                   title: const Text(r'\\tsclient\LRDP'),
-                  subtitle: const Text('远程电脑中的共享路径 · 点按查看用法'),
+                  subtitle: Text(context.tr("远程电脑中的共享路径 · 点按查看用法")),
                   trailing: IconButton(
-                    tooltip: '复制远程路径',
+                    tooltip: context.tr("复制远程路径"),
                     icon: const Icon(Icons.copy),
                     onPressed: () async {
                       const path = r'\\tsclient\LRDP';
@@ -360,8 +369,12 @@ class _TransferDialogState extends State<TransferDialog> {
                       padding: const EdgeInsets.only(bottom: 16),
                       child: Text(
                         widget.sharingEnabled
-                            ? '放入本地文件后，在远程 Windows 文件资源管理器打开上方路径，即可双向复制文件。服务器需允许磁盘重定向。收到文件后，点右侧分享按钮保存到手机。'
-                            : '请先在连接偏好中开启文件传输，再连接远程电脑。你可以提前把文件放入这里。',
+                            ? context.tr(
+                                "放入本地文件后，在远程 Windows 文件资源管理器打开上方路径，即可双向复制文件。服务器需允许磁盘重定向。收到文件后，点右侧分享按钮保存到手机。",
+                              )
+                            : context.tr(
+                                "请先在连接偏好中开启文件传输，再连接远程电脑。你可以提前把文件放入这里。",
+                              ),
                       ),
                     ),
                   ],
@@ -386,10 +399,10 @@ class _TransferDialogState extends State<TransferDialog> {
                     child: Center(child: CircularProgressIndicator()),
                   )
                 else if (_entries!.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.symmetric(vertical: 32),
                     child: Text(
-                      '还没有文件\n放入本地文件，或从远程电脑复制文件到此处。',
+                      context.tr("还没有文件\n放入本地文件，或从远程电脑复制文件到此处。"),
                       textAlign: TextAlign.center,
                     ),
                   )
@@ -409,7 +422,9 @@ class _TransferDialogState extends State<TransferDialog> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
-                        entry.directory ? '文件夹' : _size(entry.bytes),
+                        entry.directory
+                            ? context.tr("文件夹")
+                            : _size(entry.bytes),
                       ),
                       onTap: entry.directory && !_busy
                           ? () => _enter(entry.path)
@@ -421,17 +436,19 @@ class _TransferDialogState extends State<TransferDialog> {
                                 onPressed: _busy
                                     ? null
                                     : () => _export(entry, anchor),
-                                tooltip: _mobile ? '保存或分享' : '另存到本地',
+                                tooltip: _mobile
+                                    ? context.tr("保存或分享")
+                                    : context.tr("另存到本地"),
                                 icon: Icon(
                                   _mobile ? Icons.ios_share : Icons.save_alt,
                                 ),
                               ),
                             ),
                     ),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
                   child: Text(
-                    '文件保留在此连接的中转站中，断开连接不会删除。',
+                    context.tr("文件保留在此连接的中转站中，断开连接不会删除。"),
                     style: TextStyle(fontSize: 12),
                   ),
                 ),
@@ -447,12 +464,12 @@ class _TransferDialogState extends State<TransferDialog> {
                   child: FilledButton.icon(
                     onPressed: _busy ? null : _upload,
                     icon: const Icon(Icons.upload_file),
-                    label: const Text('放入本地文件'),
+                    label: Text(context.tr("放入本地文件")),
                   ),
                 ),
                 if (_relative.isNotEmpty)
                   IconButton(
-                    tooltip: '上一级',
+                    tooltip: context.tr("上一级"),
                     onPressed: _busy
                         ? null
                         : () => _enter(
@@ -464,7 +481,7 @@ class _TransferDialogState extends State<TransferDialog> {
                   ),
                 IconButton(
                   onPressed: _busy ? null : _refresh,
-                  tooltip: '刷新收到的文件',
+                  tooltip: context.tr("刷新收到的文件"),
                   icon: const Icon(Icons.refresh),
                 ),
               ],

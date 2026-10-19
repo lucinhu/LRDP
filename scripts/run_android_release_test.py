@@ -38,6 +38,8 @@ parser.add_argument('--verify-ime-control',action='store_true',
                     help='Verify real remote gestures while the IME stays visible in both input modes (API36)')
 parser.add_argument('--verify-appearance',action='store_true',
                     help='Verify system/manual appearance and persisted frame-rate selection on API36')
+parser.add_argument('--verify-session-ui',action='store_true',
+                    help='Verify languages and full screen/floating tools through actual OS input on API36')
 add_device_argument(parser)
 args=parser.parse_args()
 device=DEVICES[args.device]
@@ -45,6 +47,8 @@ if args.verify_ime_control and device.api!=36:
     parser.error('--verify-ime-control currently requires the owned API36 profile')
 if args.verify_appearance and device.api!=36:
     parser.error('--verify-appearance requires the owned API36 profile')
+if args.verify_session_ui and device.api!=36:
+    parser.error('--verify-session-ui requires the owned API36 profile')
 if args.small_phone and device.api!=36:
     parser.error('--small-phone currently requires the owned API36 profile for IME inset measurement')
 sdk=Path(os.environ.get('ANDROID_SDK_ROOT',str(Path.home()/'Android/Sdk')))
@@ -55,6 +59,7 @@ assert out.is_relative_to(root/'build'),'Evidence must stay under this workspace
 out.mkdir(parents=True,exist_ok=True)
 (out/'VERDICT.json').unlink(missing_ok=True)
 secret=secrets.token_urlsafe(18)
+translations=[json.loads((root/f'assets/l10n/{locale}.json').read_text()) for locale in ('en','zh-TW')]
 
 
 def sha(path):
@@ -115,7 +120,7 @@ class Input:
 
 
 class UI:
-    def __init__(self,input):self.input=input;self.legacy_field_lookups=0
+    def __init__(self,input):self.input=input;self.legacy_field_lookups=0;self.fullscreen_hint_dismissals=0
 
     def nodes(self):
         destination='/proc/self/fd/1' if device.api < 26 else '/dev/stdout'
@@ -125,7 +130,15 @@ class UI:
         if '<hierarchy' not in text:return []
         xml=text[text.index('<?xml') if '<?xml' in text else text.index('<hierarchy'):]
         xml=xml[:xml.rindex('</hierarchy>')+len('</hierarchy>')]
-        return list(ET.fromstring(xml).iter('node'))
+        nodes=list(ET.fromstring(xml).iter('node'))
+        # Android's first immersive entry shows a system-owned education sheet
+        # above LRDP. Acknowledge it as a user would; never bypass RDP trust UI.
+        if any('Viewing full screen' in self.label(node) for node in nodes):
+            button=next((node for node in nodes if node.get('text')=='Got it'),None)
+            if button is not None:
+                self.tap(button);self.fullscreen_hint_dismissals+=1
+                return []
+        return nodes
 
     @staticmethod
     def label(node):return '\n'.join(node.get(key,'') for key in ('text','content-desc','hint'))
@@ -137,7 +150,8 @@ class UI:
 
     def find(self,label,field=False):
         nodes=self.nodes()
-        matches=[node for node in nodes if label in self.label(node)
+        labels={label,*(catalog.get(label,label) for catalog in translations)}
+        matches=[node for node in nodes if any(value in self.label(node) for value in labels)
             and (not field or node.get('class')=='android.widget.EditText')]
         matches=[n for n in matches if (b:=self.bounds(n))[2]>b[0] and b[3]>b[1]]
         if field and not matches and device.api < 28:
@@ -157,7 +171,7 @@ class UI:
                 (label in ('键盘模拟','键盘模拟 · 输入即发送') and any('使用英文键盘' in self.label(n) for n in nodes))):
                 matches=fields
             if matches:self.legacy_field_lookups+=1
-        exact=[n for n in matches if any(n.get(key,'').strip()==label for key in ('text','content-desc','hint'))]
+        exact=[n for n in matches if any(n.get(key,'').strip() in labels for key in ('text','content-desc','hint'))]
         if exact:matches=exact
         return min(matches,key=lambda n:(self.bounds(n)[2]-self.bounds(n)[0])*(self.bounds(n)[3]-self.bounds(n)[1])) if matches else None
 
@@ -278,6 +292,12 @@ with tempfile.TemporaryDirectory(prefix='lrdp-main-release-') as temporary,ExitS
     ui=UI(injector)
     def find(label,field=False,scroll=False,reverse=False):
         node=ui.find(label,field)
+        if node is None and label in ('返回电脑列表（保持连接）','键盘','触控板','触屏','更多','退出全屏','全屏'):
+            collapsed=ui.find('展开会话工具')
+            if collapsed is not None:
+                ui.tap(collapsed)
+                until(lambda:ui.find(label,field) is not None,'Floating action unavailable: '+label)
+                node=ui.find(label,field)
         if node is None and scroll:
             for _ in range(8):
                 scrollables=[n for n in ui.nodes() if n.get('scrollable')=='true'
@@ -317,6 +337,20 @@ with tempfile.TemporaryDirectory(prefix='lrdp-main-release-') as temporary,ExitS
     if args.small_phone:
         until(lambda:(image:=capture('initial-orientation')).width<image.height,'Small phone did not enter portrait')
     launch();until(lambda:ui.find('添加电脑') is not None,'Workspace accessibility controls unavailable',60)
+    session_ui_cases=[]
+    def choose_language(name):
+        tap('设置');tap('语言');tap(name)
+        tap('电脑')
+    # Choose the interaction suite's language through customer UI, rather than
+    # seeding preferences or depending on the AVD's system locale.
+    if args.verify_session_ui:
+        for language,name,heading in [('zh-TW','繁體中文','我的電腦'),('en','English','My computers'),('zh-CN','简体中文','我的电脑')]:
+            choose_language(name)
+            until(lambda:any(heading in ui.label(node) for node in ui.nodes()),'Language did not switch: '+language)
+            capture('language-'+language)
+            session_ui_cases.append({'name':'Actual UI language switch '+language})
+    else:
+        choose_language('简体中文')
     appearance_cases=[]
     if args.verify_appearance:
         previous=android('shell','cmd','uimode','night').stdout
@@ -376,6 +410,32 @@ with tempfile.TemporaryDirectory(prefix='lrdp-main-release-') as temporary,ExitS
         return ('1280','800') in native_presentations
     until(native_render_ready,'Main Release did not present a native GPU frame')
     capture('connected');ui.dump('connected-ui');print('Main AOT received actual NLA desktop',flush=True)
+    if args.verify_session_ui:
+        image=capture('session-fullscreen')
+        assert bounds==[0,0,image.width,image.height],('Remote surface does not fill the screen',bounds,image.size)
+        tap('收起会话工具');collapsed=find('展开会话工具');old_bounds=ui.bounds(collapsed)
+        center=[(old_bounds[0]+old_bounds[2])/2,(old_bounds[1]+old_bounds[3])/2]
+        injector.send('swipe',**{'from':[center],'to':[[image.width*.2,image.height*.6]],'duration':450})
+        until(lambda:(node:=ui.find('展开会话工具')) is not None and ui.bounds(node)!=old_bounds,'Floating control did not move')
+        moved=ui.bounds(find('展开会话工具'));ui.tap(find('展开会话工具'))
+        find('收起会话工具');capture('session-tools-moved')
+        tap('退出全屏')
+        until(lambda:ui.bounds(find('远程桌面。'))!=bounds,'Exit full screen kept the same viewport')
+        tap('全屏')
+        until(lambda:ui.bounds(find('远程桌面。'))==bounds,'Full screen did not restore the viewport')
+        tap('收起会话工具');collapsed=find('展开会话工具');current=ui.bounds(collapsed)
+        injector.send('swipe',**{'from':[[(current[0]+current[2])/2,(current[1]+current[3])/2]],
+            'to':[[image.width-20,40]],'duration':450})
+        android('shell','wm','user-rotation','lock','1')
+        until(lambda:(rotated:=capture('session-tools-landscape')).width>rotated.height,'Landscape did not apply')
+        rotated=capture('session-tools-landscape');floating=ui.bounds(find('展开会话工具'))
+        assert 0<=floating[0]<floating[2]<=rotated.width and 0<=floating[1]<floating[3]<=rotated.height
+        android('shell','wm','user-rotation','lock','0')
+        until(lambda:(portrait:=capture('session-tools-portrait')).width<portrait.height,'Portrait did not restore')
+        tap('展开会话工具')
+        assert connection()==[first_connection]
+        session_ui_cases.append({'name':'Full-screen viewport, draggable/collapsible tools and orientation keep the same TCP session',
+            'fullscreen_bounds':bounds,'moved_collapsed_bounds':moved,'rotated_collapsed_bounds':floating})
     def point(x,y):
         left,top,right,bottom=bounds;scale=min((right-left)/1280,(bottom-top)/800)
         return [(left+right)/2+(x-640)*scale,(top+bottom)/2+(y-400)*scale]
@@ -389,7 +449,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-main-release-') as temporary,ExitS
         save_json('input-failure',{'reason':reason,'events':desktop.events[-64:],'keys':desktop.keys[-64:],
                                  'pointer':desktop.pointer(),'window':desktop.geometry()})
         raise AssertionError(reason)
-    cases=list(appearance_cases)
+    cases=list(appearance_cases)+session_ui_cases
     def clicks(expected,action,name):
         desktop.pump();start=len(desktop.events);action()
         pump_until(lambda:len([e for e in desktop.events[start:] if e['type'] in (4,5)])>=2,name+' missing')
@@ -722,6 +782,8 @@ with tempfile.TemporaryDirectory(prefix='lrdp-main-release-') as temporary,ExitS
         'legacy_field_lookups':ui.legacy_field_lookups,
         'system_font_scale':args.font_scale,'previous_system_font_scale':font_before,
         'small_phone':args.small_phone,'ime_control_verified':args.verify_ime_control,
+        'session_ui_verified':args.verify_session_ui,
+        'system_fullscreen_hint_dismissals':ui.fullscreen_hint_dismissals,
         'keyboard_simulation_input_box_visible':False,'display_before':display_before,
         'rotation_before':rotation_before,'rotation_mode_before':rotation_mode_before,
         'native_surface_presented':True,'native_presentations':native_presentations,

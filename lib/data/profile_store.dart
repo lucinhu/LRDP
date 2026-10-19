@@ -38,6 +38,28 @@ class ProfileStore extends ChangeNotifier {
   }
 
   bool get useSystemColors => _preferences.getBool('systemColors') ?? true;
+  static const languages = ['system', 'zh-CN', 'zh-TW', 'en'];
+  String get language {
+    final saved = _preferences.getString('language');
+    return languages.contains(saved) ? saved! : 'system';
+  }
+
+  Future<void> setLanguage(String value) => _serialize(() async {
+    if (!languages.contains(value)) {
+      throw ArgumentError.value(value, 'language');
+    }
+    if (!await _preferences.setString('language', value)) {
+      throw StateError('无法保存语言设置');
+    }
+    notifyListeners();
+  });
+  bool get openFullscreen => _preferences.getBool('openFullscreen') ?? true;
+  Future<void> setOpenFullscreen(bool value) => _serialize(() async {
+    if (!await _preferences.setBool('openFullscreen', value)) {
+      throw StateError('无法保存全屏设置');
+    }
+    notifyListeners();
+  });
   static const frameRateOptions = [0, 30, 60, 90, 120, 144, 165, 240];
   int get frameRateLimit {
     final value = _preferences.getInt('frameRateLimit') ?? 0;

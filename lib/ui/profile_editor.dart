@@ -1,3 +1,4 @@
+import '../l10n/app_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
@@ -70,8 +71,10 @@ class _ProfileEditorState extends State<ProfileEditor> {
   late String _sharedDirectory = widget.profile?.sharedDirectory ?? '';
   late bool _nla = widget.profile?.nla ?? true;
   bool _visible = false;
-  late String _resolution =
-      '${widget.profile?.width ?? 1280}×${widget.profile?.height ?? 800}';
+  static const _automatic = '自动（适应画面区域）';
+  late String _resolution = widget.profile?.automaticResolution ?? true
+      ? _automatic
+      : '${widget.profile!.width}×${widget.profile!.height}';
 
   @override
   void dispose() {
@@ -84,7 +87,8 @@ class _ProfileEditorState extends State<ProfileEditor> {
   void _submit(bool connect) {
     if (!_form.currentState!.validate()) return;
     final endpoint = Endpoint.parse(_address.text);
-    final size = _resolution.split('×');
+    final automatic = _resolution == _automatic;
+    final size = automatic ? null : _resolution.split('×');
     final p = ConnectionProfile(
       id: widget.profile?.id ?? ConnectionProfile.newId(),
       name: _name.text.trim().isEmpty ? endpoint.host : _name.text.trim(),
@@ -94,8 +98,9 @@ class _ProfileEditorState extends State<ProfileEditor> {
       domain: _domain.text.trim(),
       group: _group.text.trim().isEmpty ? '个人' : _group.text.trim(),
       favorite: widget.profile?.favorite ?? false,
-      width: int.parse(size[0]),
-      height: int.parse(size[1]),
+      width: size == null ? widget.profile?.width ?? 1280 : int.parse(size[0]),
+      height: size == null ? widget.profile?.height ?? 800 : int.parse(size[1]),
+      automaticResolution: automatic,
       clipboard: _clipboard,
       audio: _audio,
       autoReconnect: _autoReconnect,
@@ -112,11 +117,14 @@ class _ProfileEditorState extends State<ProfileEditor> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final resolutions = {
+      _automatic,
       '1280×800',
       '1366×768',
       '1920×1080',
       '2560×1440',
       '3840×2160',
+      if (widget.profile case final profile?)
+        '${profile.width}×${profile.height}',
       _resolution,
     }.toList();
     final phone = phoneLayout(context);
@@ -134,7 +142,10 @@ class _ProfileEditorState extends State<ProfileEditor> {
           children: [
             if (!phone) ...[_header(), const SizedBox(height: 26)],
             if (widget.notice case final notice?) ...[
-              Text(notice, style: TextStyle(color: theme.colorScheme.error)),
+              Text(
+                context.tr(notice),
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
               const SizedBox(height: 16),
             ],
             TextFormField(
@@ -145,9 +156,11 @@ class _ProfileEditorState extends State<ProfileEditor> {
               enableSuggestions: false,
               keyboardType: TextInputType.url,
               textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: '电脑地址',
+              decoration: InputDecoration(
+                labelText: context.tr("电脑地址与端口"),
                 hintText: '192.168.1.10:3389',
+                helperText: context.tr("可填 IP 或主机名；端口选填，默认 3389"),
+                helperMaxLines: 2,
                 prefixIcon: Icon(Icons.dns_outlined),
               ),
               validator: (v) {
@@ -155,31 +168,31 @@ class _ProfileEditorState extends State<ProfileEditor> {
                   Endpoint.parse(v ?? '');
                   return null;
                 } on FormatException catch (e) {
-                  return e.message;
+                  return context.tr(e.message);
                 }
               },
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _name,
-              decoration: const InputDecoration(
-                labelText: '显示名称（选填）',
-                hintText: '例如：办公室工作站',
+              decoration: InputDecoration(
+                labelText: context.tr("显示名称（选填）"),
+                hintText: context.tr("例如：办公室工作站"),
               ),
             ),
             const SizedBox(height: 16),
             _pair(phone, [
               TextFormField(
                 controller: _username,
-                decoration: const InputDecoration(
-                  labelText: '用户名',
+                decoration: InputDecoration(
+                  labelText: context.tr("用户名"),
                   hintText: 'Administrator',
                 ),
               ),
               TextFormField(
                 controller: _domain,
-                decoration: const InputDecoration(
-                  labelText: '域（选填）',
+                decoration: InputDecoration(
+                  labelText: context.tr("域（选填）"),
                   hintText: 'WORKGROUP',
                 ),
               ),
@@ -193,7 +206,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
               enableSuggestions: false,
               autocorrect: false,
               decoration: InputDecoration(
-                labelText: '密码',
+                labelText: context.tr("密码"),
                 suffixIcon: IconButton(
                   onPressed: () => setState(() => _visible = !_visible),
                   icon: Icon(
@@ -201,7 +214,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
                   ),
-                  tooltip: _visible ? '隐藏密码' : '显示密码',
+                  tooltip: _visible ? context.tr("隐藏密码") : context.tr("显示密码"),
                 ),
               ),
             ),
@@ -210,9 +223,9 @@ class _ProfileEditorState extends State<ProfileEditor> {
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               onChanged: (v) => setState(() => _remember = v!),
-              title: const Text('安全地记住密码'),
-              subtitle: const Text(
-                '使用此设备的系统钥匙串或加密存储',
+              title: Text(context.tr("安全地记住密码")),
+              subtitle: Text(
+                context.tr("使用此设备的系统钥匙串或加密存储"),
                 style: TextStyle(fontSize: 12),
               ),
             ),
@@ -220,21 +233,24 @@ class _ProfileEditorState extends State<ProfileEditor> {
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
               childrenPadding: const EdgeInsets.only(bottom: 12),
-              title: const Text('连接偏好'),
+              title: Text(context.tr("连接偏好")),
               subtitle: Text(
-                '$_resolution · ${_clipboard ? '剪贴板开启' : '剪贴板关闭'} · ${_nla ? 'NLA' : 'TLS'}',
+                '${context.tr(_resolution)} · ${_nla ? 'NLA' : 'TLS'}',
               ),
               children: [
                 _pair(phone, [
                   DropdownButtonFormField<String>(
                     isExpanded: true,
                     initialValue: _resolution,
-                    decoration: const InputDecoration(labelText: '远程分辨率'),
+                    decoration: InputDecoration(labelText: context.tr("远程分辨率")),
                     items: resolutions
                         .map(
                           (r) => DropdownMenuItem(
                             value: r,
-                            child: Text(r, overflow: TextOverflow.ellipsis),
+                            child: Text(
+                              context.tr(r),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         )
                         .toList(),
@@ -242,7 +258,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
                   ),
                   TextFormField(
                     controller: _group,
-                    decoration: const InputDecoration(labelText: '分组'),
+                    decoration: InputDecoration(labelText: context.tr("分组")),
                   ),
                 ]),
                 const SizedBox(height: 12),
@@ -250,40 +266,42 @@ class _ProfileEditorState extends State<ProfileEditor> {
                   contentPadding: EdgeInsets.zero,
                   value: _autoReconnect,
                   onChanged: (v) => setState(() => _autoReconnect = v),
-                  title: const Text('掉线后自动重连'),
-                  subtitle: const Text('仅对已连通的会话重试，最多 5 次；可随时取消'),
+                  title: Text(context.tr("掉线后自动重连")),
+                  subtitle: Text(context.tr("仅对已连通的会话重试，最多 5 次；可随时取消")),
                 ),
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
                   value: _clipboard,
                   onChanged: (v) => setState(() => _clipboard = v),
-                  title: const Text('共享文字剪贴板'),
-                  subtitle: const Text('仅在当前会话激活时同步，最大 1 MiB'),
+                  title: Text(context.tr("共享文字剪贴板")),
+                  subtitle: Text(context.tr("仅在当前会话激活时同步，最大 1 MiB")),
                 ),
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
                   value: _audio,
                   onChanged: (v) => setState(() => _audio = v),
-                  title: const Text('播放远程声音'),
-                  subtitle: const Text('在本机播放远程电脑的声音；下次连接生效'),
+                  title: Text(context.tr("播放远程声音")),
+                  subtitle: Text(context.tr("在本机播放远程电脑的声音；下次连接生效")),
                 ),
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
                   value: _fileTransfer,
                   onChanged: (v) => setState(() => _fileTransfer = v),
-                  title: const Text('文件传输'),
-                  subtitle: const Text('远程电脑可读写此连接的共享目录；下次连接生效'),
+                  title: Text(context.tr("文件传输")),
+                  subtitle: Text(context.tr("远程电脑可读写此连接的共享目录；下次连接生效")),
                 ),
                 if (_fileTransfer) ...[
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.folder_outlined),
                     title: Text(
-                      _sharedDirectory.isEmpty ? '使用文件中转站' : '使用指定目录',
+                      _sharedDirectory.isEmpty
+                          ? context.tr("使用文件中转站")
+                          : context.tr("使用指定目录"),
                     ),
                     subtitle: Text(
                       _sharedDirectory.isEmpty
-                          ? '仅共享你放入此连接中转站的文件'
+                          ? context.tr("仅共享你放入此连接中转站的文件")
                           : _sharedDirectory,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -301,7 +319,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
                           onPressed: () async {
                             try {
                               final path = await getDirectoryPath(
-                                confirmButtonText: '共享此目录',
+                                confirmButtonText: context.tr('共享此目录'),
                               );
                               if (path != null && mounted) {
                                 setState(() => _sharedDirectory = path);
@@ -310,20 +328,22 @@ class _ProfileEditorState extends State<ProfileEditor> {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('无法选择目录：${e.message}'),
+                                    content: Text(
+                                      context.tr("无法选择目录：{0}", [e.message]),
+                                    ),
                                   ),
                                 );
                               }
                             }
                           },
                           icon: const Icon(Icons.create_new_folder_outlined),
-                          label: const Text('选择共享目录'),
+                          label: Text(context.tr("选择共享目录")),
                         ),
                         if (_sharedDirectory.isNotEmpty)
                           TextButton(
                             onPressed: () =>
                                 setState(() => _sharedDirectory = ''),
-                            child: const Text('改用中转站'),
+                            child: Text(context.tr("改用中转站")),
                           ),
                       ],
                     ),
@@ -332,8 +352,8 @@ class _ProfileEditorState extends State<ProfileEditor> {
                   contentPadding: EdgeInsets.zero,
                   value: _nla,
                   onChanged: (v) => setState(() => _nla = v),
-                  title: const Text('网络级身份验证（NLA）'),
-                  subtitle: const Text('推荐开启。关闭后仍使用 TLS 加密。'),
+                  title: Text(context.tr("网络级身份验证（NLA）")),
+                  subtitle: Text(context.tr("推荐开启。关闭后仍使用 TLS 加密。")),
                 ),
               ],
             ),
@@ -366,7 +386,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
                               IconButton(
                                 onPressed: () => Navigator.pop(context),
                                 icon: const Icon(Icons.close),
-                                tooltip: '关闭',
+                                tooltip: context.tr("关闭"),
                               ),
                               const SizedBox(width: 8),
                               Expanded(child: _actions()),
@@ -401,14 +421,14 @@ class _ProfileEditorState extends State<ProfileEditor> {
     children: [
       Expanded(
         child: Text(
-          widget.profile == null ? '添加远程电脑' : '编辑连接',
+          widget.profile == null ? context.tr("添加远程电脑") : context.tr("编辑连接"),
           style: Theme.of(context).textTheme.headlineMedium,
         ),
       ),
       IconButton(
         onPressed: () => Navigator.pop(context),
         icon: const Icon(Icons.close),
-        tooltip: '关闭',
+        tooltip: context.tr("关闭"),
       ),
     ],
   );
@@ -418,7 +438,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
       Expanded(
         child: OutlinedButton(
           onPressed: () => _submit(false),
-          child: const Text('保存连接'),
+          child: Text(context.tr("保存连接")),
         ),
       ),
       const SizedBox(width: 12),
@@ -426,7 +446,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
         child: FilledButton(
           key: const Key('saveAndConnect'),
           onPressed: () => _submit(true),
-          child: const Text('保存并连接'),
+          child: Text(context.tr("保存并连接")),
         ),
       ),
     ],

@@ -51,6 +51,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(result!.profile.host, '192.0.2.10');
     expect(result!.profile.port, 3390);
+    expect(result!.profile.automaticResolution, isTrue);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

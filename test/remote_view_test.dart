@@ -13,9 +13,14 @@ import 'package:lrdp/ui/remote_view_memory.dart';
 import 'package:lrdp/ui/theme.dart';
 
 class RecordingSession extends RdpSession {
-  RecordingSession()
+  RecordingSession({bool automaticResolution = true})
     : super(
-        const ConnectionProfile(id: 'touch', name: '测试电脑', host: '192.0.2.1'),
+        ConnectionProfile(
+          id: 'touch',
+          name: '测试电脑',
+          host: '192.0.2.1',
+          automaticResolution: automaticResolution,
+        ),
       ) {
     state = SessionState.connected;
     features = 8;
@@ -37,6 +42,89 @@ class RecordingSession extends RdpSession {
 }
 
 void main() {
+  testWidgets(
+    'auto size follows the viewport, debounces rotation and holds during IME',
+    (tester) async {
+      tester.view.physicalSize = const Size(410, 850);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final session = RecordingSession()..features = 10;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: appTheme(Brightness.light),
+          home: Scaffold(
+            body: RemoteView(
+              session: session,
+              reconnect: () {},
+              disconnect: () {},
+              active: true,
+              toggleFullscreen: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 500));
+      List<(int, int, int, int)> sizes() =>
+          session.inputs.where((e) => e.$1 == 3).toList();
+      final surface = tester.getSize(find.byType(RemoteSurface));
+      expect(sizes().last, (3, 410, surface.height.round(), 0));
+      final count = sizes().length;
+      await tester.tap(find.text('键盘'));
+      await tester.pumpAndSettle();
+      tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+      await tester.pumpAndSettle();
+      expect(sizes().length, count);
+      tester.view.viewInsets = const FakeViewPadding();
+      await tester.pumpAndSettle();
+      // Close the composer before rotating; opening/closing it itself never
+      // changes the requested size, even while the IME is animating.
+      await tester.tap(find.byTooltip('收起键盘'));
+      await tester.pumpAndSettle();
+      expect(sizes().length, count);
+      tester.view.physicalSize = const Size(850, 410);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      tester.view.physicalSize = const Size(900, 410);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 399));
+      expect(sizes().length, count);
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(sizes().length, count + 1);
+      expect(sizes().last.$2, 900);
+      await tester.pumpWidget(const SizedBox());
+      session.dispose();
+    },
+  );
+
+  testWidgets('fixed size and missing server capability never auto resize', (
+    tester,
+  ) async {
+    for (final automatic in [true, false]) {
+      final session = RecordingSession(automaticResolution: automatic)
+        ..features = automatic ? 8 : 10;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RemoteView(
+              key: ValueKey(session),
+              session: session,
+              reconnect: () {},
+              disconnect: () {},
+              active: true,
+              toggleFullscreen: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      session.setViewportSize(1700, 900);
+      await tester.pump(const Duration(seconds: 1));
+      expect(session.inputs.where((e) => e.$1 == 3), isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      session.dispose();
+    }
+  });
   testWidgets(
     'viewport and local cursor survive remount, layout and resolution changes',
     (tester) async {

@@ -7,6 +7,7 @@ oracle in run_input_stop_test.py; the X11 shadow server itself is not KRDP.
 """
 from contextlib import ExitStack
 from pathlib import Path
+import argparse
 import hashlib
 import json
 import os
@@ -18,6 +19,9 @@ from PIL import ImageGrab
 from rdp_test_desktop import Desktop
 
 root = Path(__file__).resolve().parent.parent
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--window-manager', type=Path, help='Optional Openbox binary for actual full-screen/restore verification')
+args = parser.parse_args()
 bundle = root / 'build/linux/x64/release/bundle'
 out = root / 'build/linux-mouse-runtime'
 out.mkdir(parents=True, exist_ok=True)
@@ -59,6 +63,21 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
         subprocess.run(['xsetroot', '-solid', '#182d28'], env=env, check=True)
         displays.append(env)
     client_env, server_env = displays
+    if args.window_manager:
+        manager = args.window_manager.resolve()
+        assert manager.is_file()
+        prefix = manager.parent.parent
+        wm_env = dict(client_env, LD_LIBRARY_PATH=str(prefix/'lib'),
+            XDG_DATA_DIRS=str(prefix/'share')+':/usr/share')
+        log = cleanup.enter_context((out/'window-manager.log').open('w'))
+        wm = subprocess.Popen([str(manager), '--sm-disable'], env=wm_env, stdout=log, stderr=subprocess.STDOUT)
+        cleanup.callback(stop, wm)
+        for _ in range(100):
+            assert wm.poll() is None, 'Private window manager failed'
+            probe = subprocess.check_output(['xprop', '-root', '_NET_SUPPORTING_WM_CHECK'],env=client_env,text=True)
+            if 'window id #' in probe: break
+            time.sleep(.05)
+        else: raise AssertionError('Window manager did not register')
     desktop = Desktop(server_env['DISPLAY'])
     cleanup.callback(desktop.close)
     desktop.movable_window()
@@ -85,7 +104,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
     # Keep the pixel-based mouse oracle independent of the host's accent and
     # scheduled dark mode. Appearance has its own system/UI regression.
     preferences = {'flutter.profiles.v1': json.dumps([profile]),
-        'flutter.themeMode': 'light', 'flutter.systemColors': False}
+        'flutter.themeMode': 'light', 'flutter.systemColors': False, 'flutter.language': 'zh-CN'}
     for application in ['dev.lrdp.lrdp', 'lrdp']:
         folder = private / 'data' / application
         folder.mkdir(parents=True)
@@ -124,9 +143,11 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
         pixels = image.load()
         # The disconnected-session page also has a wide primary button. Only
         # accept an action when the light modal and dark outside scrim coexist.
-        if pixels[500, 400][0] < 180 or pixels[300, 700][0] > 180:
+        geometry = window_geometry()
+        cx, cy = geometry['X']+geometry['WIDTH']//2, geometry['Y']+geometry['HEIGHT']//2
+        if pixels[cx-140, cy-20][0] < 180 or pixels[cx-340, cy+200][0] > 180:
             return None
-        points = {(x, y) for y in range(180, 720) for x in range(350, 950)
+        points = {(x, y) for y in range(max(0,cy-300), min(image.height,cy+300)) for x in range(max(0,cx-300), min(image.width,cx+300))
             if (color := pixels[x, y])[0] < 60 and 70 < color[1] < 140 and
                 50 < color[2] < 120 and color[1] > color[0] * 1.5 and color[2] > color[0] * 1.2}
         candidates = []
@@ -159,11 +180,18 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
     windows = subprocess.check_output(['xdotool', 'search', '--name', '^LRDP$'],
         env=client_env, text=True).splitlines()
     assert windows
+    def window_geometry():
+        output = subprocess.check_output(['xdotool', 'getwindowgeometry', '--shell', windows[-1]],env=client_env,text=True)
+        return {key:int(value) for line in output.splitlines() if '=' in line for key,value in [line.split('=',1)]}
+    def window_fullscreen():
+        return '_NET_WM_STATE_FULLSCREEN' in subprocess.check_output(
+            ['xprop','-id',windows[-1],'_NET_WM_STATE'],env=client_env,text=True)
     os_input('windowfocus', windows[-1])
     # Fixed 1280x840 default window, private 1440x1000 screen, scale 1. These
     # clicks exercise the real customer UI, including temporary certificate trust.
     capture('workspace')
-    click(1158, 510)
+    initial_geometry = window_geometry()
+    click(initial_geometry['X']+1158, initial_geometry['Y']+545)
     wait_action()
     time.sleep(.3)
     capture('login')
@@ -178,6 +206,9 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
     click((action[0] + action[2]) // 2, action[1])
     time.sleep(1)
     capture('connected')
+    if args.window_manager:
+        wait_for(lambda: window_fullscreen() and window_geometry()['WIDTH']==1440 and window_geometry()['HEIGHT']==1000,
+            'Session did not enter actual OS full screen')
 
     # Locate the fitted remote desktop from its known synthetic window header.
     # Do not infer acceptance just from the existence of a native process.
@@ -186,7 +217,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
         pixels = image.load()
         # Restrict to the remote area: antialiased toolbar text can contain the
         # same color as this deliberately plain synthetic window header.
-        points = [(x, y) for y in range(200, image.height) for x in range(250, image.width)
+        points = [(x, y) for y in range(image.height) for x in range(image.width)
             if all(abs(pixels[x, y][i] - (127, 187, 168)[i]) <= 4 for i in range(3))]
         if len(points) < 100:
             return None
@@ -245,6 +276,15 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
     wait_for(lambda: any(e['type'] == 5 and e['button'] == 1 and abs(e['x'] - 340) <= 1
         for e in desktop.events), 'Click after Escape did not work')
     capture('passed')
+    fullscreen_case = []
+    if args.window_manager:
+        # First floating action is Back to computers. The panel has seven 68px
+        # actions, a 52px drag header and an 8px margin on this 1440x1000 screen.
+        click(1440-340-8+68, 8+52+1+6+32)
+        wait_for(lambda: not window_fullscreen() and window_geometry()['WIDTH']==initial_geometry['WIDTH']
+            and window_geometry()['HEIGHT']==initial_geometry['HEIGHT'], 'Leaving the session did not restore the OS window')
+        capture('window-restored')
+        fullscreen_case = ['actual OS full screen and original window size restored through floating Back action']
     (out / 'events.json').write_text(json.dumps(desktop.events, indent=2) + '\n')
     report = {'passed': True, 'entrypoint': 'lib/main.dart Linux Release', 'backend': 'GTK/X11',
         'native_abi': 5, 'library_sha256': hashlib.sha256((bundle / 'lib/liblrdp.so').read_bytes()).hexdigest(),
@@ -252,7 +292,8 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
         'plugin_sha256': hashlib.sha256((bundle / 'lib/liblrdp_native_plugin.so').read_bytes()).hexdigest(),
         'window_after_drag': dragged, 'pointer_after_tests': desktop.pointer(),
         'cases': ['actual X11 window drag/release', 'no window movement after release',
-            'subsequent left/right/middle click', 'stationary multi-button release', 'click after Escape'],
+            'subsequent left/right/middle click', 'stationary multi-button release', 'click after Escape']+fullscreen_case,
+        'os_fullscreen_verified': bool(args.window_manager),
         'scope': 'private X11 shadow server; KRDP event precedence verified separately; no external host'}
     (out / 'VERDICT.json').write_text(json.dumps(report, indent=2) + '\n')
     print('PASS: Linux main Release, OS mouse drag/release, follow-up clicks and multi-button state')

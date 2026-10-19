@@ -1,3 +1,4 @@
+import '../l10n/app_strings.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
@@ -664,7 +665,7 @@ class _RemoteSurfaceState extends State<RemoteSurface>
       }
       _pointer = _clamp(_pointer ?? Offset(image.width / 2, image.height / 2));
       return Semantics(
-        label: '远程桌面。轻点左键，双指轻点或长按右键，双击按住拖拽；双指滚动、捏合缩放，光标靠近边缘自动移动视野。',
+        label: context.tr("远程桌面。轻点左键，双指轻点或长按右键，双击按住拖拽；双指滚动、捏合缩放，光标靠近边缘自动移动视野。"),
         child: MouseRegion(
           cursor: widget.pan
               ? SystemMouseCursors.grab

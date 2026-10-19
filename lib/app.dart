@@ -5,6 +5,7 @@ import 'data/profile_store.dart';
 import 'ui/theme.dart';
 import 'ui/system_colors.dart';
 import 'ui/workspace_screen.dart';
+import 'l10n/app_strings.dart';
 
 class LrdpApp extends StatelessWidget {
   const LrdpApp({super.key, required this.store, this.protocolDirectory});
@@ -17,9 +18,11 @@ class LrdpApp extends StatelessWidget {
       enabled: store.useSystemColors,
       builder: (light, dark) => MaterialApp(
         title: 'LRDP',
-        locale: const Locale('zh', 'CN'),
-        supportedLocales: const [Locale('zh', 'CN')],
+        locale: AppStrings.localeFor(store.language),
+        supportedLocales: AppStrings.supportedLocales,
+        localeListResolutionCallback: AppStrings.resolve,
         localizationsDelegates: const [
+          AppStrings.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
