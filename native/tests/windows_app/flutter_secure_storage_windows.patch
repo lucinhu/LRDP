@@ -1,0 +1,74 @@
+--- a/windows/flutter_secure_storage_windows_plugin.cpp
++++ b/windows/flutter_secure_storage_windows_plugin.cpp
+@@ -85,7 +85,7 @@
+       const std::string &param,
+       const flutter::EncodableMap *args)
+   {
+-    auto p = args->find(param);
++    auto p = args->find(flutter::EncodableValue(param));
+     if (p == args->end())
+       return std::nullopt;
+     return std::get<std::string>(p->second);
+@@ -101,13 +101,13 @@
+       return "ERROR_INVALID_FLAGS";
+     case ERROR_BAD_USERNAME:
+       return "ERROR_BAD_USERNAME";
+-    case SCARD_E_NO_READERS_AVAILABLE:
++    case static_cast<DWORD>(SCARD_E_NO_READERS_AVAILABLE):
+       return "SCARD_E_NO_READERS_AVAILABLE";
+-    case SCARD_E_NO_SMARTCARD:
++    case static_cast<DWORD>(SCARD_E_NO_SMARTCARD):
+       return "SCARD_E_NO_SMARTCARD";
+-    case SCARD_W_REMOVED_CARD:
++    case static_cast<DWORD>(SCARD_W_REMOVED_CARD):
+       return "SCARD_W_REMOVED_CARD";
+-    case SCARD_W_WRONG_CHV:
++    case static_cast<DWORD>(SCARD_W_WRONG_CHV):
+       return "SCARD_W_WRONG_CHV";
+     case ERROR_INVALID_PARAMETER:
+       return "ERROR_INVALID_PARAMETER";
+@@ -123,19 +123,19 @@
+ 
+       switch (status)
+       {
+-      case 0xc0000000:
++      case static_cast<NTSTATUS>(0xc0000000):
+           oss << " (STATUS_SUCCESS)";
+           break;
+-      case 0xC0000008:
++      case static_cast<NTSTATUS>(0xC0000008):
+           oss << " (STATUS_INVALID_HANDLE)";
+           break;
+-      case 0xc000000d:
++      case static_cast<NTSTATUS>(0xc000000d):
+           oss << " (STATUS_INVALID_PARAMETER)";
+           break;
+-      case 0xc00000bb:
++      case static_cast<NTSTATUS>(0xc00000bb):
+           oss << " (STATUS_NOT_SUPPORTED)";
+           break;
+-      case 0xC0000225:
++      case static_cast<NTSTATUS>(0xC0000225):
+           oss << " (STATUS_NOT_FOUND)";
+           break;
+       }
+@@ -704,7 +704,7 @@
+           std::optional<std::string> val = this->Read(out);
+           auto key = this->RemoveKeyPrefix(out);
+           if (val.has_value()) {
+-              creds[key] = val.value();
++              creds[flutter::EncodableValue(key)] = val.value();
+               continue;
+           }
+       } while (FindNextFile(hFile, &searchRes) != 0);
+@@ -725,8 +725,8 @@
+       auto val = std::string((char*)pcred->CredentialBlob);
+       auto key = this->RemoveKeyPrefix(target_name);
+       //If the key exists then data was already read from a file, which implies that the data read from the credential system is outdated
+-      if (creds.find(key) == creds.end()) {
+-          creds[key] = val;
++      if (creds.find(flutter::EncodableValue(key)) == creds.end()) {
++          creds[flutter::EncodableValue(key)] = val;
+       }
+     }
+ 

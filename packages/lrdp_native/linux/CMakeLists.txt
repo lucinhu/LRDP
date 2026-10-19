@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.22)
+project(lrdp_native LANGUAGES C CXX)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../src" "${CMAKE_CURRENT_BINARY_DIR}/shared")
+set(PLUGIN_NAME "lrdp_native_plugin")
+pkg_check_modules(EPOXY REQUIRED IMPORTED_TARGET epoxy)
+add_library(${PLUGIN_NAME} SHARED lrdp_native_plugin.cc)
+apply_standard_settings(${PLUGIN_NAME})
+set_target_properties(${PLUGIN_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden
+  BUILD_WITH_INSTALL_RPATH ON INSTALL_RPATH "$ORIGIN")
+target_include_directories(${PLUGIN_NAME} INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(${PLUGIN_NAME} PRIVATE flutter PkgConfig::GTK PkgConfig::EPOXY lrdp_core)
+set(lrdp_native_bundled_libraries $<TARGET_FILE:lrdp_core> PARENT_SCOPE)

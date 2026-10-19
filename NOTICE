@@ -1,0 +1,20 @@
+LRDP
+Copyright 2026 LRDP contributors
+
+This product includes FreeRDP and WinPR, provided as an unmodified Git submodule.
+Their copyright, Apache License 2.0, and attribution notices are retained in
+third_party/FreeRDP/LICENSE and the individual source headers. Native license
+texts are bundled in assets/licenses and the in-app open source license page.
+
+Flutter and Dart dependencies retain their respective licenses, available in
+the application's open source license page and the package distributions.
+
+MinGW-built Windows core distributions include MinGW-w64 runtime and GCC runtime
+license texts in licenses/windows. These apply to that optional core build.
+
+H.264 decoding uses FFmpeg under the GNU Lesser General Public License,
+version 2.1 or later. The pinned 9.0.2 source archive and repeatable decoder-only
+build are documented in scripts/fetch_ffmpeg.sh and scripts/build_ffmpeg.sh.
+See assets/licenses/FFmpeg.txt. GPL, version-3-only and nonfree components are
+disabled. Preserve the corresponding source/rebuild bundle with distributions
+that include statically linked FFmpeg.

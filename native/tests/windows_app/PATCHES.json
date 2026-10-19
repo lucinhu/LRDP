@@ -1,0 +1,24 @@
+{
+  "flutter_secure_storage_windows": {
+    "version": "4.2.2",
+    "files": {
+      "windows/flutter_secure_storage_windows_plugin.cpp": {
+        "original_sha256": "a832d629ac72979e0ae4c0012517e5af10f8eda0af045efac38746945034fa67",
+        "patched_sha256": "4d996d4e19acebc66053075380730d3566da75332356fa0e6db3d895ab44695a"
+      }
+    }
+  },
+  "share_plus": {
+    "version": "13.3.1",
+    "files": {
+      "windows/share_plus_windows_plugin.h": {
+        "original_sha256": "5b3b8a55483d3974a69ad11aae810f45185eb31df56234a61cc656cdd8b2c5f4",
+        "patched_sha256": "2f5826e9e65c8d64b46d97742a34ae3024972420a0c9aa2ff7852af4f787eb27"
+      },
+      "windows/vector.h": {
+        "original_sha256": "f3e44dfc7d7ce5cbfedf605c44ee7523747f19daf667f8e4b66a60517a9b070f",
+        "patched_sha256": "744388c819acb0fab5939f4dd31bd1acf0fcbfb1961142a0e9f24c4fb1601442"
+      }
+    }
+  }
+}

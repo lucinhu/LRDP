@@ -1,0 +1,121 @@
+--- a/windows/share_plus_windows_plugin.h
++++ b/windows/share_plus_windows_plugin.h
+@@ -58,7 +58,7 @@
+   static HRESULT GetStorageFileFromPath(wchar_t *path,
+                                         WindowsStorage::IStorageFile **file);
+ 
+-  static std::wstring SharePlusWindowsPlugin::Utf16FromUtf8(std::string string);
++  static std::wstring Utf16FromUtf8(std::string string);
+ 
+   flutter::PluginRegistrarWindows *registrar_ = nullptr;
+   WRL::ComPtr<IDataTransferManagerInterop> data_transfer_manager_interop_ =
+--- a/windows/vector.h
++++ b/windows/vector.h
+@@ -231,6 +231,7 @@
+ // Vector traits describe how the collection itself is implemented.
+ // This default version just uses an STL vector.
+ template <typename T> struct DefaultVectorTraits : public ElementTraits<T> {
++  typedef typename ElementTraits<T>::ElementType ElementType;
+   typedef std::vector<ElementType> InternalVectorType;
+ 
+   static unsigned GetSize(InternalVectorType const &vector) {
+@@ -242,7 +243,7 @@
+     if (index >= vector.size())
+       ThrowHR(E_BOUNDS);
+ 
+-    ElementTraits::CopyTo(vector[index], element);
++    ElementTraits<T>::CopyTo(vector[index], element);
+     return;
+   }
+ 
+@@ -250,7 +251,7 @@
+     if (index >= vector.size())
+       ThrowHR(E_BOUNDS);
+ 
+-    vector[index] = Wrap(item);
++    vector[index] = ElementTraits<T>::Wrap(item);
+   }
+ 
+   static void InsertAt(InternalVectorType &vector, unsigned index,
+@@ -258,7 +259,7 @@
+     if (index > vector.size())
+       ThrowHR(E_BOUNDS);
+ 
+-    vector.insert(vector.begin() + index, Wrap(item));
++    vector.insert(vector.begin() + index, ElementTraits<T>::Wrap(item));
+   }
+ 
+   static void RemoveAt(InternalVectorType &vector, unsigned index) {
+@@ -269,7 +270,7 @@
+   }
+ 
+   static void Append(InternalVectorType &vector, T const &item) {
+-    vector.push_back(Wrap(item));
++    vector.push_back(ElementTraits<T>::Wrap(item));
+   }
+ 
+   static void Clear(InternalVectorType &vector) { vector.clear(); }
+@@ -277,20 +278,21 @@
+ 
+ // Implements the WinRT IVector interface.
+ template <typename T,
+-          template <typename T_abi> class Traits = DefaultVectorTraits>
++          template <typename T_abi> class VectorTraits = DefaultVectorTraits>
+ class Vector : public Microsoft::WRL::RuntimeClass<
+                    ABI::Windows::Foundation::Collections::IVector<T>,
+                    ABI::Windows::Foundation::Collections::IIterable<T>> {
+-  InspectableClass(IVector<T>::z_get_rc_name_impl(), BaseTrust);
++  using RuntimeClassT = Microsoft::WRL::RuntimeClass<ABI::Windows::Foundation::Collections::IVector<T>, ABI::Windows::Foundation::Collections::IIterable<T>>;
++  InspectableClass(ABI::Windows::Foundation::Collections::IVector<T>::z_get_rc_name_impl(), BaseTrust);
+ 
+ public:
+   // T_abi is often the same as T, but if T is a runtime class, T_abi will be
+   // the corresponding interface.
+   typedef typename ABI::Windows::Foundation::Internal::GetAbiType<
+-      typename RuntimeClass::IVector::T_complex>::type T_abi;
++      typename ABI::Windows::Foundation::Collections::IVector<T>::T_complex>::type T_abi;
+ 
+   // Specialize our traits class to use the ABI version of the type.
+-  typedef Traits<T_abi> Traits;
++  typedef VectorTraits<T_abi> Traits;
+ 
+ private:
+   // Fields.
+@@ -337,7 +339,7 @@
+       CheckInPointer(item);
+       ZeroMemory(item, sizeof(*item));
+ 
+-      Traits::ElementType element;
++      typename Traits::ElementType element;
+       Traits::GetAt(mVector, index, &element);
+       Traits::Unwrap(element, item);
+     });
+@@ -356,7 +358,7 @@
+       auto size = Traits::GetSize(mVector);
+ 
+       for (unsigned i = 0; i < size; i++) {
+-        Traits::ElementType element;
++        typename Traits::ElementType element;
+         Traits::GetAt(mVector, i, &element);
+ 
+         if (Traits::Equals(element, value)) {
+@@ -483,7 +485,8 @@
+ class VectorView : public Microsoft::WRL::RuntimeClass<
+                        ABI::Windows::Foundation::Collections::IVectorView<T>,
+                        ABI::Windows::Foundation::Collections::IIterable<T>> {
+-  InspectableClass(IVectorView<T>::z_get_rc_name_impl(), BaseTrust);
++  using RuntimeClassT = Microsoft::WRL::RuntimeClass<ABI::Windows::Foundation::Collections::IVectorView<T>, ABI::Windows::Foundation::Collections::IIterable<T>>;
++  InspectableClass(ABI::Windows::Foundation::Collections::IVectorView<T>::z_get_rc_name_impl(), BaseTrust);
+ 
+   // Fields.
+   Microsoft::WRL::ComPtr<TVector> mVector;
+@@ -520,7 +523,8 @@
+ class VectorIterator
+     : public Microsoft::WRL::RuntimeClass<
+           ABI::Windows::Foundation::Collections::IIterator<T>> {
+-  InspectableClass(IIterator<T>::z_get_rc_name_impl(), BaseTrust);
++  using RuntimeClassT = Microsoft::WRL::RuntimeClass<ABI::Windows::Foundation::Collections::IIterator<T>>;
++  InspectableClass(ABI::Windows::Foundation::Collections::IIterator<T>::z_get_rc_name_impl(), BaseTrust);
+ 
+   // Fields.
+   Microsoft::WRL::ComPtr<TVector> mVector;

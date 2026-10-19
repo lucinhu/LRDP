@@ -1,0 +1,27 @@
+name: lrdp_native
+description: Platform build integration for the isolated FreeRDP bridge.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+  flutter: '>=3.32.0'
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  plugin:
+    platforms:
+      android:
+        ffiPlugin: true
+        package: dev.lrdp.lrdp_native
+        pluginClass: LrdpNativePlugin
+      ios:
+        ffiPlugin: true
+      linux:
+        ffiPlugin: true
+        pluginClass: LrdpNativePlugin
+      macos:
+        ffiPlugin: true
+      windows:
+        ffiPlugin: true
+        pluginClass: LrdpNativePlugin

@@ -1,0 +1,38 @@
+name: lrdp
+description: A local-first Flutter remote desktop client powered by FreeRDP.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.11.0 <4.0.0'
+  flutter: '>=3.41.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  lrdp_native:
+    path: packages/lrdp_native
+  ffi: ^2.2.0
+  shared_preferences: ^2.5.6
+  flutter_secure_storage: ^11.2.0
+  file_selector: ^1.1.0
+  path_provider: ^2.1.6
+  path: ^1.9.1
+  share_plus: ^13.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  config:
+    enable-swift-package-manager: false
+  uses-material-design: true
+  assets:
+    - assets/licenses/
+    - assets/branding/lrdp-128.png

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" data-adaptive-background="#1B5E4B">
+  <title>LRDP</title>
+  <desc>A remote desktop display and connection arrow on a pine green background.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="0.7" y2="1">
+      <stop stop-color="#236F58" />
+      <stop offset="1" stop-color="#164D3E" />
+    </linearGradient>
+  </defs>
+  <rect width="960" height="960" fill="url(#background)" x="32" y="32" rx="216" />
+  <g id="mark" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path id="display" d="M 284,272 H 740 A 60,60 0 0 1 800,332 V 588 A 60,60 0 0 1 740,648 H 284 A 60,60 0 0 1 224,588 V 332 A 60,60 0 0 1 284,272 Z" stroke="#F2FAF4" stroke-width="48" />
+    <path id="stand" d="M 512,648 V 752 M 400,752 H 624" stroke="#F2FAF4" stroke-width="48" />
+    <path id="connection" d="M 416,528 L 608,384 M 480,384 H 608 V 512" stroke="#BDE3C9" stroke-width="48" />
+  </g>
+</svg>

@@ -1,0 +1,27 @@
+set(CMAKE_SYSTEM_NAME Windows)
+set(CMAKE_SYSTEM_PROCESSOR AMD64)
+find_program(CMAKE_C_COMPILER clang-cl REQUIRED)
+find_program(CMAKE_CXX_COMPILER clang-cl REQUIRED)
+find_program(CMAKE_RC_COMPILER llvm-rc REQUIRED)
+find_program(CMAKE_LINKER lld-link REQUIRED)
+find_program(CMAKE_AR llvm-lib REQUIRED)
+
+foreach(option LRDP_XWIN_ROOT LRDP_MSVC_VERSION LRDP_WINDOWS_SDK_VERSION)
+  if(NOT DEFINED ${option})
+    message(FATAL_ERROR "${option} is required; use scripts/build_windows_app.py")
+  endif()
+endforeach()
+set(CMAKE_C_FLAGS_INIT "--target=x86_64-pc-windows-msvc /winsysroot \"${LRDP_XWIN_ROOT}\"")
+set(CMAKE_CXX_FLAGS_INIT "${CMAKE_C_FLAGS_INIT}")
+set(CMAKE_EXE_LINKER_FLAGS_INIT
+  "/libpath:\"${LRDP_XWIN_ROOT}/VC/Tools/MSVC/${LRDP_MSVC_VERSION}/lib/x64\" /libpath:\"${LRDP_XWIN_ROOT}/Windows Kits/10/Lib/${LRDP_WINDOWS_SDK_VERSION}/ucrt/x64\" /libpath:\"${LRDP_XWIN_ROOT}/Windows Kits/10/Lib/${LRDP_WINDOWS_SDK_VERSION}/um/x64\"")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "${CMAKE_EXE_LINKER_FLAGS_INIT}")
+set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
+set(CMAKE_FIND_ROOT_PATH "${LRDP_XWIN_ROOT}")
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+# CMake compiler probes inherit the same SDK configuration.
+list(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES
+  LRDP_XWIN_ROOT LRDP_MSVC_VERSION LRDP_WINDOWS_SDK_VERSION)

@@ -1,0 +1,4 @@
+# Retain third-party license texts verbatim, including their original spacing.
+licenses/windows/*.txt -whitespace
+# Preserve unified-diff context markers, including space-only context lines.
+native/tests/windows_app/*.patch -whitespace

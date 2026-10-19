@@ -1,0 +1,4 @@
+[submodule "third_party/FreeRDP"]
+	path = third_party/FreeRDP
+	url = https://github.com/FreeRDP/FreeRDP.git
+	shallow = true

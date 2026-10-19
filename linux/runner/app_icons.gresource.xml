@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/dev/lrdp/lrdp">
+    <file alias="icon.png">assets/branding/lrdp-128.png</file>
+  </gresource>
+</gresources>

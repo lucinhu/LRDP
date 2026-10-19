@@ -1,0 +1,83 @@
+// The Android Gradle Plugin builds the native code with the Android NDK.
+
+group = "dev.lrdp.lrdp_native"
+version = "1.0"
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        // The Android Gradle Plugin knows how to build native code with the NDK.
+        classpath("com.android.tools.build:gradle:8.12.1")
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: "com.android.library"
+
+// Library variants otherwise build every ABI even for a single-ABI Flutter APK.
+// Match Flutter's target-platform property so each ABI uses its own OpenSSL.
+def flutterAbis = ["android-arm": "armeabi-v7a", "android-arm64": "arm64-v8a", "android-x64": "x86_64"]
+def requestedTargets = (project.findProperty("target-platform") ?: "android-arm,android-arm64,android-x64").split(",")
+
+android {
+    namespace = "dev.lrdp.lrdp_native"
+
+    // Bumping the plugin compileSdk version requires all clients of this plugin
+    // to bump the version in their app.
+    compileSdk = 36
+    buildToolsVersion = "36.0.0"
+
+    // Use the NDK version
+    // declared in /android/app/build.gradle file of the Flutter project.
+    // Replace it with a version number if this plugin requires a specific NDK version.
+    // (e.g. ndkVersion "23.1.7779620")
+    ndkVersion = project.findProperty("lrdp.ndkVersion") ?: "27.0.12077973"
+
+    // Invoke the shared CMake build with the Android Gradle Plugin.
+    externalNativeBuild {
+        cmake {
+            path = "../src/CMakeLists.txt"
+            version = "3.22.1"
+
+            // The default CMake version for the Android Gradle Plugin is 3.10.2.
+            // https://developer.android.com/studio/projects/install-ndk#vanilla_cmake
+            //
+            // The Flutter tooling requires that developers have CMake 3.10 or later
+            // installed. You should not increase this version, as doing so will cause
+            // the plugin to fail to compile for some customers of the plugin.
+            // version "3.10.2"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        minSdk = 24
+        ndk {
+            abiFilters.addAll(requestedTargets.collect { target ->
+                def abi = flutterAbis[target.trim()]
+                if (abi == null) throw new GradleException("Unsupported LRDP target platform: $target")
+                abi
+            })
+        }
+        externalNativeBuild {
+            cmake {
+                targets "lrdp_core"
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
+    }
+}
