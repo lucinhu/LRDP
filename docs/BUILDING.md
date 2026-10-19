@@ -10,6 +10,14 @@ flutter analyze
 flutter test
 ```
 
+系统配色依赖 `dynamic_color` 固定为 1.8.1，版本和下载摘要见 `pubspec.lock`；
+源码由 Pub 缓存管理，不复制到仓库，也不修改 Pub 缓存。1.9.0 的 Android Kotlin DSL
+在本项目 AGP 8.12.1 / Kotlin 2.2.20 下编译失败，因此没有采用。升级前应重新验证
+Android Release 与各桌面插件构建。主题默认跟随系统，不支持动态配色的平台使用默认颜色。
+Windows 对固定插件的 `MethodResult::Success(nullptr)` 调用做一处兼容适配：
+`native/cmake/dynamic_color_compat.cmake` 校验原文件 SHA-256，只在构建目录生成
+使用 `Success()` 的副本，普通 Flutter Windows 构建和交叉构建均使用这份副本。
+
 ## Linux
 
 H.264 默认开启。先构建固定版本的最小静态 FFmpeg（需要 Make；x86 SIMD 建议安装 NASM）：
@@ -59,6 +67,7 @@ python3 scripts/run_cursor_test.py
 python3 scripts/run_cursor_test.py --flutter
 python3 scripts/run_logoff_test.py
 python3 scripts/run_file_test.py
+python3 scripts/run_frame_rate_test.py
 python3 scripts/run_audio_test.py --build build/native
 python3 scripts/run_protocol_test.py --live-ui
 python3 scripts/run_protocol_test.py --release

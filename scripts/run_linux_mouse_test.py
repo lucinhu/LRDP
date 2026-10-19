@@ -82,7 +82,10 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
     profile = {'id': 'isolated-linux-mouse', 'name': 'Linux mouse test', 'host': '127.0.0.1',
         'port': port, 'username': 'fixture', 'width': 1280, 'height': 800,
         'nla': False, 'autoReconnect': False, 'rememberPassword': False}
-    preferences = {'flutter.profiles.v1': json.dumps([profile])}
+    # Keep the pixel-based mouse oracle independent of the host's accent and
+    # scheduled dark mode. Appearance has its own system/UI regression.
+    preferences = {'flutter.profiles.v1': json.dumps([profile]),
+        'flutter.themeMode': 'light', 'flutter.systemColors': False}
     for application in ['dev.lrdp.lrdp', 'lrdp']:
         folder = private / 'data' / application
         folder.mkdir(parents=True)

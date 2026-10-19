@@ -4,27 +4,30 @@ import 'package:flutter/services.dart';
 /// The platform renderer owns a retained, immutable native frame reader.
 /// Only metadata crosses this channel; frame bytes never enter Dart.
 class NativeVideo {
-  NativeVideo._(this.id, this.changed, this.failed);
+  NativeVideo._(this.id, this.changed, this.failed, this.frameRate);
   static const channel = MethodChannel('dev.lrdp/video');
   final int id;
   final void Function(NativeVideo) changed, failed;
   int width = 0, height = 0, uploads = 0, generation = 0;
+  int frameRate;
   bool _closed = false, _polling = false, _visible = true;
   Timer? _timer;
   DateTime _nextPoll = DateTime.fromMillisecondsSinceEpoch(0);
 
   static Future<NativeVideo?> create(
     int ticket, {
+    int frameRate = 60,
     required void Function(NativeVideo) changed,
     required void Function(NativeVideo) failed,
   }) async {
     try {
       final result = await channel.invokeMapMethod<String, dynamic>('create', {
         'ticket': ticket,
+        'frameRate': frameRate.clamp(1, 240),
       });
       final id = result?['id'];
       if (id is! int || id < 0) return null;
-      final video = NativeVideo._(id, changed, failed);
+      final video = NativeVideo._(id, changed, failed, frameRate.clamp(1, 240));
       video._update(result!);
       video._startPolling();
       return video;
@@ -99,6 +102,22 @@ class NativeVideo {
         'visible': visible,
       });
       if (visible && !_closed) await poll();
+    } on PlatformException {
+      if (!_closed) failed(this);
+    } on MissingPluginException {
+      if (!_closed) failed(this);
+    }
+  }
+
+  Future<void> setFrameRate(int value) async {
+    value = value.clamp(1, 240);
+    if (_closed || value == frameRate) return;
+    frameRate = value;
+    try {
+      await channel.invokeMethod<void>('frameRate', {
+        'id': id,
+        'frameRate': value,
+      });
     } on PlatformException {
       if (!_closed) failed(this);
     } on MissingPluginException {

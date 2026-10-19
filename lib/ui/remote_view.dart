@@ -6,6 +6,7 @@ import '../rdp/key_mapping.dart';
 import '../rdp/rdp_session.dart';
 import '../rdp/session_recovery.dart';
 import '../rdp/session_issue.dart';
+import '../rdp/frame_rate.dart';
 import 'transfer_dialog.dart';
 import 'adaptive.dart';
 import 'remote_surface.dart';
@@ -24,6 +25,7 @@ class RemoteView extends StatefulWidget {
     this.recovery,
     this.configure,
     this.memory,
+    this.frameRateLimit = 0,
   });
   final RdpSession session;
   final RemoteViewMemory? memory;
@@ -31,6 +33,7 @@ class RemoteView extends StatefulWidget {
   final VoidCallback? configure;
   final VoidCallback reconnect, disconnect, toggleFullscreen;
   final bool active, fullscreen;
+  final int frameRateLimit;
   @override
   State<RemoteView> createState() => _RemoteViewState();
 }
@@ -47,12 +50,15 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
   bool get _trackpad => _memory.trackpad ?? false;
   set _trackpad(bool value) => _memory.trackpad = value;
   bool _keyboard = false;
+  final _displayToken = DisplayRefresh.allocate();
+  (bool, int)? _displayRequest;
   RdpSession get session => widget.session;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    session.addListener(_updateDisplayRequest);
     _focus.addListener(_focusChanged);
     _clipboardTimer = Timer.periodic(
       const Duration(seconds: 1),
@@ -63,9 +69,55 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(covariant RemoteView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.session != session) {
+      oldWidget.session.removeListener(_updateDisplayRequest);
+      session.addListener(_updateDisplayRequest);
+    }
+    _updateFrameRate();
     if (!widget.active) {
       _releaseKeys();
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateFrameRate();
+  }
+
+  @override
+  void didChangeMetrics() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _updateFrameRate();
+    });
+  }
+
+  void _updateFrameRate() {
+    session.setFrameRate(
+      FrameRatePolicy.effective(
+        View.of(context).display.refreshRate,
+        widget.frameRateLimit,
+      ),
+    );
+    _updateDisplayRequest();
+  }
+
+  void _updateDisplayRequest() {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    final active =
+        widget.active &&
+        session.isActive &&
+        (lifecycle == null || lifecycle == AppLifecycleState.resumed);
+    final request = (active, widget.frameRateLimit);
+    if (_displayRequest == request) return;
+    _displayRequest = request;
+    unawaited(
+      DisplayRefresh.request(
+        _displayToken,
+        active: active,
+        limit: widget.frameRateLimit,
+      ),
+    );
   }
 
   void _focusChanged() {
@@ -92,6 +144,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) _releaseKeys();
+    _updateDisplayRequest();
   }
 
   Future<void> _syncClipboard({bool manual = false}) async {
@@ -134,6 +187,8 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    session.removeListener(_updateDisplayRequest);
+    unawaited(DisplayRefresh.request(_displayToken, active: false, limit: 0));
     _clipboardTimer?.cancel();
     _releaseKeys();
     _focus.removeListener(_focusChanged);

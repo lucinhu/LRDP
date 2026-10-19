@@ -150,7 +150,7 @@ def main():
     patches = ROOT / 'native/tests/windows_app'
     patch_info = json.loads((patches / 'PATCHES.json').read_text())
     plugin_inputs = {}
-    for name in ('file_selector_windows', 'flutter_secure_storage_windows', 'share_plus', 'url_launcher_windows', 'jni'):
+    for name in ('dynamic_color', 'file_selector_windows', 'flutter_secure_storage_windows', 'share_plus', 'url_launcher_windows', 'jni'):
         source = plugins[name]
         plugin_inputs[name] = {str(p.relative_to(source)): sha(p)
                               for p in sorted((source / 'windows').rglob('*')) if p.is_file()}
@@ -182,7 +182,7 @@ def main():
               'LRDP_RUNNER_RESOURCE': out / 'Runner.rc', 'LRDP_VERSION': version[1],
               'LRDP_VERSION_MAJOR': major, 'LRDP_VERSION_MINOR': minor,
               'LRDP_VERSION_PATCH': patch, 'LRDP_VERSION_BUILD': version[2] or '1'}
-    for name in ('file_selector_windows', 'flutter_secure_storage_windows', 'share_plus', 'url_launcher_windows', 'jni'):
+    for name in ('dynamic_color', 'file_selector_windows', 'flutter_secure_storage_windows', 'share_plus', 'url_launcher_windows', 'jni'):
         values['LRDP_PLUGIN_' + name] = plugins[name]
     (out / 'inputs.cmake').write_text(''.join(f'set({k} {cmake_value(v)})\n' for k, v in values.items()))
     run(['cmake', '-S', ROOT / 'native/windows_app', '-B', out / 'cmake', '-G', 'Ninja',

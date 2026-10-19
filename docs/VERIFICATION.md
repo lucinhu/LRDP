@@ -3,13 +3,42 @@
 记录日期：2026-10-19。当前为开发预览。构建、真实协议和平台设备验收分别记录；
 尚未进行与 aRDP Free 的同设备性能对比。
 
+## 系统配色与高帧率
+
+本轮最终源码通过静态分析、128 个 Flutter 单元/布局测试（普通运行跳过 7 个外部协议
+用例）、3 个原生 CTest 和 9 个 Python 检查。新增回归覆盖旧明暗设置迁移、系统亮度变化
+保留编辑中的连接、手动明暗覆盖、前台重读主题色、设置持久化，以及刷新率变化时原会话
+原地调整帧率和释放系统刷新率偏好。
+
+- Android API 36 / x86_64 / 16 KiB 的实际主入口 Release APK 通过 17 项流程。
+  系统主色与 `system_accent1_600` 资源逐像素对应，自动明暗、手动浅色、返回自动、
+  120 帧设置的进程重启保留均通过。既有 NLA/Keystore、原生画面、触控、IME 保持、
+  组合键和中文 Unicode/粘贴回归也通过；[浅色](screenshots/android-system-theme-light.png)
+  与[深色](screenshots/android-system-theme-dark.png)为本轮未修改的主 Release 实际截图。
+- 独立 TLS 服务端以 240 帧/秒目标发送带序号的 320×240 画面。生产 worker 与 Flutter
+  CPU 回退实际交付约 29.98 / 120.50 / 213.29 帧/秒，对应 30 / 120 / 240 的设置；
+  还核对了画面像素序号、后台停止交付和返回继续。单帧背压保持，过期帧不排队追赶。
+  这组数据覆盖小画面回环解码/交付吞吐量；实体高刷屏、高分辨率、耗电与端到端延迟待验收。
+- Linux GTK 原生纹理与强制 GPU 故障回退分别通过真实 RDP 像素、XOR、缩放、暂停恢复、
+  重建视图及三次重连/资源释放检查。当前 Linux 主入口 Release 还通过窗口图标/绘制、
+  实际远端窗口拖拽和后续点击，以及正常/阻塞写入时的输入释放与取消检查。
+- Windows 的新帧率调度插件、固定版本的配色插件及构建目录中的 API 兼容副本通过
+  Linux 上 clang-cl / x64 Windows SDK 交叉编译。当前完整 Windows 主应用、原生 MSVC、
+  macOS、iOS 和 ARM64 手机真机仍待验收。
+
+Android 模拟器仅提供 60 Hz 屏幕，本轮没有把“可以选择 120/240”当作实体屏幕高刷实测。
+实际帧率还取决于服务端更新和系统刷新率策略。FreeRDP 子模块仍无修改，C ABI 保持 v5。
+本轮报告位于 `build/android-theme-refresh-runtime/VERDICT.json`、
+`build/frame-rate-runtime/VERDICT.json` 与 `build/linux-mouse-runtime/VERDICT.json`；
+分发时用 `build/distributions/theme-refresh/BUILD_INFO.json` 对照 APK、AOT、原生库和源码摘要。
+
 ## 已验证范围
 
 | 项目 | 结果与范围 |
 | --- | --- |
 | 上游源码 | FreeRDP 3.32.2，提交 `97eff6ddfbbfaa8e42a126d362686bd001ff8bdc`，子模块源码无修改；适配均在 LRDP 仓库 |
 | ABI 与线程 | ABI v5、24 个 C 导出（新增原生帧接口保持旧签名兼容）；每个会话一个 worker isolate，FreeRDP 连接线程串行处理原生操作；帧与光标独立背压 |
-| Flutter 全量检查 | 静态分析无问题，99 项单元/布局用例通过；6 个外部协议用例在普通测试中跳过，基础会话/粘贴/认证/恢复/光标/键盘另由实际回环服务运行 |
+| Flutter 全量检查 | 静态分析无问题，128 项单元/布局用例通过；7 个外部协议用例在普通测试中跳过，基础会话/粘贴/认证/恢复/光标/键盘/高帧率另由实际回环服务运行 |
 | Linux 发布版 | 当前 lib/main.dart 的 Release AOT、原生纹理插件与安装库 ABI v5 / 24 导出；私有显示实际窗口启动、128×128 图标逐像素一致；系统鼠标拖动、释放与后续点击通过。声音、AVC 图像、光标及 Flutter 粘贴的历史发布库证据保留各自原哈希 |
 | Android 完整运行基线 | 前一构建（源码指纹 `36ece57b…`）的 API 36、x86_64、PAGE_SIZE=16384：四个用例、24 个阶段通过，包括 Keystore、文件、中文粘贴、AVC、光标、真实 IME/触控/旋转/DocumentUI/SharePlus、后台断网及换证书；声音与系统手势使用下方专项报告，不将前次基线当成新增行为的验收 |
 | Android ARM64 包 | lib/main.dart 非调试 Release AOT 预览 APK；显式开发证书签名；ABI v5、ELF/RELRO/ZIP 的 16 KiB 对齐、签名、单 ABI 和主应用入口检查通过；未实测 ARM64 设备 |

@@ -5,25 +5,35 @@ const mint = Color(0xFFBDE3C9);
 const ink = Color(0xFF182D28);
 const canvas = Color(0xFFF4F6F3);
 
-ThemeData appTheme(Brightness brightness) {
+ThemeData appTheme(Brightness brightness, {ColorScheme? systemColors}) {
   final dark = brightness == Brightness.dark;
-  final scheme = ColorScheme.fromSeed(
-    seedColor: pine,
-    brightness: brightness,
-    surface: dark ? const Color(0xFF17211E) : Colors.white,
-  );
+  final scheme =
+      systemColors ??
+      ColorScheme.fromSeed(
+        seedColor: pine,
+        brightness: brightness,
+        surface: dark ? const Color(0xFF17211E) : Colors.white,
+      );
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
     colorScheme: scheme,
-    scaffoldBackgroundColor: dark ? const Color(0xFF101916) : canvas,
+    scaffoldBackgroundColor: systemColors != null
+        ? scheme.surface
+        : dark
+        ? const Color(0xFF101916)
+        : canvas,
     fontFamilyFallback: const [
       'Noto Sans CJK SC',
       'Microsoft YaHei',
       'PingFang SC',
     ],
     appBarTheme: AppBarTheme(
-      backgroundColor: dark ? const Color(0xFF101916) : canvas,
+      backgroundColor: systemColors != null
+          ? scheme.surface
+          : dark
+          ? const Color(0xFF101916)
+          : canvas,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
     ),
@@ -33,7 +43,7 @@ ThemeData appTheme(Brightness brightness) {
         height: 1.2,
         fontWeight: FontWeight.w700,
         letterSpacing: -1.2,
-        color: dark ? Colors.white : ink,
+        color: scheme.onSurface,
       ),
       headlineMedium: const TextStyle(
         fontSize: 24,
@@ -47,7 +57,7 @@ ThemeData appTheme(Brightness brightness) {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: dark ? const Color(0xFF202E28) : const Color(0xFFF5F7F4),
+      fillColor: scheme.surfaceContainerHighest.withValues(alpha: .5),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -110,10 +120,10 @@ class Brand extends StatelessWidget {
       ),
       if (!compact) ...[
         const SizedBox(width: 11),
-        const Text(
+        Text(
           'LRDP',
           style: TextStyle(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onSurface,
             fontSize: 22,
             fontWeight: FontWeight.w800,
             letterSpacing: 1.2,

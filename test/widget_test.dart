@@ -114,7 +114,7 @@ void main() {
         expect(find.text('暂无收藏'), findsOneWidget);
         await tester.tap(find.text('设置').last);
         await tester.pumpAndSettle();
-        expect(find.text('深色外观'), findsOneWidget);
+        expect(find.text('主题模式'), findsOneWidget);
         await tester.tap(find.text('电脑').last);
         await tester.pumpAndSettle();
         expect(find.text('测试电脑'), findsOneWidget);

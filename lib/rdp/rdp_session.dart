@@ -11,6 +11,7 @@ import '../data/transfer_folder.dart';
 import 'native_bindings.dart';
 import 'rdp_cursor.dart';
 import 'native_video.dart';
+import 'frame_rate.dart';
 
 enum SessionState {
   idle,
@@ -91,6 +92,16 @@ class RdpSession extends ChangeNotifier {
   bool _disposed = false, _decoding = false, _cursorDecoding = false;
   int _epoch = 0;
   bool _visible = true;
+  int _frameRate = 60;
+  int get targetFrameRate => _frameRate;
+  void setFrameRate(int value) {
+    value = value.clamp(1, 240);
+    if (_frameRate == value) return;
+    _frameRate = value;
+    _commands?.send(['frameRate', value]);
+    if (_video case final video?) unawaited(video.setFrameRate(value));
+  }
+
   bool _audioAllowed = !Platform.isAndroid;
   String audioStatus = 'off';
   void setAudioAllowed(bool allowed) {
@@ -134,6 +145,7 @@ class RdpSession extends ChangeNotifier {
     }
     final video = await NativeVideo.create(
       ticket,
+      frameRate: _frameRate,
       changed: (video) {
         if (_disposed || epoch != _epoch || !identical(_video, video)) return;
         frames += (video.uploads - _lastUploads).clamp(0, 1 << 30);
@@ -158,6 +170,8 @@ class RdpSession extends ChangeNotifier {
     }
     _releaseVideo();
     _video = video;
+    await video.setFrameRate(_frameRate);
+    if (_disposed || epoch != _epoch || !identical(_video, video)) return;
     _commands?.send(['video', true]);
     await video.setVisible(_visible);
     if (!_disposed && epoch == _epoch) notifyListeners();
@@ -199,6 +213,7 @@ class RdpSession extends ChangeNotifier {
           event.send(['stop']);
         } else {
           event.send(['visible', _visible]);
+          event.send(['frameRate', _frameRate]);
           event.send(['audio', _audioAllowed]);
         }
         return;
@@ -545,6 +560,22 @@ void _sessionWorker(Map<String, dynamic> init) {
   Timer? timer;
   bool inFlight = false, finished = false, nativeVideo = false;
   var visible = init['visible'] as bool? ?? true;
+  var frameRate = 60;
+  final pacingClock = Stopwatch()..start();
+  var nextPoll = 0;
+  void Function(Timer)? tick;
+  void schedulePolling() {
+    timer?.cancel();
+    nextPoll = 0;
+    if (finished || tick == null) return;
+    timer = Timer.periodic(
+      visible
+          ? FrameRatePolicy.interval(frameRate)
+          : const Duration(milliseconds: 33),
+      tick,
+    );
+  }
+
   var audioAllowed = init['audioAllowed'] as bool? ?? !Platform.isAndroid;
   var previousAudioStatus = '';
   int? pasteRequest;
@@ -702,8 +733,18 @@ void _sessionWorker(Map<String, dynamic> init) {
               }
             }
           case 'visible':
-            visible = msg[1] as bool;
+            final value = msg[1] as bool;
+            if (visible != value) {
+              visible = value;
+              schedulePolling();
+            }
             api!.audioActive(session, visible && audioAllowed ? 1 : 0);
+          case 'frameRate':
+            final value = (msg[1] as int).clamp(1, 240);
+            if (value != frameRate) {
+              frameRate = value;
+              schedulePolling();
+            }
           case 'video':
             nativeVideo = msg[1] as bool;
             if (nativeVideo && pixels != nullptr) {
@@ -742,124 +783,123 @@ void _sessionWorker(Map<String, dynamic> init) {
         }
       }),
     );
-    timer = Timer.periodic(
-      const Duration(milliseconds: 33),
-      (_) => guarded(() {
-        if (finished) return;
-        final state = api!.state(session);
-        final audioStatus = read(4);
-        if (audioStatus != previousAudioStatus) {
-          previousAudioStatus = audioStatus;
-          events.send({'type': 'audioStatus', 'value': audioStatus});
-        }
-        if (pasteRequest case final id?) {
-          final status = read(3);
-          if (status != 'pending') {
-            pasteRequest = null;
-            events.send({
-              'type': 'pasteResult',
-              'id': id,
-              'ok': status == 'sent',
-              'message': status == 'timeout'
-                  ? '远程端未及时确认粘贴，文字已保留。请检查远程输入框后再试'
-                  : '远程端未接受粘贴，文字已保留',
-            });
-          }
-        }
-        if (state != previousState) {
-          previousState = state;
+    tick = (_) => guarded(() {
+      if (finished) return;
+      // Dart timers may round 8.333 ms down to 8 ms. Keep a monotonic
+      // deadline so 120 Hz does not become 125 Hz, and never queue catch-up
+      // decodes after a slow frame or a foreground transition.
+      if (visible) {
+        final now = pacingClock.elapsedMicroseconds;
+        if (now < nextPoll) return;
+        final interval = FrameRatePolicy.interval(frameRate).inMicroseconds;
+        if (nextPoll == 0 || now - nextPoll > interval) nextPoll = now;
+        nextPoll += interval;
+      }
+      final state = api!.state(session);
+      final audioStatus = read(4);
+      if (audioStatus != previousAudioStatus) {
+        previousAudioStatus = audioStatus;
+        events.send({'type': 'audioStatus', 'value': audioStatus});
+      }
+      if (pasteRequest case final id?) {
+        final status = read(3);
+        if (status != 'pending') {
+          pasteRequest = null;
           events.send({
-            'type': 'state',
-            'state': state,
-            'reason': api.endReason(session),
-            'code': api.errorCode(session),
-            'error': read(0),
-            'fingerprint': read(1),
-            'version': api.version().toDartString(),
+            'type': 'pasteResult',
+            'id': id,
+            'ok': status == 'sent',
+            'message': status == 'timeout'
+                ? '远程端未及时确认粘贴，文字已保留。请检查远程输入框后再试'
+                : '远程端未接受粘贴，文字已保留',
           });
         }
-        if (state >= SessionState.closed.index) {
-          finish();
-          return;
-        }
-        if (state != SessionState.connected.index) return;
-        final features = api.features(session);
-        if (features != previousFeatures) {
-          previousFeatures = features;
-          events.send({'type': 'features', 'value': features});
-        }
-        final clipboardSize = api.read(session, 2, textBuffer, 1024 * 1024 + 1);
-        if (clipboardSize >= 0) {
-          events.send({
-            'type': 'clipboard',
-            'text': textBuffer.toDartString(length: clipboardSize),
-          });
-        }
-        for (var i = 0; i < 128 && unicode.isNotEmpty; i++) {
-          final key = unicode.first;
-          if (api.input(session, 2, key.$1, key.$2, 0) == 0) break;
-          unicode.removeFirst();
-        }
-        if (!visible) return;
-        if (!cursorInFlight) {
-          final bytes = api.cursor(
-            session,
-            cursorPixels,
-            384 * 384 * 8,
-            cursorInfo,
-            cursorGeneration,
-          );
-          if (bytes < 0) throw StateError('服务器光标超过支持范围');
-          if (bytes > 0) {
-            cursorInFlight = true;
-            final shapeChanged = previousCursorShape != cursorInfo[8];
-            events.send({
-              'type': 'cursor',
-              'info': cursorInfo.asTypedList(9).toList(),
-              'pixels': cursorInfo[0] == 2 && shapeChanged
-                  ? TransferableTypedData.fromList([
-                      cursorPixels.asTypedList(bytes),
-                    ])
-                  : null,
-            });
-            previousCursorShape = cursorInfo[8];
-          }
-        }
-        if (nativeVideo || inFlight) return;
-        var size = api.frame(
+      }
+      if (state != previousState) {
+        previousState = state;
+        events.send({
+          'type': 'state',
+          'state': state,
+          'reason': api.endReason(session),
+          'code': api.errorCode(session),
+          'error': read(0),
+          'fingerprint': read(1),
+          'version': api.version().toDartString(),
+        });
+      }
+      if (state >= SessionState.closed.index) {
+        finish();
+        return;
+      }
+      if (state != SessionState.connected.index) return;
+      final features = api.features(session);
+      if (features != previousFeatures) {
+        previousFeatures = features;
+        events.send({'type': 'features', 'value': features});
+      }
+      final clipboardSize = api.read(session, 2, textBuffer, 1024 * 1024 + 1);
+      if (clipboardSize >= 0) {
+        events.send({
+          'type': 'clipboard',
+          'text': textBuffer.toDartString(length: clipboardSize),
+        });
+      }
+      for (var i = 0; i < 128 && unicode.isNotEmpty; i++) {
+        final key = unicode.first;
+        if (api.input(session, 2, key.$1, key.$2, 0) == 0) break;
+        unicode.removeFirst();
+      }
+      if (!visible) return;
+      if (!cursorInFlight) {
+        final bytes = api.cursor(
           session,
-          pixels,
-          capacity,
-          width,
-          height,
-          generation,
+          cursorPixels,
+          384 * 384 * 8,
+          cursorInfo,
+          cursorGeneration,
         );
-        if (size < 0) {
-          calloc.free(pixels);
-          capacity = -size;
-          pixels = calloc<Uint8>(capacity);
-          size = api.frame(
-            session,
-            pixels,
-            capacity,
-            width,
-            height,
-            generation,
-          );
-        }
-        if (size > 0) {
-          inFlight = true;
+        if (bytes < 0) throw StateError('服务器光标超过支持范围');
+        if (bytes > 0) {
+          cursorInFlight = true;
+          final shapeChanged = previousCursorShape != cursorInfo[8];
           events.send({
-            'type': 'frame',
-            'pixels': TransferableTypedData.fromList([
-              pixels.asTypedList(size),
-            ]),
-            'width': width.value,
-            'height': height.value,
+            'type': 'cursor',
+            'info': cursorInfo.asTypedList(9).toList(),
+            'pixels': cursorInfo[0] == 2 && shapeChanged
+                ? TransferableTypedData.fromList([
+                    cursorPixels.asTypedList(bytes),
+                  ])
+                : null,
           });
+          previousCursorShape = cursorInfo[8];
         }
-      }),
-    );
+      }
+      if (nativeVideo || inFlight) return;
+      var size = api.frame(
+        session,
+        pixels,
+        capacity,
+        width,
+        height,
+        generation,
+      );
+      if (size < 0) {
+        calloc.free(pixels);
+        capacity = -size;
+        pixels = calloc<Uint8>(capacity);
+        size = api.frame(session, pixels, capacity, width, height, generation);
+      }
+      if (size > 0) {
+        inFlight = true;
+        events.send({
+          'type': 'frame',
+          'pixels': TransferableTypedData.fromList([pixels.asTypedList(size)]),
+          'width': width.value,
+          'height': height.value,
+        });
+      }
+    });
+    schedulePolling();
   } catch (e) {
     events.send({
       'type': 'state',

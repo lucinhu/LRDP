@@ -77,6 +77,8 @@ struct _LrdpTexture {
   FlTextureGL parent_instance;
   GMutex lock;
   lrdp_video* video;
+  gint frame_rate;
+  gint64 next_frame;
   FallbackImage* fallback;
   GLuint name;
   uint32_t width, height;
@@ -256,6 +258,7 @@ static void lrdp_texture_init(LrdpTexture* self) {
   g_atomic_int_inc(&live_textures);
   g_mutex_init(&self->lock);
   self->visible = TRUE;
+  self->frame_rate = 60;
   self->display = EGL_NO_DISPLAY;
   self->cleanup = EGL_NO_CONTEXT;
 }
@@ -266,7 +269,8 @@ struct _LrdpNativePlugin {
   FlTextureRegistrar* registrar;
   GHashTable* textures;
   FallbackImage* fallback;
-  guint timer;
+  GtkWidget* view;
+  guint tick;
 };
 G_DEFINE_TYPE(LrdpNativePlugin, lrdp_native_plugin, G_TYPE_OBJECT)
 
@@ -281,11 +285,14 @@ static FlValue* status(LrdpTexture* texture) {
   fl_value_set_string_take(result, "generation", fl_value_new_int(generation));
   fl_value_set_string_take(result, "uploads", fl_value_new_int(texture->uploads));
   fl_value_set_string_take(result, "failed", fl_value_new_bool(texture->failed));
+  fl_value_set_string_take(result, "frameRate", fl_value_new_int(texture->frame_rate));
   g_mutex_unlock(&texture->lock);
   return result;
 }
-static gboolean poll_frames(gpointer data) {
+static gboolean poll_frames(GtkWidget*, GdkFrameClock* clock, gpointer data) {
   auto* self = LRDP_NATIVE_PLUGIN(data);
+  const gint64 now = gdk_frame_clock_get_frame_time(clock);
+  gboolean active = FALSE;
   GHashTableIter iter;
   gpointer value;
   g_hash_table_iter_init(&iter, self->textures);
@@ -294,15 +301,28 @@ static gboolean poll_frames(gpointer data) {
     int32_t w, h;
     uint64_t generation;
     g_mutex_lock(&texture->lock);
+    active |= texture->visible && !texture->failed;
     gboolean update = texture->visible && !texture->failed && texture->video &&
+                      now + 500 >= texture->next_frame &&
                       lrdp_video_info(texture->video, &w, &h, &generation) &&
                       texture->announced != generation;
-    if (update) texture->announced = generation;
+    if (update) {
+      texture->announced = generation;
+      const gint64 interval = 1000000 / texture->frame_rate;
+      if (!texture->next_frame || now - texture->next_frame > interval)
+        texture->next_frame = now;
+      texture->next_frame += interval;
+    }
     g_mutex_unlock(&texture->lock);
     if (update)
       fl_texture_registrar_mark_texture_frame_available(self->registrar, FL_TEXTURE(texture));
   }
-  return G_SOURCE_CONTINUE;
+  if (!active) self->tick = 0;
+  return active ? G_SOURCE_CONTINUE : G_SOURCE_REMOVE;
+}
+static void schedule_tick(LrdpNativePlugin* self) {
+  if (!self->tick)
+    self->tick = gtk_widget_add_tick_callback(self->view, poll_frames, self, nullptr);
 }
 static void respond(FlMethodCall* call, FlValue* value) {
   g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(fl_method_success_response_new(value));
@@ -354,6 +374,9 @@ static void method(FlMethodChannel*, FlMethodCall* call, gpointer data) {
     }
     auto* texture = LRDP_TEXTURE(g_object_new(lrdp_texture_get_type(), nullptr));
     texture->video = video;
+    FlValue* rate = fl_value_lookup_string(args, "frameRate");
+    if (rate && fl_value_get_type(rate) == FL_VALUE_TYPE_INT)
+      texture->frame_rate = CLAMP(fl_value_get_int(rate), 1, 240);
     texture->fallback = fallback_ref(self->fallback);
     if (!fl_texture_registrar_register_texture(self->registrar, FL_TEXTURE(texture))) {
       g_object_unref(texture);
@@ -362,6 +385,7 @@ static void method(FlMethodChannel*, FlMethodCall* call, gpointer data) {
     }
     id = fl_texture_get_id(FL_TEXTURE(texture));
     g_hash_table_insert(self->textures, GINT_TO_POINTER(id), texture);
+    schedule_tick(self);
     g_autoptr(FlValue) result = status(texture);
     fl_value_set_string_take(result, "id", fl_value_new_int(id));
     respond(call, result);
@@ -384,6 +408,20 @@ static void method(FlMethodChannel*, FlMethodCall* call, gpointer data) {
     g_mutex_lock(&texture->lock);
     texture->visible = fl_value_get_bool(visible);
     if (texture->visible) texture->announced = 0;
+    texture->next_frame = 0;
+    g_mutex_unlock(&texture->lock);
+    if (texture->visible) schedule_tick(self);
+    respond(call, nullptr);
+  } else if (g_str_equal(name, "frameRate")) {
+    FlValue* rate = fl_value_lookup_string(args, "frameRate");
+    if (!rate || fl_value_get_type(rate) != FL_VALUE_TYPE_INT ||
+        fl_value_get_int(rate) < 1 || fl_value_get_int(rate) > 240) {
+      error(call, "Invalid frame rate");
+      return;
+    }
+    g_mutex_lock(&texture->lock);
+    texture->frame_rate = fl_value_get_int(rate);
+    texture->next_frame = 0;
     g_mutex_unlock(&texture->lock);
     respond(call, nullptr);
   } else if (g_str_equal(name, "dispose")) {
@@ -398,9 +436,9 @@ static void method(FlMethodChannel*, FlMethodCall* call, gpointer data) {
 }
 static void plugin_dispose(GObject* object) {
   auto* self = LRDP_NATIVE_PLUGIN(object);
-  if (self->timer) {
-    g_source_remove(self->timer);
-    self->timer = 0;
+  if (self->tick) {
+    gtk_widget_remove_tick_callback(self->view, self->tick);
+    self->tick = 0;
   }
   if (self->textures) {
     GHashTableIter iter;
@@ -412,6 +450,7 @@ static void plugin_dispose(GObject* object) {
   }
   g_clear_pointer(&self->fallback, fallback_unref);
   g_clear_object(&self->registrar);
+  g_clear_object(&self->view);
   G_OBJECT_CLASS(lrdp_native_plugin_parent_class)->dispose(object);
 }
 static void lrdp_native_plugin_class_init(LrdpNativePluginClass* klass) {
@@ -425,10 +464,10 @@ void lrdp_native_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
   auto* self = LRDP_NATIVE_PLUGIN(g_object_new(lrdp_native_plugin_get_type(), nullptr));
   self->registrar =
       FL_TEXTURE_REGISTRAR(g_object_ref(fl_plugin_registrar_get_texture_registrar(registrar)));
+  self->view = GTK_WIDGET(g_object_ref(fl_plugin_registrar_get_view(registrar)));
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   g_autoptr(FlMethodChannel) channel = fl_method_channel_new(
       fl_plugin_registrar_get_messenger(registrar), "dev.lrdp/video", FL_METHOD_CODEC(codec));
   fl_method_channel_set_method_call_handler(channel, method, g_object_ref(self), g_object_unref);
-  self->timer = g_timeout_add(16, poll_frames, self);
   g_object_unref(self);
 }

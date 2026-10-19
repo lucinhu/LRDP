@@ -105,12 +105,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('设置').last);
       await tester.pumpAndSettle();
-      final dark = find.widgetWithText(SwitchListTile, '深色外观');
+      final dark = find.byKey(const ValueKey('theme-system'));
       await tester.ensureVisible(dark);
       await tester.pumpAndSettle();
       await tester.tap(dark);
       await tester.pumpAndSettle();
-      expect(store.darkMode, isTrue);
+      await tester.tap(find.text('深色').last);
+      await tester.pumpAndSettle();
+      expect(store.themeMode, ThemeMode.dark);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     });

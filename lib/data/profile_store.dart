@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/connection_profile.dart';
@@ -22,7 +23,26 @@ class ProfileStore extends ChangeNotifier {
     return operation;
   }
 
-  bool get darkMode => _preferences.getBool('darkMode') ?? false;
+  ThemeMode get themeMode {
+    final saved = _preferences.getString('themeMode');
+    for (final mode in ThemeMode.values) {
+      if (mode.name == saved) return mode;
+    }
+    // Keep an explicitly selected appearance from older installations.
+    final legacy = _preferences.getBool('darkMode');
+    return legacy == null
+        ? ThemeMode.system
+        : legacy
+        ? ThemeMode.dark
+        : ThemeMode.light;
+  }
+
+  bool get useSystemColors => _preferences.getBool('systemColors') ?? true;
+  static const frameRateOptions = [0, 30, 60, 90, 120, 144, 165, 240];
+  int get frameRateLimit {
+    final value = _preferences.getInt('frameRateLimit') ?? 0;
+    return frameRateOptions.contains(value) ? value : 0;
+  }
 
   Future<void> load() async {
     final raw = _preferences.getString('profiles.v1');
@@ -112,8 +132,25 @@ class ProfileStore extends ChangeNotifier {
       });
   Future<void> forgetCertificate(ConnectionProfile p) =>
       _vault.delete(key: 'certificate.${p.id}');
-  Future<void> setDarkMode(bool value) async {
-    await _preferences.setBool('darkMode', value);
+  Future<void> setThemeMode(ThemeMode value) => _serialize(() async {
+    if (!await _preferences.setString('themeMode', value.name)) {
+      throw StateError('无法保存外观设置');
+    }
     notifyListeners();
-  }
+  });
+
+  Future<void> setSystemColors(bool value) => _serialize(() async {
+    if (!await _preferences.setBool('systemColors', value)) {
+      throw StateError('无法保存配色设置');
+    }
+    notifyListeners();
+  });
+
+  Future<void> setFrameRateLimit(int value) => _serialize(() async {
+    if (!frameRateOptions.contains(value)) throw ArgumentError.value(value);
+    if (!await _preferences.setInt('frameRateLimit', value)) {
+      throw StateError('无法保存帧率设置');
+    }
+    notifyListeners();
+  });
 }

@@ -2,6 +2,9 @@ LRDP
 Copyright 2026 LRDP contributors
 
 This product includes FreeRDP and WinPR, provided as an unmodified Git submodule.
+
+System color integration uses dynamic_color (Apache-2.0), resolved by Pub.
+Its license is included in Flutter's bundled license notices.
 Their copyright, Apache License 2.0, and attribution notices are retained in
 third_party/FreeRDP/LICENSE and the individual source headers. Native license
 texts are bundled in assets/licenses and the in-app open source license page.

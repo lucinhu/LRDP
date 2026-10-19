@@ -80,9 +80,11 @@ void main() {
       }
 
       await capture('workspace');
-      await tester.tap(find.byTooltip('切换明暗主题'));
+      await tester.tap(find.byTooltip('外观'));
       await tester.pumpAndSettle();
-      expect(store.darkMode, true);
+      await tester.tap(find.text('深色'));
+      await tester.pumpAndSettle();
+      expect(store.themeMode, ThemeMode.dark);
       expect(tester.takeException(), isNull);
       await capture('workspace-dark');
       await tester.tap(find.text('添加电脑').first);

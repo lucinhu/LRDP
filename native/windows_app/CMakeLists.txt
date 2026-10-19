@@ -45,9 +45,11 @@ target_include_directories(lrdp_native_plugin PUBLIC
   "${LRDP_ROOT}/packages/lrdp_native/windows/include")
 target_link_libraries(lrdp_native_plugin PRIVATE flutter flutter_wrapper_plugin lrdp_core)
 
-foreach(plugin file_selector_windows flutter_secure_storage_windows share_plus url_launcher_windows jni)
+foreach(plugin dynamic_color file_selector_windows flutter_secure_storage_windows share_plus url_launcher_windows jni)
   add_subdirectory("${LRDP_PLUGIN_${plugin}}/windows" "plugins/${plugin}")
 endforeach()
+include("${LRDP_ROOT}/native/cmake/dynamic_color_compat.cmake")
+lrdp_dynamic_color_windows_compat()
 
 add_executable(lrdp WIN32
   "${LRDP_ROOT}/windows/runner/main.cpp"
@@ -66,7 +68,7 @@ target_compile_definitions(lrdp PRIVATE FLUTTER_VERSION="${LRDP_VERSION}"
   FLUTTER_VERSION_MAJOR=${LRDP_VERSION_MAJOR} FLUTTER_VERSION_MINOR=${LRDP_VERSION_MINOR}
   FLUTTER_VERSION_PATCH=${LRDP_VERSION_PATCH} FLUTTER_VERSION_BUILD=${LRDP_VERSION_BUILD})
 target_link_libraries(lrdp PRIVATE flutter_wrapper_app lrdp_native_plugin
-  file_selector_windows_plugin flutter_secure_storage_windows_plugin
+  dynamic_color_plugin file_selector_windows_plugin flutter_secure_storage_windows_plugin
   share_plus_plugin url_launcher_windows_plugin
   dwmapi ole32 shell32 shlwapi advapi32 uuid user32 gdi32 bcrypt version windowsapp)
 

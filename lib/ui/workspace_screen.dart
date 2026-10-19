@@ -659,7 +659,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
           drawer: wide || phone
               ? null
               : Drawer(
-                  backgroundColor: ink,
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainer,
                   child: SafeArea(child: _sidebar(drawer: true)),
                 ),
           body: SafeArea(
@@ -688,6 +690,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                 memory: _viewMemories[session.profile.id],
                                 recovery: _recoveries[session.profile.id],
                                 active: true,
+                                frameRateLimit: store.frameRateLimit,
                                 fullscreen: _fullscreen,
                                 toggleFullscreen: () =>
                                     setState(() => _fullscreen = !_fullscreen),
@@ -777,7 +780,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                 minTileHeight: 72,
                 leading: Icon(
                   Icons.computer,
-                  color: entry.key == _active ? pine : null,
+                  color: entry.key == _active
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
                 ),
                 title: Text(
                   entry.value.profile.name,
@@ -790,7 +795,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: entry.key == _active
-                    ? const Icon(Icons.check_circle, color: pine)
+                    ? Icon(
+                        Icons.check_circle,
+                        color: Theme.of(context).colorScheme.primary,
+                      )
                     : null,
                 onTap: () => Navigator.pop(context, entry.key),
               ),
@@ -810,7 +818,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         child: SizedBox(
           height: math.max(bounds.maxHeight, 650),
           child: Container(
-            color: ink,
+            color: Theme.of(context).colorScheme.surfaceContainer,
             padding: const EdgeInsets.fromLTRB(20, 30, 20, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -839,12 +847,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                       _nav(item.$1, item.$2, count: item.$3, drawer: drawer),
                 ),
                 const SizedBox(height: 30),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(left: 14),
                   child: Text(
                     '分组',
                     style: TextStyle(
-                      color: Color(0xFF809D8C),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 11,
                       letterSpacing: 1.5,
                     ),
@@ -864,12 +872,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                           small: true,
                         ),
                       if (groups.isEmpty)
-                        const Padding(
+                        Padding(
                           padding: EdgeInsets.all(14),
                           child: Text(
                             '添加连接后，分组将在这里显示',
                             style: TextStyle(
-                              color: Color(0xFF809D8C),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                               fontSize: 12,
                               height: 1.8,
                             ),
@@ -879,12 +889,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   ),
                 ),
                 _nav(Icons.tune_rounded, '设置', drawer: drawer),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.fromLTRB(14, 18, 0, 0),
                   child: Text(
                     'LRDP  /  0.1.0 PREVIEW',
                     style: TextStyle(
-                      color: Color(0xFF638470),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 9,
                       letterSpacing: 1.2,
                     ),
@@ -910,7 +920,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     return Padding(
       padding: const EdgeInsets.only(bottom: 5),
       child: Material(
-        color: selected ? mint : Colors.transparent,
+        color: selected
+            ? Theme.of(context).colorScheme.primaryContainer
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(11),
         child: InkWell(
           borderRadius: BorderRadius.circular(11),
@@ -931,7 +943,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                 Icon(
                   icon,
                   size: small ? 17 : 19,
-                  color: selected ? ink : const Color(0xFFADC3B7),
+                  color: selected
+                      ? Theme.of(context).colorScheme.onPrimaryContainer
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -939,7 +953,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                     label,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: selected ? ink : const Color(0xFFADC3B7),
+                      color: selected
+                          ? Theme.of(context).colorScheme.onPrimaryContainer
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 13,
                       fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                     ),
@@ -949,7 +965,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   Text(
                     '$count',
                     style: TextStyle(
-                      color: selected ? pine : const Color(0xFF6F917C),
+                      color: selected
+                          ? Theme.of(context).colorScheme.onPrimaryContainer
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 11,
                     ),
                   ),
@@ -990,14 +1008,22 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
           style: const TextStyle(fontSize: 13),
         ),
         const Spacer(),
-        IconButton(
-          onPressed: () => store.setDarkMode(!store.darkMode),
-          icon: Icon(
-            store.darkMode
-                ? Icons.light_mode_outlined
-                : Icons.dark_mode_outlined,
-          ),
-          tooltip: '切换明暗主题',
+        PopupMenuButton<ThemeMode>(
+          onSelected: (mode) => _saveSetting(() => store.setThemeMode(mode)),
+          icon: Icon(switch (store.themeMode) {
+            ThemeMode.system => Icons.brightness_auto_outlined,
+            ThemeMode.light => Icons.light_mode_outlined,
+            ThemeMode.dark => Icons.dark_mode_outlined,
+          }),
+          tooltip: '外观',
+          itemBuilder: (_) => [
+            for (final mode in ThemeMode.values)
+              CheckedPopupMenuItem(
+                value: mode,
+                checked: store.themeMode == mode,
+                child: Text(_themeLabel(mode)),
+              ),
+          ],
         ),
       ],
     ),
@@ -1034,7 +1060,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                       Icons.circle,
                       size: 7,
                       color: entry.value.state == SessionState.connected
-                          ? pine
+                          ? Theme.of(context).colorScheme.primary
                           : Colors.orange,
                     ),
                     const SizedBox(width: 7),
@@ -1252,23 +1278,27 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   Widget _quickConnect(bool compact) => Container(
     padding: EdgeInsets.all(compact ? 20 : 26),
     decoration: BoxDecoration(
-      color: const Color(0xFFE6EDE5),
+      color: Theme.of(context).colorScheme.surfaceContainer,
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: const Color(0xFFD7E3D5)),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
+        Row(
           children: [
-            Icon(Icons.bolt_rounded, size: 18, color: pine),
+            Icon(
+              Icons.bolt_rounded,
+              size: 18,
+              color: Theme.of(context).colorScheme.primary,
+            ),
             SizedBox(width: 7),
             Text(
               '快速连接',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: ink,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ],
@@ -1280,17 +1310,22 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               child: TextField(
                 key: const Key('quickAddress'),
                 controller: _quick,
-                style: const TextStyle(color: ink, fontSize: 14),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontSize: 14,
+                ),
                 onSubmitted: (value) => _edit(address: value),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: '主机名或 IP 地址:端口',
-                  hintStyle: TextStyle(color: Color(0xFF87988A)),
+                  hintStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                   prefixIcon: Icon(
                     Icons.computer_outlined,
                     size: 20,
-                    color: pine,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                  fillColor: Colors.white,
+                  fillColor: Theme.of(context).colorScheme.surface,
                 ),
               ),
             ),
@@ -1298,8 +1333,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             FilledButton(
               onPressed: () => _edit(address: _quick.text),
               style: FilledButton.styleFrom(
-                backgroundColor: pine,
-                foregroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1318,8 +1353,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
           const SizedBox(height: 12),
           TextButton.icon(
             onPressed: _edit,
-            icon: const Icon(Icons.add, color: pine),
-            label: const Text('添加电脑', style: TextStyle(color: pine)),
+            icon: const Icon(Icons.add),
+            label: const Text('添加电脑'),
           ),
         ],
       ],
@@ -1403,7 +1438,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                         ],
                       ),
                     ),
-                    if (live) const Icon(Icons.circle, size: 8, color: pine),
+                    if (live)
+                      Icon(
+                        Icons.circle,
+                        size: 8,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     const SizedBox(width: 8),
                     TextButton(
                       onPressed: () => _connect(p),
@@ -1465,7 +1505,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                         ),
                         const Spacer(),
                         if (live) ...[
-                          const Icon(Icons.circle, size: 6, color: pine),
+                          Icon(
+                            Icons.circle,
+                            size: 6,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                           const SizedBox(width: 5),
                         ],
                         Text(
@@ -1480,7 +1524,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                           ),
                         ),
                         const SizedBox(width: 7),
-                        const Icon(Icons.arrow_outward, size: 15, color: pine),
+                        Icon(
+                          Icons.arrow_outward,
+                          size: 15,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ],
                     ),
                   ],
@@ -1525,9 +1573,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               ).colorScheme.primaryContainer.withValues(alpha: .45),
               borderRadius: BorderRadius.circular(24),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.add_to_queue_rounded,
-              color: pine,
+              color: Theme.of(context).colorScheme.primary,
               size: 32,
             ),
           ),
@@ -1664,6 +1712,24 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     );
   }
 
+  String _themeLabel(ThemeMode mode) => switch (mode) {
+    ThemeMode.system => '跟随系统',
+    ThemeMode.light => '浅色',
+    ThemeMode.dark => '深色',
+  };
+
+  Future<void> _saveSetting(Future<void> Function() save) async {
+    try {
+      await save();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('设置未能保存，请检查存储空间后重试')));
+      }
+    }
+  }
+
   Widget _settings() => ListView(
     padding: EdgeInsets.all(phoneLayout(context) ? 16 : 32),
     children: [
@@ -1672,12 +1738,60 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       Card(
         child: Column(
           children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: DropdownButtonFormField<ThemeMode>(
+                key: ValueKey('theme-${store.themeMode.name}'),
+                initialValue: store.themeMode,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: '主题模式'),
+                items: [
+                  for (final mode in ThemeMode.values)
+                    DropdownMenuItem(
+                      value: mode,
+                      child: Text(_themeLabel(mode)),
+                    ),
+                ],
+                onChanged: (mode) {
+                  if (mode != null) {
+                    _saveSetting(() => store.setThemeMode(mode));
+                  }
+                },
+              ),
+            ),
             SwitchListTile.adaptive(
-              value: store.darkMode,
-              onChanged: store.setDarkMode,
-              title: const Text('深色外观'),
-              subtitle: const Text('使用深色界面'),
-              secondary: const Icon(Icons.dark_mode_outlined),
+              value: store.useSystemColors,
+              onChanged: (value) =>
+                  _saveSetting(() => store.setSystemColors(value)),
+              title: const Text('使用系统配色'),
+              subtitle: const Text('采用系统主题色；不可用时使用默认配色'),
+              secondary: const Icon(Icons.palette_outlined),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: DropdownButtonFormField<int>(
+                key: ValueKey('frame-rate-${store.frameRateLimit}'),
+                initialValue: store.frameRateLimit,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: '画面帧率上限',
+                  helperText: '实际帧率取决于远端、网络和屏幕刷新率。高帧率会增加耗电。',
+                  helperMaxLines: 3,
+                ),
+                items: [
+                  for (final rate in ProfileStore.frameRateOptions)
+                    DropdownMenuItem(
+                      value: rate,
+                      child: Text(rate == 0 ? '自动（跟随屏幕）' : '$rate 帧/秒'),
+                    ),
+                ],
+                onChanged: (rate) {
+                  if (rate != null) {
+                    _saveSetting(() => store.setFrameRateLimit(rate));
+                  }
+                },
+              ),
             ),
             const Divider(height: 1),
             const ListTile(

@@ -5,6 +5,7 @@
 #include <flutter/standard_method_codec.h>
 
 #include <chrono>
+#include <algorithm>
 #include <condition_variable>
 #include <map>
 #include <thread>
@@ -35,7 +36,7 @@ bool Integer(const EncodableValue* value, int64_t* output) {
   return false;
 }
 
-EncodableMap Status(int64_t id, VideoTexture& video) {
+EncodableMap Status(int64_t id, VideoTexture& video, int frame_rate) {
   auto status = video.Status();
   return {{EncodableValue("id"), EncodableValue(id)},
           {EncodableValue("width"), EncodableValue(status.width)},
@@ -44,8 +45,14 @@ EncodableMap Status(int64_t id, VideoTexture& video) {
            EncodableValue(static_cast<int64_t>(status.generation))},
           {EncodableValue("uploads"),
            EncodableValue(static_cast<int64_t>(status.uploads))},
-          {EncodableValue("failed"), EncodableValue(status.failed)}};
+          {EncodableValue("failed"), EncodableValue(status.failed)},
+          {EncodableValue("frameRate"), EncodableValue(frame_rate)}};
 }
+struct ScheduledVideo {
+  std::shared_ptr<VideoTexture> texture;
+  int frame_rate = 60;
+  std::chrono::steady_clock::time_point next{};
+};
 
 class VideoPlugin : public flutter::Plugin {
  public:
@@ -76,7 +83,7 @@ class VideoPlugin : public flutter::Plugin {
     wake_.notify_one();
     ticker_.join();
     for (auto& entry : videos_)
-      Unregister(entry.first, std::move(entry.second));
+      Unregister(entry.first, std::move(entry.second.texture));
     FlutterDesktopMessengerRelease(messenger_);
   }
 
@@ -97,14 +104,24 @@ class VideoPlugin : public flutter::Plugin {
     std::unique_lock<std::mutex> lock(mutex_);
     while (!stopping_) {
       bool active = false;
+      const auto now = std::chrono::steady_clock::now();
+      auto next = now + std::chrono::seconds(1);
       for (auto& entry : videos_) {
-        active = active || entry.second->Active();
-        if (entry.second->Poll())
-          FlutterDesktopTextureRegistrarMarkExternalTextureFrameAvailable(
-              textures_, entry.first);
+        auto& video = entry.second;
+        if (!video.texture->Active()) continue;
+        active = true;
+        if (now >= video.next) {
+          if (video.texture->Poll())
+            FlutterDesktopTextureRegistrarMarkExternalTextureFrameAvailable(
+                textures_, entry.first);
+          const auto interval = std::chrono::microseconds(1000000 / video.frame_rate);
+          video.next += interval;
+          if (video.next <= now) video.next = now + interval;
+        }
+        next = std::min(next, video.next);
       }
       if (active)
-        wake_.wait_for(lock, std::chrono::milliseconds(16));
+        wake_.wait_until(lock, next);
       else
         wake_.wait(lock);
     }
@@ -155,8 +172,11 @@ class VideoPlugin : public flutter::Plugin {
         result->Error("video-unavailable", "Texture registration failed");
         return;
       }
-      videos_.emplace(id, video);
-      result->Success(EncodableValue(Status(id, *video)));
+      int64_t rate = 60;
+      Integer(Argument(args, "frameRate"), &rate);
+      const int fps = static_cast<int>(std::clamp<int64_t>(rate, 1, 240));
+      videos_.emplace(id, ScheduledVideo{video, fps});
+      result->Success(EncodableValue(Status(id, *video, fps)));
       wake_.notify_one();
       return;
     }
@@ -166,7 +186,7 @@ class VideoPlugin : public flutter::Plugin {
       return;
     }
     if (method == "status") {
-      result->Success(EncodableValue(Status(id, *found->second)));
+      result->Success(EncodableValue(Status(id, *found->second.texture, found->second.frame_rate)));
     } else if (method == "visible") {
       const auto* value = Argument(args, "visible");
       const auto* visible = value ? std::get_if<bool>(value) : nullptr;
@@ -174,11 +194,22 @@ class VideoPlugin : public flutter::Plugin {
         result->Error("video-unavailable", "Invalid visibility");
         return;
       }
-      found->second->SetVisible(*visible);
+      found->second.texture->SetVisible(*visible);
+      found->second.next = {};
+      wake_.notify_one();
+      result->Success();
+    } else if (method == "frameRate") {
+      int64_t rate;
+      if (!Integer(Argument(args, "frameRate"), &rate) || rate < 1 || rate > 240) {
+        result->Error("video-unavailable", "Invalid frame rate");
+        return;
+      }
+      found->second.frame_rate = static_cast<int>(rate);
+      found->second.next = {};
       wake_.notify_one();
       result->Success();
     } else if (method == "dispose") {
-      Unregister(id, std::move(found->second));
+      Unregister(id, std::move(found->second.texture));
       videos_.erase(found);
       result->Success();
     } else {
@@ -189,7 +220,7 @@ class VideoPlugin : public flutter::Plugin {
   FlutterDesktopTextureRegistrarRef textures_;
   FlutterDesktopMessengerRef messenger_;
   flutter::MethodChannel<EncodableValue> channel_;
-  std::map<int64_t, std::shared_ptr<VideoTexture>> videos_;
+  std::map<int64_t, ScheduledVideo> videos_;
   std::mutex mutex_;
   std::condition_variable wake_;
   std::thread ticker_;

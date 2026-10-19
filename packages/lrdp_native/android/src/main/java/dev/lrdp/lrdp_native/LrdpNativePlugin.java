@@ -4,8 +4,10 @@ import android.content.pm.ApplicationInfo;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.os.Build;
 import android.util.Log;
 import android.view.Surface;
+import android.view.Choreographer;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
@@ -28,13 +30,13 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
   private HandlerThread thread;
   private Handler gl;
   private boolean attached, loaded, debug, tickScheduled;
-  private final Runnable tick = new Runnable() {
+  private final Choreographer.FrameCallback tick = new Choreographer.FrameCallback() {
     @Override
-    public void run() {
+    public void doFrame(long frameTimeNanos) {
       tickScheduled = false;
       if (!attached)
         return;
-      for (Video video : videos.values()) video.step();
+      for (Video video : videos.values()) video.step(frameTimeNanos);
       scheduleTick();
     }
   };
@@ -44,7 +46,7 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
     for (Video video : videos.values()) {
       if (!video.closed && !video.failed && video.visible && video.available) {
         tickScheduled = true;
-        main.postDelayed(tick, 16);
+        Choreographer.getInstance().postFrameCallback(tick);
         return;
       }
     }
@@ -80,7 +82,7 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
   @Override
   public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
     attached = false;
-    main.removeCallbacks(tick);
+    Choreographer.getInstance().removeFrameCallback(tick);
     tickScheduled = false;
     channel.setMethodCallHandler(null);
     for (Video video : videos.values()) video.close();
@@ -99,6 +101,12 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
     boolean queued, failed, loggedFirstFrame;
     long handle; // GL handler only.
     int width, height, retries;
+    int frameRate = 60;
+    long nextFrameNanos;
+    long presentedGeneration = -1;
+    Surface rateSurface;
+    int surfaceFrameRate;
+    int surfaceEpoch;
     Map<String, Object> status = new HashMap<>();
     Video(long ticket) {
       producer = registry.createSurfaceProducer();
@@ -137,10 +145,22 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
       status.put("generation", data[2]);
       status.put("uploads", data[3]);
       status.put("failed", failed);
+      status.put("frameRate", frameRate);
     }
-    void step() {
+    void frameRate(int value) {
+      frameRate = Math.max(1, Math.min(240, value));
+      nextFrameNanos = 0;
+      scheduleTick();
+    }
+    void step(long now) {
       if (queued || closed || !visible || !available || failed)
         return;
+      if (now + 500000 < nextFrameNanos)
+        return;
+      long interval = 1000000000L / frameRate;
+      if (nextFrameNanos == 0 || now - nextFrameNanos > interval)
+        nextFrameNanos = now;
+      nextFrameNanos += interval;
       queued = true;
       gl.post(() -> {
         if (closed || handle == 0) {
@@ -152,34 +172,54 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
         }
         final long[] info = nativeStatus(handle);
         main.post(() -> {
-          queued = false;
           if (closed)
             return;
           if (info == null) {
+            queued = false;
             failed = true;
             return;
           }
           update(info);
-          if (failed || !visible || !available || width < 1 || height < 1)
+          if (failed || !visible || !available || width < 1 || height < 1) {
+            queued = false;
             return;
+          }
+          if (info[2] == presentedGeneration && surfaceFrameRate == frameRate) {
+            queued = false;
+            return;
+          }
           try {
             producer.setSize(width, height);
             final Surface surface = producer.getSurface();
+            if (Build.VERSION.SDK_INT >= 30 && (rateSurface != surface || surfaceFrameRate != frameRate)) {
+              try {
+                surface.setFrameRate(frameRate, Surface.FRAME_RATE_COMPATIBILITY_DEFAULT);
+              } catch (RuntimeException ignored) { /* Refresh hints are optional. */ }
+              rateSurface = surface;
+              surfaceFrameRate = frameRate;
+            }
             final int w = width, h = height;
+            final int epoch = surfaceEpoch;
             gl.post(() -> {
-              if (closed || !visible || !available)
+              if (closed || !visible || !available) {
+                main.post(() -> queued = false);
                 return;
+              }
               final int result = nativeDraw(handle, surface, w, h);
               main.post(() -> {
-                if (closed || !visible || !available)
+                queued = false;
+                if (closed || !visible || !available || epoch != surfaceEpoch)
                   return;
                 if (result == -3 && ++retries >= 30)
                   failed = true;
                 else if (result >= 0)
                   retries = 0;
+                if (result > 0)
+                  presentedGeneration = info[2];
               });
             });
           } catch (RuntimeException exception) {
+            queued = false;
             failed = true;
           }
         });
@@ -188,10 +228,16 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
     Map<String, Object> snapshot() {
       Map<String, Object> value = new HashMap<>(status);
       value.put("failed", failed);
+      value.put("frameRate", frameRate);
       return value;
     }
     void visibility(boolean value) {
       visible = value;
+      nextFrameNanos = 0;
+      if (value)
+        presentedGeneration = -1;
+      if (value)
+        surfaceEpoch++;
       if (value)
         scheduleTick();
       if (value)
@@ -203,6 +249,9 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
     @Override
     public void onSurfaceCleanup() {
       available = false;
+      rateSurface = null;
+      presentedGeneration = -1;
+      surfaceEpoch++;
       gl.post(() -> {
         if (!closed && handle != 0)
           nativeReset(handle, true);
@@ -211,6 +260,8 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
     @Override
     public void onSurfaceAvailable() {
       available = true;
+      presentedGeneration = -1;
+      surfaceEpoch++;
       scheduleTick();
       gl.post(() -> {
         if (!closed && handle != 0)
@@ -279,6 +330,9 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
       Video video = null;
       try {
         video = new Video(id);
+        Number requestedRate = call.argument("frameRate");
+        if (requestedRate != null)
+          video.frameRate(requestedRate.intValue());
         videos.put(video.id, video);
         scheduleTick();
         result.success(video.snapshot());
@@ -324,6 +378,15 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
       case "visible":
         video.visibility(Boolean.TRUE.equals(call.argument("visible")));
         result.success(null);
+        break;
+      case "frameRate":
+        Number rate = call.argument("frameRate");
+        if (rate == null || rate.intValue() < 1 || rate.intValue() > 240) {
+          result.error("invalid-rate", "Invalid frame rate", null);
+        } else {
+          video.frameRate(rate.intValue());
+          result.success(null);
+        }
         break;
       default:
         result.notImplemented();

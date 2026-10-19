@@ -36,11 +36,15 @@ parser.add_argument('--small-phone',action='store_true',
                     help='Use a 320x568 logical phone display on the owned AVD; restored afterward')
 parser.add_argument('--verify-ime-control',action='store_true',
                     help='Verify real remote gestures while the IME stays visible in both input modes (API36)')
+parser.add_argument('--verify-appearance',action='store_true',
+                    help='Verify system/manual appearance and persisted frame-rate selection on API36')
 add_device_argument(parser)
 args=parser.parse_args()
 device=DEVICES[args.device]
 if args.verify_ime_control and device.api!=36:
     parser.error('--verify-ime-control currently requires the owned API36 profile')
+if args.verify_appearance and device.api!=36:
+    parser.error('--verify-appearance requires the owned API36 profile')
 if args.small_phone and device.api!=36:
     parser.error('--small-phone currently requires the owned API36 profile for IME inset measurement')
 sdk=Path(os.environ.get('ANDROID_SDK_ROOT',str(Path.home()/'Android/Sdk')))
@@ -313,6 +317,41 @@ with tempfile.TemporaryDirectory(prefix='lrdp-main-release-') as temporary,ExitS
     if args.small_phone:
         until(lambda:(image:=capture('initial-orientation')).width<image.height,'Small phone did not enter portrait')
     launch();until(lambda:ui.find('添加电脑') is not None,'Workspace accessibility controls unavailable',60)
+    appearance_cases=[]
+    if args.verify_appearance:
+        previous=android('shell','cmd','uimode','night').stdout
+        match=re.search(r'Night mode:\s*(auto|no|yes|custom)',previous)
+        assert match,previous
+        cleanup.callback(android,'shell','cmd','uimode','night',match[1],check=False)
+        tap('设置');until(lambda:ui.find('主题模式') is not None,'Appearance settings did not open')
+        def brightness(name,dark):
+            def check():
+                image=capture(name)
+                return (sum(image.getpixel((4,image.height//2)))/3<100)==dark
+            until(check,'Appearance brightness did not follow '+name)
+        android('shell','cmd','uimode','night','no');brightness('settings-system-light',False)
+        # Android's supplied primary tone must actually appear in the rendered
+        # app, proving the native palette reaches Material (not just a toggle).
+        palette=android('shell','cmd','overlay','lookup','android','android:color/system_accent1_600').stdout.strip()
+        primary=re.findall(r'#[0-9a-fA-F]{8}',palette)
+        assert primary,palette
+        rgb=tuple(bytes.fromhex(primary[-1][3:]))
+        image=capture('settings-system-palette')
+        assert sum(1 for pixel in image.getdata() if pixel==rgb)>20,('System primary not rendered',rgb)
+        android('shell','cmd','uimode','night','yes');brightness('settings-system-dark',True)
+        tap('跟随系统');tap('浅色');brightness('settings-manual-light',False)
+        tap('浅色');tap('跟随系统');brightness('settings-auto-restored',True)
+        tap('自动（跟随屏幕）',scroll=True);tap('120 帧/秒',scroll=True)
+        android('shell','am','force-stop',package);launch()
+        until(lambda:ui.find('添加电脑') is not None,'App did not restart after preference save')
+        tap('设置');find('120 帧/秒',scroll=True)
+        brightness('settings-preferences-restored',True)
+        tap('120 帧/秒',scroll=True);tap('自动（跟随屏幕）',scroll=True)
+        tap('电脑');until(lambda:ui.find('添加电脑') is not None,'Workspace did not return')
+        appearance_cases=[{'name':'System palette rendered from actual Android resource','primary_rgb':rgb},
+            {'name':'System light/dark, manual override and auto restore'},
+            {'name':'120 fps preference survives process restart; auto restored','physical_high_refresh_screen':False}]
+        print('PASS: actual Android system palette/brightness, manual override and frame-rate persistence',flush=True)
     capture('workspace');ui.dump('workspace-ui');tap('添加电脑')
     until(lambda:ui.find('电脑地址',True) is not None,'Profile editor accessibility fields unavailable')
     ui.dump('editor-open');print('Main Release profile editor opened',flush=True)
@@ -350,7 +389,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-main-release-') as temporary,ExitS
         save_json('input-failure',{'reason':reason,'events':desktop.events[-64:],'keys':desktop.keys[-64:],
                                  'pointer':desktop.pointer(),'window':desktop.geometry()})
         raise AssertionError(reason)
-    cases=[]
+    cases=list(appearance_cases)
     def clicks(expected,action,name):
         desktop.pump();start=len(desktop.events);action()
         pump_until(lambda:len([e for e in desktop.events[start:] if e['type'] in (4,5)])>=2,name+' missing')
