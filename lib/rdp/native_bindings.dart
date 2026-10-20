@@ -170,6 +170,11 @@ class NativeBindings {
           int,
         )
       >('lrdp_paste_image');
+  late final pasteFiles = library
+      .lookupFunction<
+        Int32 Function(Pointer<NativeSession>, Pointer<Pointer<Utf8>>, Size),
+        int Function(Pointer<NativeSession>, Pointer<Pointer<Utf8>>, int)
+      >('lrdp_paste_files');
   late final readImage = library
       .lookupFunction<
         Int32 Function(

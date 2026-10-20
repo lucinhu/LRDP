@@ -12,7 +12,7 @@
 手机端读取本机剪贴板需要明确操作，使用“粘贴本机文字”即可。
 
 RDP 的 [CLIPRDR 协议](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpeclip/fb9b7e0b-6db4-41c2-b83c-f889c1ee7688)
-具备图片和文件格式协商、文件流传输能力；LRDP 已接入 Unicode 文字与图片格式，文件流剪贴板仍待实现。
+具备图片和文件格式协商、文件流传输能力；LRDP 已接入 Unicode 文字、双向图片，以及选择本机文件粘贴到远端。
 
 ## 图片粘贴
 
@@ -36,7 +36,29 @@ Android 使用私有缓存与仅图片目录的 FileProvider content URI，最�
 图片需要服务端和目标应用共同支持。KDE KRDP 核对版本只处理文字，无法靠 LRDP 开启图片粘贴。
 当前证据与平台范围见 [VERIFICATION.md](VERIFICATION.md)；不把独立协议服务的通过当作 Windows、xrdp 或 GNOME 的互操作验收。
 
-传输图片文件或其他文件：
+## 选择文件粘贴到远端
+
+1. 在远程电脑打开接收文件的文件夹，让文件管理器获得焦点。
+2. 打开 LRDP 悬浮工具栏的“更多 → 选择文件粘贴”，在系统选择器中选择本机文件。
+3. 保持连接，在远端确认复制完成。不要在复制过程中切换剪贴板内容。
+
+此操作传输原始文件字节和文件名，支持多文件、中文/emoji 文件名和空文件。
+每次 1～32 个文件，单文件最多 256 MiB，合计最多 512 MiB；文件夹、重复文件名及 Windows
+保留文件名不支持。文件先复制到应用私有临时目录，原生层固定只读句柄后移除临时路径，
+不会向远端公开本机路径，也不会将选中的目录变为共享磁盘。
+
+服务端必须允许剪贴板重定向并协商文件流；不支持时该入口禁用并提示使用文件中转站。
+等待格式确认后只发送一次 Ctrl+V。完成提示表示文件列表和按键已交给发送通道；
+实际文件内容由远端随后按需读取，协议没有目标文件保存成功的回执。
+拒绝、超时或断开后不自动重试；换用其他剪贴板内容会撤销旧文件列表。
+
+目前此入口使用系统文件选择器；尚未读取本机文件管理器“复制文件”的剪贴板，也未实现
+远端文件剪贴板下载。反向传输可继续使用文件中转站。Windows、xrdp、GNOME 的实际文件
+管理器互操作与手机真机仍待验收；独立 TLS 协议测试结果见 [VERIFICATION.md](VERIFICATION.md)。
+
+## 文件中转站
+
+双向传输图片原文件或其他文件：
 
 1. 在“连接偏好”中开启“文件传输”，重新连接使其生效。
 2. 打开“更多 → 文件中转站 → 放入本地文件”，选择需要传输的文件。
@@ -44,7 +66,7 @@ Android 使用私有缓存与仅图片目录的 FileProvider content URI，最�
 4. 反向传输时，把远端文件复制到该目录，再从中转站“另存到本地”或“保存或分享”。
 
 服务端需实现并允许磁盘重定向；这一流程使用 RDPDR 目录共享。若要保留图片的原文件名、
-格式和完整文件字节，请使用中转站。选择了指定共享目录时，远端可读写其中的文件。
+格式和完整文件字节，可使用文件粘贴或中转站。选择了指定共享目录时，远端可读写其中的文件。
 
 ## 远端是 Linux 时
 
@@ -53,8 +75,8 @@ Linux 版 LRDP 已实现 RDPDR 客户端；远端 Linux 的支持取决于运行
 
 | Linux 服务端 | 上游能力与 LRDP 当前范围 |
 | --- | --- |
-| [xrdp](https://github.com/neutrinolabs/xrdp) | 支持磁盘重定向和文字、图片、文件剪贴板；LRDP 当前可提供共享目录，文件剪贴板未接入。远端挂载位置由 xrdp 的 `FuseMountName` 配置决定。 |
-| [GNOME Remote Desktop](https://github.com/GNOME/gnome-remote-desktop/blob/main/src/grd-clipboard-rdp.c) | 上游实现图片与文件剪贴板；LRDP 已接入图片格式，互操作仍待实测；文件剪贴板未接入，不能把它当成已支持目录共享。 |
+| [xrdp](https://github.com/neutrinolabs/xrdp) | 支持磁盘重定向和文字、图片、文件剪贴板；LRDP 可提供共享目录及本机文件粘贴，文件剪贴板互操作待验收。远端挂载位置由 xrdp 的 `FuseMountName` 配置决定。 |
+| [GNOME Remote Desktop](https://github.com/GNOME/gnome-remote-desktop/blob/main/src/grd-clipboard-rdp.c) | 上游实现图片与文件剪贴板；LRDP 已接入图片格式及本机文件粘贴，互操作待验收；不能把剪贴板能力当成已支持目录共享。 |
 | [KDE KRDP](https://github.com/KDE/krdp/blob/a08961e64dd85d80681acdb3d6d3fb9ef1d6818c/src/Clipboard.cpp) | 核对的上游版本仅处理文字，且显式关闭文件剪贴板；文件传输不能仅靠客户端开启选项实现。 |
 
 以上为 2026-10-20 的上游文档/源码核对，不代表当前 LRDP 与每个服务端都已完成互通实测。

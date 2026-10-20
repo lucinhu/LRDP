@@ -83,9 +83,26 @@ python3 scripts/run_logoff_test.py
 python3 scripts/run_file_test.py
 python3 scripts/run_frame_rate_test.py
 python3 scripts/run_resolution_test.py
+python3 scripts/run_file_clipboard_test.py
+python3 scripts/run_file_clipboard_test.py --flutter
 python3 scripts/run_audio_test.py --build build/native
 python3 scripts/run_protocol_test.py --live-ui
 python3 scripts/run_protocol_test.py --release
+```
+
+文件粘贴使用现有 `file_selector`，不增加依赖或应用权限。原生适配使用 ABI v5 的新增
+`lrdp_paste_files` 接口，Dart 按功能位 5 延迟查找；服务端未协商文件流时不启用入口。
+选中的文件在私有临时目录形成快照，原生固定只读句柄，在连接线程按需读取；单块最多
+1 MiB，不将整个文件载入内存。CLIPRDR 回调使用有界邮箱，所有协议响应由连接线程发送；
+入站邮箱最多 63 个事件、32 MiB 数据。未声明锁定剪贴板和超大文件支持，换用其他剪贴板
+内容撤销旧文件。操作与限制见 [CLIPBOARD.md](CLIPBOARD.md)。
+
+独立文件测试需要系统 `freerdp-server3`、`freerdp3`、`winpr3` 开发包及 OpenSSL CLI，
+服务只绑定随机回环端口。`--flutter` 经过真实 worker/FFI/TLS，系统文件选择器使用替代接口，
+不作为实际系统文件选择器或远端文件管理器验收。发布安装库可用：
+
+```sh
+python3 scripts/run_file_clipboard_test.py --library build/linux/x64/release/bundle/lib/liblrdp.so
 ```
 
 协议测试需要 `Xvnc`（TigerVNC）、`freerdp-shadow-cli3`、`xsetroot`，自动启动

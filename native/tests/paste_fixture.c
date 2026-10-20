@@ -23,8 +23,9 @@ static HANDLE done;
 static BYTE *png_bytes, *dib_bytes;
 static size_t png_size, dib_size;
 static BOOL image_mode(void) { return strncmp(mode, "image_", 6) == 0; }
+static BOOL file_mode(void) { return strncmp(mode, "file_", 5) == 0; }
 static BOOL receiving(void) { return strncmp(mode, "receive_", 8) == 0; }
-static const char* behavior(void) { return image_mode() ? mode + 6 : mode; }
+static const char* behavior(void) { return file_mode() ? mode + 5 : image_mode() ? mode + 6 : mode; }
 static BYTE* load_bytes(const char* path, size_t* length) {
   FILE* file = fopen(path, "rb"); if (!file) return NULL;
   if (fseek(file, 0, SEEK_END) || ftell(file) <= 0 || ftell(file) > 16 * 1024 * 1024) { fclose(file); return NULL; }
@@ -44,10 +45,14 @@ typedef struct {
   UINT formats, key_phase, data_count, unicode_phase, image_format, requests;
   UINT64 ack_at;
   BOOL ack_sent;
+  UINT file_format, file_step, file_responses, file_bytes;
+  BOOL file_complete;
+  CLIPRDR_FILE_CONTENTS_REQUEST file_request;
 } paste_context;
 static void check(BOOL ok, const char* message) {
   if (!ok) { fprintf(stderr, "FAIL: %s\n", message); failed = TRUE; }
 }
+#include "file_clipboard_peer.h"
 static UINT advertise_image(paste_context* c, BOOL dib) {
   CLIPRDR_FORMAT formats[] = {{0xd001, "PNG"}, {CF_DIB, NULL}, {CF_UNICODETEXT, NULL}};
   CLIPRDR_FORMAT_LIST list = {0}; list.common.msgType = CB_FORMAT_LIST;
@@ -71,7 +76,7 @@ static UINT image_request(CliprdrServerContext* clip, const CLIPRDR_FORMAT_DATA_
 static UINT request_data(paste_context* c) {
   CLIPRDR_FORMAT_DATA_REQUEST request = {0};
   request.common.msgType = CB_FORMAT_DATA_REQUEST; request.common.dataLen = 4;
-  request.requestedFormatId = image_mode() ? c->image_format : CF_UNICODETEXT;
+  request.requestedFormatId = file_mode() ? c->file_format : image_mode() ? c->image_format : CF_UNICODETEXT;
   return c->clip->ServerFormatDataRequest(c->clip, &request);
 }
 static UINT formats(CliprdrServerContext* clip, const CLIPRDR_FORMAT_LIST* list) {
@@ -82,6 +87,7 @@ static UINT formats(CliprdrServerContext* clip, const CLIPRDR_FORMAT_LIST* list)
     return clip->ServerFormatListResponse(clip, &ack);
   }
   c->formats++;
+  if (file_mode()) return file_formats(c, list);
   check(c->formats == 1, "one publication, no automatic retry");
   if (image_mode()) {
     BOOL dib = FALSE, png = FALSE, mime = FALSE;
@@ -105,6 +111,7 @@ static UINT formats(CliprdrServerContext* clip, const CLIPRDR_FORMAT_LIST* list)
 }
 static UINT data_response(CliprdrServerContext* clip, const CLIPRDR_FORMAT_DATA_RESPONSE* response) {
   paste_context* c = clip->custom;
+  if (file_mode()) return file_descriptor_response(c, response);
   if (image_mode()) {
     BOOL dib = c->image_format == CF_DIB;
     size_t size = dib ? dib_size : png_size;
@@ -133,7 +140,8 @@ static BOOL keyboard(rdpInput* input, UINT16 flags, UINT8 code) {
   check(code == codes[c->key_phase] && !!(flags & 0x8000) == (c->key_phase >= 2),
     "Ctrl/V press and release order");
   c->key_phase++;
-  if (c->key_phase == 4 && (strcmp(behavior(), "normal") == 0 || strcmp(behavior(), "dib") == 0 || strcmp(behavior(), "mime") == 0))
+  if (c->key_phase == 4 && (strcmp(behavior(), "normal") == 0 || strcmp(behavior(), "dib") == 0 || strcmp(behavior(), "mime") == 0 ||
+      (file_mode() && (!strcmp(behavior(), "revoke") || !strcmp(behavior(), "replace") || !strcmp(behavior(), "cancel_stream")))))
     check(request_data(c) == CHANNEL_RC_OK, "request data after key releases");
   return !failed;
 }
@@ -166,6 +174,10 @@ static BOOL context_new(freerdp_peer* peer, rdpContext* context) {
   c->clip->ClientFormatList = formats;
   c->clip->ClientFormatDataResponse = data_response;
   c->clip->ClientFormatDataRequest = image_request;
+  if (file_mode()) {
+    c->clip->ClientFileContentsResponse = file_contents_response;
+    c->clip->ClientCapabilities = file_client_caps;
+  }
   return TRUE;
 }
 static void context_free(freerdp_peer* peer, rdpContext* context) {
@@ -181,6 +193,8 @@ static BOOL post_connect(freerdp_peer* peer) {
   general.capabilitySetType = CB_CAPSTYPE_GENERAL;
   general.capabilitySetLength = CB_CAPSTYPE_GENERAL_LEN;
   general.version = CB_CAPS_VERSION_2; general.generalFlags = CB_USE_LONG_FORMAT_NAMES;
+  if (file_mode() && strcmp(behavior(), "unsupported"))
+    general.generalFlags |= CB_STREAM_FILECLIP_ENABLED | CB_FILECLIP_NO_FILE_PATHS | CB_CAN_LOCK_CLIPDATA | CB_HUGE_FILE_SUPPORT_ENABLED;
   CLIPRDR_CAPABILITIES caps = {0};
   caps.common.msgType = CB_CLIP_CAPS;
   caps.common.dataLen = 4 + CB_CAPSTYPE_GENERAL_LEN;
@@ -236,7 +250,16 @@ static BOOL accepted(freerdp_listener* listener, freerdp_peer* peer) {
     }
   } else check(FALSE, "initialize private TLS clipboard peer");
   BOOL success = strcmp(behavior(), "normal") == 0 || strcmp(behavior(), "prefetch") == 0 || strcmp(behavior(), "dib") == 0 || strcmp(behavior(), "mime") == 0;
-  if (receiving()) {
+  if (file_mode() && (!strcmp(behavior(), "normal") || !strcmp(behavior(), "prefetch") ||
+      !strcmp(behavior(), "revoke") || !strcmp(behavior(), "replace"))) {
+    check(c->key_phase == 4 && c->data_count == 1 && c->file_complete &&
+      c->formats == (!strcmp(behavior(), "replace") ? 2u : 1u), "complete file request sequence");
+  }
+  else if (file_mode() && !strcmp(behavior(), "cancel_stream"))
+    check(c->key_phase == 4 && c->data_count == 1 && c->formats == 1, "cancel active file stream without another paste");
+  else if (file_mode() && !strcmp(behavior(), "unsupported"))
+    check(c->key_phase == 0 && c->data_count == 0 && c->formats == 0, "unsupported server sends no file publication or keys");
+  else if (receiving()) {
     check(c->requests == (strcmp(mode,"receive_stale") == 0 ? 2u : 1u) &&
       c->formats == (strcmp(mode,"receive_clear") == 0 ? 1u : 0u) && c->key_phase == 0,
       "serialized image requests, no feedback publication or paste keys");
@@ -255,7 +278,10 @@ static BOOL accepted(freerdp_listener* listener, freerdp_peer* peer) {
   else if (strcmp(behavior(), "no_data") == 0) check(c->key_phase == 4 && c->data_count == 0 && c->formats == 1, "missing data has no retry");
   else check(c->key_phase == 0 && c->data_count == 0 &&
     (c->formats == 1 || strcmp(behavior(), "cancel") == 0), "reject/timeout/cancel sends no paste keys");
-  if (strcmp(behavior(), "unicode") == 0)
+  if (file_mode())
+    printf("{\"mode\":\"%s\",\"passed\":%s,\"keys\":%u,\"data\":%u,\"publications\":%u,\"file_responses\":%u,\"file_bytes\":%u}\n",
+      mode, failed ? "false" : "true", c->key_phase, c->data_count, c->formats, c->file_responses, c->file_bytes);
+  else if (strcmp(behavior(), "unicode") == 0)
     printf("{\"mode\":\"unicode\",\"passed\":%s,\"unicode_events\":%u,\"keys\":%u,\"data\":%u,\"publications\":%u}\n",
       failed ? "false" : "true", c->unicode_phase, c->key_phase, c->data_count, c->formats);
   else printf("{\"mode\":\"%s\",\"passed\":%s,\"keys\":%u,\"data\":%u,\"publications\":%u}\n",

@@ -6,8 +6,10 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
+import 'package:file_selector/file_selector.dart';
 import '../models/connection_profile.dart';
 import '../data/transfer_folder.dart';
+import '../data/clipboard_files.dart';
 import 'native_bindings.dart';
 import 'rdp_cursor.dart';
 import 'native_video.dart';
@@ -87,6 +89,7 @@ class RdpSession extends ChangeNotifier {
   bool get displayResizeSupported => features & 2 != 0;
   bool get clipboardSupported => features & 1 != 0;
   bool get imageClipboardSupported => features & 16 != 0;
+  bool get fileClipboardSupported => features & 33 == 33;
   bool get unicodeInputSupported => features & 8 != 0;
   bool get hasDecodedAvc => features & 4 != 0;
   String? remoteClipboard;
@@ -631,6 +634,47 @@ class RdpSession extends ChangeNotifier {
     }
   }
 
+  Future<bool> pasteFiles(List<XFile> files) async {
+    if (state != SessionState.connected ||
+        !profile.clipboard ||
+        !fileClipboardSupported ||
+        _commands == null ||
+        pasteInProgress) {
+      pasteError = '文件剪贴板暂不可用，可使用文件中转站';
+      return false;
+    }
+    final epoch = _epoch;
+    final id = ++_pasteId;
+    final result = Completer<bool>();
+    _pastes[id] = result;
+    pasteError = '';
+    remoteClipboard = null;
+    discardRemotePicture();
+    notifyListeners();
+    ClipboardFiles? prepared;
+    try {
+      bool current() =>
+          epoch == _epoch &&
+          state == SessionState.connected &&
+          _pastes.containsKey(id);
+      prepared = await ClipboardFiles.prepare(files, isCurrent: current);
+      if (!current()) return false;
+      _commands!.send(['pasteFiles', id, prepared.paths]);
+      return await result.future;
+    } on FormatException catch (e) {
+      if (epoch == _epoch && !_disposed) pasteError = e.message.toString();
+      return false;
+    } on Exception {
+      if (epoch == _epoch && !_disposed) pasteError = '无法准备文件，请重新选择';
+      return false;
+    } finally {
+      final pending = _pastes.remove(id);
+      if (pending != null && !pending.isCompleted) pending.complete(false);
+      await prepared?.dispose();
+      if (epoch == _epoch && !_disposed) notifyListeners();
+    }
+  }
+
   void resize(int width, int height) =>
       input(3, width.clamp(200, 4096), height.clamp(200, 4096));
   void chord(List<int> keys) {
@@ -716,6 +760,7 @@ void _sessionWorker(Map<String, dynamic> init) {
   bool imageInFlight = false;
   var previousAudioStatus = '';
   int? pasteRequest;
+  var pasteKind = 'text';
   final unicode = Queue<(int, int)>();
   int previousState = -1, previousFeatures = -1;
   void finish() {
@@ -726,7 +771,7 @@ void _sessionWorker(Map<String, dynamic> init) {
         'type': 'pasteResult',
         'id': id,
         'ok': false,
-        'message': '连接已结束，文字未确认发送',
+        'message': pasteKind == 'files' ? '连接已结束，文件粘贴未完成' : '连接已结束，文字未确认发送',
       });
       pasteRequest = null;
     }
@@ -925,6 +970,7 @@ void _sessionWorker(Map<String, dynamic> init) {
                       ) ==
                       1) {
                 pasteRequest = id;
+                pasteKind = 'image';
               } else {
                 events.send({
                   'type': 'pasteResult',
@@ -937,12 +983,41 @@ void _sessionWorker(Map<String, dynamic> init) {
               calloc.free(pngBuffer);
               calloc.free(dibBuffer);
             }
+          case 'pasteFiles':
+            final id = msg[1] as int;
+            final paths = (msg[2] as List).cast<String>();
+            final nativePaths = calloc<Pointer<Utf8>>(paths.length);
+            try {
+              for (var i = 0; i < paths.length; i++) {
+                nativePaths[i] = paths[i].toNativeUtf8();
+              }
+              // Gate lazy symbol lookup for older ABI v5 adapters.
+              if (pasteRequest == null &&
+                  (api!.features(session) & 33) == 33 &&
+                  api.pasteFiles(session, nativePaths, paths.length) == 1) {
+                pasteRequest = id;
+                pasteKind = 'files';
+              } else {
+                events.send({
+                  'type': 'pasteResult',
+                  'id': id,
+                  'ok': false,
+                  'message': '文件剪贴板暂不可用，可使用文件中转站',
+                });
+              }
+            } finally {
+              for (var i = 0; i < paths.length; i++) {
+                calloc.free(nativePaths[i]);
+              }
+              calloc.free(nativePaths);
+            }
           case 'paste':
             final id = msg[1] as int;
             final value = (msg[2] as String).toNativeUtf8();
             try {
               if (pasteRequest == null && api!.paste(session, value) == 1) {
                 pasteRequest = id;
+                pasteKind = 'text';
               } else {
                 events.send({
                   'type': 'pasteResult',
@@ -983,7 +1058,9 @@ void _sessionWorker(Map<String, dynamic> init) {
             'type': 'pasteResult',
             'id': id,
             'ok': status == 'sent',
-            'message': status == 'timeout'
+            'message': pasteKind == 'files'
+                ? '远端未确认文件粘贴，可使用文件中转站'
+                : status == 'timeout'
                 ? '远程端未及时确认粘贴，文字已保留。请检查远程输入框后再试'
                 : '远程端未接受粘贴，文字已保留',
           });

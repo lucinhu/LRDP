@@ -325,7 +325,6 @@ const localizedMessages = <String, Map<String, String>>{
     "选择图片粘贴": "选择图片粘贴",
     "图片": "图片",
     "本机剪贴板没有图片，可使用“选择图片粘贴”": "本机剪贴板没有图片，可使用“选择图片粘贴”",
-    "本机剪贴板没有文字；图片请使用“粘贴本机图片”，文件请使用文件中转站": "本机剪贴板没有文字；图片请使用“粘贴本机图片”，文件请使用文件中转站",
     "图片已传输并发送粘贴，请在远程应用中确认": "图片已传输并发送粘贴，请在远程应用中确认",
     "图片未确认送达，请确认服务端和目标应用支持图片粘贴": "图片未确认送达，请确认服务端和目标应用支持图片粘贴",
     "无法读取图片，请检查剪贴板权限或选择图片文件": "无法读取图片，请检查剪贴板权限或选择图片文件",
@@ -338,6 +337,21 @@ const localizedMessages = <String, Map<String, String>>{
     "无法准备图片，图片未发送": "无法准备图片，图片未发送",
     "共享剪贴板": "共享剪贴板",
     "文字与图片；仅在当前会话激活时同步": "文字与图片；仅在当前会话激活时同步",
+    "先在远端打开目标文件夹；每次最多 32 个文件": "先在远端打开目标文件夹；每次最多 32 个文件",
+    "已发送文件粘贴请求，请保持连接并在远端确认复制完成": "已发送文件粘贴请求，请保持连接并在远端确认复制完成",
+    "所选文件名重复，请分次粘贴": "所选文件名重复，请分次粘贴",
+    "文件剪贴板暂不可用，可使用文件中转站": "文件剪贴板暂不可用，可使用文件中转站",
+    "文件在读取时发生变化，请重新选择": "文件在读取时发生变化，请重新选择",
+    "文件粘贴未完成，可使用文件中转站": "文件粘贴未完成，可使用文件中转站",
+    "无法准备文件，请重新选择": "无法准备文件，请重新选择",
+    "文件剪贴板不可用，可检查连接偏好或使用文件中转站": "文件剪贴板不可用，可检查连接偏好或使用文件中转站",
+    "本机剪贴板没有文字；可使用“粘贴本机图片”或“选择文件粘贴”": "本机剪贴板没有文字；可使用“粘贴本机图片”或“选择文件粘贴”",
+    "正在准备文件…": "正在准备文件…",
+    "每个文件最大 256 MiB，每次合计最大 512 MiB": "每个文件最大 256 MiB，每次合计最大 512 MiB",
+    "每次请选择 1 至 32 个文件": "每次请选择 1 至 32 个文件",
+    "远端未确认文件粘贴，可使用文件中转站": "远端未确认文件粘贴，可使用文件中转站",
+    "连接已结束，文件粘贴未完成": "连接已结束，文件粘贴未完成",
+    "选择文件粘贴": "选择文件粘贴",
   },
   "zh-TW": {
     "IPv6 地址格式不正确": "IPv6 地址格式不正確",
@@ -664,7 +678,6 @@ const localizedMessages = <String, Map<String, String>>{
     "选择图片粘贴": "選擇圖片貼上",
     "图片": "圖片",
     "本机剪贴板没有图片，可使用“选择图片粘贴”": "本機剪貼簿沒有圖片，可使用「選擇圖片貼上」",
-    "本机剪贴板没有文字；图片请使用“粘贴本机图片”，文件请使用文件中转站": "本機剪貼簿沒有文字；圖片請使用「貼上本機圖片」，檔案請使用檔案中轉站",
     "图片已传输并发送粘贴，请在远程应用中确认": "圖片已傳輸並傳送貼上操作，請在遠端應用程式中確認",
     "图片未确认送达，请确认服务端和目标应用支持图片粘贴": "圖片未確認送達，請確認伺服器與目標應用程式支援圖片貼上",
     "无法读取图片，请检查剪贴板权限或选择图片文件": "無法讀取圖片，請檢查剪貼簿權限或選擇圖片檔案",
@@ -677,6 +690,21 @@ const localizedMessages = <String, Map<String, String>>{
     "无法准备图片，图片未发送": "無法準備圖片，圖片未傳送",
     "共享剪贴板": "共享剪貼簿",
     "文字与图片；仅在当前会话激活时同步": "文字與圖片；僅在目前工作階段啟用時同步",
+    "先在远端打开目标文件夹；每次最多 32 个文件": "先在遠端開啟目標資料夾；每次最多 32 個檔案",
+    "已发送文件粘贴请求，请保持连接并在远端确认复制完成": "已傳送檔案貼上請求，請保持連線並在遠端確認複製完成",
+    "所选文件名重复，请分次粘贴": "所選檔案名稱重複，請分次貼上",
+    "文件剪贴板暂不可用，可使用文件中转站": "檔案剪貼簿暫不可用，可使用檔案中轉站",
+    "文件在读取时发生变化，请重新选择": "檔案在讀取時發生變更，請重新選擇",
+    "文件粘贴未完成，可使用文件中转站": "檔案貼上未完成，可使用檔案中轉站",
+    "无法准备文件，请重新选择": "無法準備檔案，請重新選擇",
+    "文件剪贴板不可用，可检查连接偏好或使用文件中转站": "檔案剪貼簿不可用，可檢查連線偏好或使用檔案中轉站",
+    "本机剪贴板没有文字；可使用“粘贴本机图片”或“选择文件粘贴”": "本機剪貼簿沒有文字；可使用「貼上本機圖片」或「選擇檔案貼上」",
+    "正在准备文件…": "正在準備檔案…",
+    "每个文件最大 256 MiB，每次合计最大 512 MiB": "每個檔案最大 256 MiB，每次合計最大 512 MiB",
+    "每次请选择 1 至 32 个文件": "每次請選擇 1 至 32 個檔案",
+    "远端未确认文件粘贴，可使用文件中转站": "遠端未確認檔案貼上，可使用檔案中轉站",
+    "连接已结束，文件粘贴未完成": "連線已結束，檔案貼上未完成",
+    "选择文件粘贴": "選擇檔案貼上",
   },
   "en": {
     "IPv6 地址格式不正确": "Invalid IPv6 address",
@@ -1059,8 +1087,6 @@ const localizedMessages = <String, Map<String, String>>{
     "图片": "Images",
     "本机剪贴板没有图片，可使用“选择图片粘贴”":
         "No image in the local clipboard. Use “Choose image to paste”.",
-    "本机剪贴板没有文字；图片请使用“粘贴本机图片”，文件请使用文件中转站":
-        "No text in the local clipboard. Use “Paste local image” for pictures or File transfer for files.",
     "图片已传输并发送粘贴，请在远程应用中确认":
         "Image transferred and paste sent. Check the remote app.",
     "图片未确认送达，请确认服务端和目标应用支持图片粘贴":
@@ -1077,5 +1103,29 @@ const localizedMessages = <String, Map<String, String>>{
     "无法准备图片，图片未发送": "Cannot prepare image. Nothing was sent.",
     "共享剪贴板": "Share clipboard",
     "文字与图片；仅在当前会话激活时同步": "Text and images; sync only in the active session",
+    "先在远端打开目标文件夹；每次最多 32 个文件":
+        "Open the destination folder remotely first. Up to 32 files per paste.",
+    "已发送文件粘贴请求，请保持连接并在远端确认复制完成":
+        "File paste requested. Stay connected and confirm the copy finishes remotely.",
+    "所选文件名重复，请分次粘贴":
+        "Selected filenames overlap. Paste these files separately.",
+    "文件剪贴板暂不可用，可使用文件中转站":
+        "File clipboard is unavailable. You can use File exchange.",
+    "文件在读取时发生变化，请重新选择": "A file changed while being read. Select it again.",
+    "文件粘贴未完成，可使用文件中转站":
+        "File paste did not complete. You can use File exchange.",
+    "无法准备文件，请重新选择": "Unable to prepare files. Select them again.",
+    "文件剪贴板不可用，可检查连接偏好或使用文件中转站":
+        "File clipboard unavailable. Check connection preferences or use File exchange.",
+    "本机剪贴板没有文字；可使用“粘贴本机图片”或“选择文件粘贴”":
+        "No text in the local clipboard. Use Paste local image or Select files to paste.",
+    "正在准备文件…": "Preparing files…",
+    "每个文件最大 256 MiB，每次合计最大 512 MiB":
+        "Each file may be up to 256 MiB; the total limit is 512 MiB.",
+    "每次请选择 1 至 32 个文件": "Select between 1 and 32 files per paste.",
+    "远端未确认文件粘贴，可使用文件中转站":
+        "The remote device did not confirm file paste. You can use File exchange.",
+    "连接已结束，文件粘贴未完成": "Connection ended before file paste completed.",
+    "选择文件粘贴": "Select files to paste",
   },
 };

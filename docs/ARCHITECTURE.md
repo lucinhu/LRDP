@@ -47,7 +47,24 @@ enable local filesystem access. Each managed directory has a path-safe encoded
 profile identifier. Uploads stream through a staging file; same-name files receive
 a numerical suffix. The file panel rejects traversal and links outside its root.
 Server-side access is handled by upstream's drive backend, rather than a second
-LRDP filesystem protocol. Clipboard file copy/paste remains separate work.
+LRDP filesystem protocol.
+
+An explicit file-picker action also offers local files through CLIPRDR
+`FileGroupDescriptorW` and size/range requests when the server negotiates file
+streams. Dart stages immutable private snapshots; the adapter pins read-only
+regular-file handles, serializes names without paths, and reads at most 1 MiB
+per request. Batches contain at most 32 files, 256 MiB per file and 512 MiB total.
+The shared paste slot acknowledges descriptor delivery and Ctrl+V, not completion
+of the remote filesystem copy. Replacing clipboard ownership revokes that list;
+locking and huge-file capabilities are not advertised. Remote file clipboard
+download and reading file-manager copy selections remain separate work.
+
+Upstream CLIPRDR callbacks run on a channel thread. They copy bounded events into
+a 63-entry / 32 MiB mailbox and wake the connection owner; only that owner sends
+capabilities, acknowledgements, format data and file responses. Local publication
+serials discard earlier queued remote format lists. Pending response barriers and
+epochs still reject stale data, and teardown releases queued events after channel
+threads have stopped. No FreeRDP source change is required.
 
 The app initializes a private FreeRDP configuration directory before creating
 sessions. Android's missing process home is initialized once from that real

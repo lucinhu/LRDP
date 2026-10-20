@@ -251,7 +251,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
         return;
       }
       if (text == null || text.isEmpty) {
-        message = context.tr('本机剪贴板没有文字；图片请使用“粘贴本机图片”，文件请使用文件中转站');
+        message = context.tr('本机剪贴板没有文字；可使用“粘贴本机图片”或“选择文件粘贴”');
       } else {
         // A user-requested local paste takes priority over a pending remote
         // update. Never replace the local payload with remote clipboard text.
@@ -367,6 +367,70 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  Future<void> _pasteFiles() async {
+    if (_clipboardBusy ||
+        session.pasteInProgress ||
+        !session.profile.clipboard ||
+        !session.fileClipboardSupported) {
+      return;
+    }
+    final target = session;
+    final connection = target.connectedAt;
+    bool current() =>
+        mounted &&
+        widget.active &&
+        identical(session, target) &&
+        target.state == SessionState.connected &&
+        target.connectedAt == connection;
+    _clipboardBusy = true;
+    String? message;
+    try {
+      final desktop = {
+        TargetPlatform.linux,
+        TargetPlatform.windows,
+        TargetPlatform.macOS,
+      }.contains(Theme.of(context).platform);
+      if (desktop) {
+        try {
+          _lastClipboard = (await Clipboard.getData(
+            Clipboard.kTextPlain,
+          ))?.text;
+        } on PlatformException {
+          /* Selecting a file does not require reading the text clipboard. */
+        }
+      }
+      if (!current()) return;
+      final files = await openFiles();
+      if (files.isEmpty || !current() || !mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('正在准备文件…'))));
+      final sent = await target.pasteFiles(files);
+      if (!current() || !mounted) return;
+      message = context.tr(
+        sent
+            ? '已发送文件粘贴请求，请保持连接并在远端确认复制完成'
+            : target.pasteError.isNotEmpty
+            ? target.pasteError
+            : '文件粘贴未完成，可使用文件中转站',
+      );
+    } on Exception {
+      if (current() && mounted) message = context.tr('无法准备文件，请重新选择');
+    } finally {
+      _clipboardBusy = false;
+    }
+    if (current() && mounted && message != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 8),
+          ),
+        );
     }
   }
 
@@ -679,6 +743,14 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                     session.imageClipboardSupported &&
                     !session.pasteInProgress,
               ),
+              'pasteFiles': (
+                Icons.upload_file_outlined,
+                '选择文件粘贴',
+                connected &&
+                    session.profile.clipboard &&
+                    session.fileClipboardSupported &&
+                    !session.pasteInProgress,
+              ),
               'cad': (Icons.security_outlined, 'Ctrl + Alt + Del', connected),
               'win': (Icons.window, 'Windows 键', connected),
               'help': (Icons.gesture_outlined, '触控手势说明', true),
@@ -688,6 +760,15 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                 minTileHeight: 56,
                 leading: Icon(entry.value.$1),
                 title: Text(context.tr(entry.value.$2)),
+                subtitle: entry.key == 'pasteFiles'
+                    ? Text(
+                        context.tr(
+                          session.fileClipboardSupported
+                              ? '先在远端打开目标文件夹；每次最多 32 个文件'
+                              : '文件剪贴板不可用，可检查连接偏好或使用文件中转站',
+                        ),
+                      )
+                    : null,
                 enabled: entry.value.$3,
                 onTap: () => Navigator.pop(context, entry.key),
               ),
@@ -712,6 +793,8 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
         await _pastePicture();
       case 'imageFile':
         await _pastePicture(fromFile: true);
+      case 'pasteFiles':
+        await _pasteFiles();
       case 'cad':
         session.chord([0x1d, 0x38, 0x153]);
       case 'win':

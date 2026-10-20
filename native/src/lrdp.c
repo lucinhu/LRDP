@@ -34,6 +34,7 @@
 #include <string.h>
 #include <errno.h>
 #include "clipboard_image.h"
+#include "clipboard_files.h"
 
 #define MAX_CURSOR 384
 #define MAX_DIM 4096
@@ -43,12 +44,23 @@
 enum { PASTE_IDLE, PASTE_PENDING, PASTE_SENT, PASTE_REJECTED, PASTE_TIMEOUT, PASTE_CANCELLED };
 typedef struct { int type, a, b, c; } input_event;
 typedef struct { rdpContext base; lrdp_session* owner; } lrdp_context;
+enum { CLIP_READY, CLIP_CAPS, CLIP_LIST, CLIP_LIST_ACK, CLIP_REQUEST, CLIP_RESPONSE, CLIP_FILE_REQUEST };
+typedef struct {
+  int type;
+  CliprdrClientContext* context;
+  UINT32 value, kind, flags, size;
+  BYTE* bytes;
+  UINT64 local_serial;
+  CLIPRDR_FILE_CONTENTS_REQUEST file;
+} clip_event;
+#define CLIP_EVENT_COUNT 64
 typedef struct { BYTE *png, *dib; size_t png_size, dib_size; } clipboard_image;
 static void free_clip_image(clipboard_image* image) {
   if (image) { free(image->png); free(image->dib); free(image); }
 }
 #define LRDP_PNG_FORMAT 0xc001
 #define LRDP_PNG_MIME_FORMAT 0xc002
+#define LRDP_FILES_FORMAT 0xc003
 struct lrdp_session {
   freerdp* instance;
   HANDLE thread, stop, wake;
@@ -67,12 +79,18 @@ struct lrdp_session {
   char* clipboard_out;
   char* clipboard_pending;
   clipboard_image *image_out, *image_pending;
+  lrdp_clip_files *files_out, *files_pending;
+  BOOL files_owned, files_descriptor_served;
+  clip_event* clip_events[CLIP_EVENT_COUNT];
+  unsigned clip_head, clip_tail;
+  size_t clip_event_bytes;
   BYTE* image_in;
   size_t image_in_size;
   int image_in_kind;
   BOOL remote_request_pending;
   UINT32 remote_format, remote_kind, requested_kind;
   UINT64 remote_epoch, requested_epoch;
+  UINT64 local_clip_serial;
   BOOL clipboard_waiting, clipboard_pending_paste, clipboard_out_paste;
   BOOL paste_ready, paste_keys_sent, paste_data_served;
   int paste_status;
@@ -298,33 +316,46 @@ static UINT clip_announce(CliprdrClientContext* c) {
   CLIPRDR_FORMAT formats[] = {{CF_DIB, NULL}, {LRDP_PNG_FORMAT, "PNG"},
                              {LRDP_PNG_MIME_FORMAT, "image/png"}};
   CLIPRDR_FORMAT fmt = { CF_UNICODETEXT, NULL };
+  CLIPRDR_FORMAT file_fmt = { LRDP_FILES_FORMAT, "FileGroupDescriptorW" };
   CLIPRDR_FORMAT_LIST list = {0};
   lrdp_session* s = c->custom;
   EnterCriticalSection(&s->lock);
   BOOL has_text = s->clipboard_out != NULL;
   BOOL has_image = s->image_out != NULL;
+  BOOL has_files = s->files_out != NULL;
   LeaveCriticalSection(&s->lock);
-  list.numFormats = has_image ? 3 : has_text ? 1 : 0;
-  list.formats = has_image ? formats : has_text ? &fmt : NULL;
+  list.numFormats = has_files ? 1 : has_image ? 3 : has_text ? 1 : 0;
+  list.formats = has_files ? &file_fmt : has_image ? formats : has_text ? &fmt : NULL;
   return c->ClientFormatList(c, &list);
 }
-static UINT clip_ready(CliprdrClientContext* c, const CLIPRDR_MONITOR_READY* ready) {
+static UINT clip_owner_ready(CliprdrClientContext* c, const CLIPRDR_MONITOR_READY* ready) {
   (void)ready;
   lrdp_session* s = c->custom;
   EnterCriticalSection(&s->lock); s->features |= 1 | 16; LeaveCriticalSection(&s->lock);
   CLIPRDR_GENERAL_CAPABILITY_SET general = {0};
   general.capabilitySetType = CB_CAPSTYPE_GENERAL;
   general.capabilitySetLength = CB_CAPSTYPE_GENERAL_LEN;
-  general.version = CB_CAPS_VERSION_2; general.generalFlags = CB_USE_LONG_FORMAT_NAMES;
+  general.version = CB_CAPS_VERSION_2;
+  general.generalFlags = CB_USE_LONG_FORMAT_NAMES | CB_STREAM_FILECLIP_ENABLED | CB_FILECLIP_NO_FILE_PATHS;
   CLIPRDR_CAPABILITIES caps = {0};
   caps.cCapabilitiesSets = 1; caps.capabilitySets = (CLIPRDR_CAPABILITY_SET*)&general;
   /* Clipboard ownership is announced when the user supplies local text. */
   return c->ClientCapabilities(c, &caps);
 }
-static UINT clip_capabilities(CliprdrClientContext* c, const CLIPRDR_CAPABILITIES* caps) {
-  (void)c; (void)caps; return CHANNEL_RC_OK;
+static UINT clip_owner_capabilities(CliprdrClientContext* c, const CLIPRDR_CAPABILITIES* caps) {
+  /* Upstream delivers one validated general capability set per callback. */
+  lrdp_session* s = c->custom;
+  if (caps->cCapabilitiesSets == 1 && caps->capabilitySets &&
+      caps->capabilitySets->capabilitySetType == CB_CAPSTYPE_GENERAL &&
+      caps->capabilitySets->capabilitySetLength >= CB_CAPSTYPE_GENERAL_LEN) {
+    const CLIPRDR_GENERAL_CAPABILITY_SET* general = (const void*)caps->capabilitySets;
+    EnterCriticalSection(&s->lock);
+    s->features = (s->features & ~32) | ((general->generalFlags & CB_STREAM_FILECLIP_ENABLED) ? 32 : 0);
+    LeaveCriticalSection(&s->lock);
+  }
+  return CHANNEL_RC_OK;
 }
-static UINT clip_list_response(CliprdrClientContext* c, const CLIPRDR_FORMAT_LIST_RESPONSE* r) {
+static UINT clip_owner_list_response(CliprdrClientContext* c, const CLIPRDR_FORMAT_LIST_RESPONSE* r) {
   lrdp_session* s = c->custom;
   EnterCriticalSection(&s->lock);
   if (s->clipboard_waiting) {
@@ -339,7 +370,7 @@ static UINT clip_list_response(CliprdrClientContext* c, const CLIPRDR_FORMAT_LIS
   SetEvent(s->wake);
   return CHANNEL_RC_OK;
 }
-static UINT clip_list(CliprdrClientContext* c, const CLIPRDR_FORMAT_LIST* list) {
+static UINT clip_owner_list(CliprdrClientContext* c, const CLIPRDR_FORMAT_LIST* list, UINT64 local_serial) {
   CLIPRDR_FORMAT_LIST_RESPONSE response = {0};
   response.common.msgFlags = CB_RESPONSE_OK;
   UINT rc = c->ClientFormatListResponse(c, &response);
@@ -355,15 +386,19 @@ static UINT clip_list(CliprdrClientContext* c, const CLIPRDR_FORMAT_LIST* list) 
   }
   lrdp_session* s = c->custom;
   EnterCriticalSection(&s->lock);
+  if (local_serial != s->local_clip_serial) { LeaveCriticalSection(&s->lock); return CHANNEL_RC_OK; }
   s->remote_epoch++;
   s->remote_format = format; s->remote_kind = kind;
+  /* No CB_CAN_LOCK_CLIPDATA: changing ownership revokes the old file list. */
+  s->files_owned = FALSE;
+  lrdp_files_free(s->files_out); s->files_out = NULL;
   free(s->clipboard_in); s->clipboard_in = NULL;
   free(s->image_in); s->image_in = NULL; s->image_in_size = 0;
   LeaveCriticalSection(&s->lock);
   SetEvent(s->wake);
   return CHANNEL_RC_OK;
 }
-static UINT clip_request(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_REQUEST* req) {
+static UINT clip_owner_request(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_REQUEST* req) {
   lrdp_session* s = c->custom;
   CLIPRDR_FORMAT_DATA_RESPONSE response = {0};
   WCHAR* wide = NULL;
@@ -376,6 +411,14 @@ static UINT clip_request(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_REQU
       response.common.msgFlags = CB_RESPONSE_OK;
       response.common.dataLen = ((UINT32)count + 1) * 2;
       response.requestedFormatData = (BYTE*)wide;
+    }
+  } else if (req->requestedFormatId == LRDP_FILES_FORMAT && s->files_owned && s->files_out) {
+    UINT32 size = 0;
+    if (lrdp_files_descriptor(s->files_out, &image, &size)) {
+      response.common.msgFlags = CB_RESPONSE_OK;
+      response.common.dataLen = size;
+      response.requestedFormatData = image;
+      s->files_descriptor_served = TRUE;
     }
   } else if (s->image_out) {
     const clipboard_image* source = s->image_out;
@@ -402,7 +445,21 @@ static UINT clip_request(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_REQU
   LeaveCriticalSection(&s->lock);
   free(wide); free(image); return rc;
 }
-static UINT clip_response(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_RESPONSE* r) {
+static UINT clip_owner_file_request(CliprdrClientContext* c, const CLIPRDR_FILE_CONTENTS_REQUEST* request) {
+  lrdp_session* s = c->custom;
+  CLIPRDR_FILE_CONTENTS_RESPONSE response = {0};
+  response.streamId = request->streamId;
+  BYTE* bytes = NULL;
+  EnterCriticalSection(&s->lock);
+  BOOL ok = (s->features & 32) && s->files_owned && s->files_descriptor_served &&
+    lrdp_files_read(s->files_out, request, &bytes, &response.cbRequested);
+  LeaveCriticalSection(&s->lock);
+  response.common.msgFlags = ok ? CB_RESPONSE_OK : CB_RESPONSE_FAIL;
+  response.requestedData = bytes;
+  UINT rc = c->ClientFileContentsResponse(c, &response);
+  free(bytes); return rc;
+}
+static UINT clip_owner_response(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_RESPONSE* r) {
   lrdp_session* s = c->custom;
   EnterCriticalSection(&s->lock);
   BOOL current = s->remote_request_pending && s->requested_epoch == s->remote_epoch;
@@ -448,6 +505,126 @@ static UINT clip_response(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_RES
   }
   return CHANNEL_RC_OK;
 }
+/* Upstream dispatches CLIPRDR callbacks on a channel thread. Copy only bounded
+ * values here; filesystem reads and every outgoing FreeRDP call run on the
+ * connection owner. The context remains live until that owner disconnects. */
+static UINT enqueue_clip(CliprdrClientContext* c, clip_event* event) {
+  if (!event) return CHANNEL_RC_NO_MEMORY;
+  lrdp_session* s = c->custom;
+  event->context = c;
+  EnterCriticalSection(&s->lock);
+  unsigned next = (s->clip_head + 1) % CLIP_EVENT_COUNT;
+  BOOL stopping = WaitForSingleObject(s->stop, 0) == WAIT_OBJECT_0;
+  if (stopping || next == s->clip_tail || s->clip_event_bytes + event->size > 2 * LRDP_IMAGE_MAX_BYTES) {
+    LeaveCriticalSection(&s->lock);
+    free(event->bytes); free(event);
+    return stopping ? CHANNEL_RC_OK : CHANNEL_RC_NO_MEMORY;
+  }
+  s->clip_events[s->clip_head] = event; s->clip_head = next;
+  event->local_serial = s->local_clip_serial;
+  s->clip_event_bytes += event->size;
+  LeaveCriticalSection(&s->lock); SetEvent(s->wake); return CHANNEL_RC_OK;
+}
+static clip_event* new_clip_event(int type) {
+  clip_event* event = calloc(1, sizeof(*event));
+  if (event) event->type = type;
+  return event;
+}
+static UINT clip_ready(CliprdrClientContext* c, const CLIPRDR_MONITOR_READY* ready) {
+  (void)ready; return enqueue_clip(c, new_clip_event(CLIP_READY));
+}
+static UINT clip_capabilities(CliprdrClientContext* c, const CLIPRDR_CAPABILITIES* caps) {
+  if (caps->cCapabilitiesSets != 1 || !caps->capabilitySets ||
+      caps->capabilitySets->capabilitySetType != CB_CAPSTYPE_GENERAL ||
+      caps->capabilitySets->capabilitySetLength < CB_CAPSTYPE_GENERAL_LEN) return CHANNEL_RC_OK;
+  clip_event* event = new_clip_event(CLIP_CAPS);
+  if (event) event->flags = ((const CLIPRDR_GENERAL_CAPABILITY_SET*)caps->capabilitySets)->generalFlags;
+  return enqueue_clip(c, event);
+}
+static UINT clip_list(CliprdrClientContext* c, const CLIPRDR_FORMAT_LIST* list) {
+  clip_event* event = new_clip_event(CLIP_LIST);
+  if (!event) return CHANNEL_RC_NO_MEMORY;
+  UINT32 priority = 0;
+  for (UINT32 i = 0; i < list->numFormats; i++) {
+    const CLIPRDR_FORMAT* f = &list->formats[i];
+    UINT32 next = f->formatName && (!strcmp(f->formatName, "PNG") || !strcmp(f->formatName, "image/png")) ? 4 :
+      f->formatId == CF_DIBV5 ? 3 : f->formatId == CF_DIB ? 2 : f->formatId == CF_UNICODETEXT ? 1 : 0;
+    if (next > priority) { priority = next; event->value = f->formatId; event->kind = next == 4 ? 1 : next >= 2 ? 2 : 0; }
+  }
+  return enqueue_clip(c, event);
+}
+static UINT clip_list_response(CliprdrClientContext* c, const CLIPRDR_FORMAT_LIST_RESPONSE* response) {
+  clip_event* event = new_clip_event(CLIP_LIST_ACK);
+  if (event) event->flags = response->common.msgFlags;
+  return enqueue_clip(c, event);
+}
+static UINT clip_request(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_REQUEST* request) {
+  clip_event* event = new_clip_event(CLIP_REQUEST);
+  if (event) event->value = request->requestedFormatId;
+  return enqueue_clip(c, event);
+}
+static UINT clip_file_request(CliprdrClientContext* c, const CLIPRDR_FILE_CONTENTS_REQUEST* request) {
+  clip_event* event = new_clip_event(CLIP_FILE_REQUEST);
+  if (event) event->file = *request;
+  return enqueue_clip(c, event);
+}
+static UINT clip_response(CliprdrClientContext* c, const CLIPRDR_FORMAT_DATA_RESPONSE* response) {
+  clip_event* event = new_clip_event(CLIP_RESPONSE);
+  if (!event) return CHANNEL_RC_NO_MEMORY;
+  event->flags = response->common.msgFlags;
+  if ((response->common.msgFlags & CB_RESPONSE_OK) && response->requestedFormatData &&
+      response->common.dataLen && response->common.dataLen <= LRDP_IMAGE_MAX_BYTES) {
+    event->bytes = malloc(response->common.dataLen);
+    if (!event->bytes) { free(event); return CHANNEL_RC_NO_MEMORY; }
+    event->size = response->common.dataLen;
+    memcpy(event->bytes, response->requestedFormatData, event->size);
+  }
+  return enqueue_clip(c, event);
+}
+static BOOL process_clip_events(lrdp_session* s) {
+  /* Drain one bounded batch so queued peers cannot starve input or stop. */
+  for (unsigned i = 0; i < CLIP_EVENT_COUNT && WaitForSingleObject(s->stop, 0) != WAIT_OBJECT_0; i++) {
+    EnterCriticalSection(&s->lock);
+    if (s->clip_tail == s->clip_head) { LeaveCriticalSection(&s->lock); break; }
+    clip_event* event = s->clip_events[s->clip_tail];
+    s->clip_events[s->clip_tail] = NULL; s->clip_tail = (s->clip_tail + 1) % CLIP_EVENT_COUNT;
+    s->clip_event_bytes -= event->size;
+    CliprdrClientContext* c = s->clip;
+    LeaveCriticalSection(&s->lock);
+    UINT rc = CHANNEL_RC_OK;
+    if (c && c == event->context) switch (event->type) {
+      case CLIP_READY: rc = clip_owner_ready(c, NULL); break;
+      case CLIP_CAPS: {
+        CLIPRDR_GENERAL_CAPABILITY_SET general = {CB_CAPSTYPE_GENERAL, CB_CAPSTYPE_GENERAL_LEN, CB_CAPS_VERSION_2, event->flags};
+        CLIPRDR_CAPABILITIES caps = {0}; caps.cCapabilitiesSets = 1; caps.capabilitySets = (void*)&general;
+        rc = clip_owner_capabilities(c, &caps); break;
+      }
+      case CLIP_LIST: {
+        CLIPRDR_FORMAT format = {event->value, event->kind == 1 ? "PNG" : NULL};
+        CLIPRDR_FORMAT_LIST list = {0}; list.numFormats = event->value ? 1 : 0; list.formats = &format;
+        rc = clip_owner_list(c, &list, event->local_serial); break;
+      }
+      case CLIP_LIST_ACK: {
+        CLIPRDR_FORMAT_LIST_RESPONSE response = {0}; response.common.msgFlags = (UINT16)event->flags;
+        rc = clip_owner_list_response(c, &response); break;
+      }
+      case CLIP_REQUEST: {
+        CLIPRDR_FORMAT_DATA_REQUEST request = {0}; request.requestedFormatId = event->value;
+        rc = clip_owner_request(c, &request); break;
+      }
+      case CLIP_RESPONSE: {
+        CLIPRDR_FORMAT_DATA_RESPONSE response = {0}; response.common.msgFlags = (UINT16)event->flags;
+        response.common.dataLen = event->size; response.requestedFormatData = event->bytes;
+        rc = clip_owner_response(c, &response); break;
+      }
+      case CLIP_FILE_REQUEST: rc = clip_owner_file_request(c, &event->file); break;
+      default: rc = ERROR_INVALID_DATA; break;
+    }
+    free(event->bytes); free(event);
+    if (rc != CHANNEL_RC_OK) return FALSE;
+  }
+  return TRUE;
+}
 static UINT display_caps(DispClientContext* d, UINT32 n, UINT32 a, UINT32 b) {
   (void)n; (void)a; (void)b;
   lrdp_session* s = d->custom;
@@ -484,6 +661,7 @@ static void channel_connected(void* context, const ChannelConnectedEventArgs* e)
     clip->ServerFormatListResponse = clip_list_response;
     clip->ServerFormatDataRequest = clip_request;
     clip->ServerFormatDataResponse = clip_response;
+    clip->ServerFileContentsRequest = clip_file_request;
     EnterCriticalSection(&s->lock); s->clip = clip; LeaveCriticalSection(&s->lock);
   } else if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0) {
     DispClientContext* disp = e->pInterface; disp->custom = s;
@@ -503,7 +681,9 @@ static void channel_disconnected(void* context, const ChannelDisconnectedEventAr
   rdpContext* c = context; lrdp_session* s = owner(c);
   if (strcmp(e->name, CLIPRDR_SVC_CHANNEL_NAME) == 0) {
     EnterCriticalSection(&s->lock);
-    s->clip = NULL; s->features &= ~(1 | 16);
+    s->clip = NULL; s->features &= ~(1 | 16 | 32);
+    s->files_owned = FALSE;
+    lrdp_files_free(s->files_out); s->files_out = NULL;
     LeaveCriticalSection(&s->lock);
   }
   else if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0) {
@@ -617,12 +797,14 @@ static void release_delivered_input(lrdp_session* s) {
   s->held_buttons = 0;
 }
 static BOOL process_clipboard(lrdp_session* s) {
+  if (!process_clip_events(s)) return FALSE;
   EnterCriticalSection(&s->lock);
   if (s->paste_status == PASTE_PENDING && GetTickCount64() >= s->paste_deadline) {
     s->paste_status = PASTE_TIMEOUT;
     if (s->clipboard_pending_paste) {
       free(s->clipboard_pending); s->clipboard_pending = NULL;
       free_clip_image(s->image_pending); s->image_pending = NULL;
+      lrdp_files_free(s->files_pending); s->files_pending = NULL;
       s->clipboard_pending_paste = FALSE;
     }
   }
@@ -630,10 +812,12 @@ static BOOL process_clipboard(lrdp_session* s) {
   /* Format responses have no operation ID. Keep at most one announcement in
    * flight so a late ACK cannot paste
    * text from a different operation. Never reset this barrier on a timeout. */
-  if (!s->clipboard_waiting && (s->clipboard_pending || s->image_pending) && (s->features & 1) && s->clip) {
+  if (!s->clipboard_waiting && (s->clipboard_pending || s->image_pending || s->files_pending) && (s->features & 1) && s->clip) {
     free(s->clipboard_out); s->clipboard_out = s->clipboard_pending;
     s->clipboard_pending = NULL;
     free_clip_image(s->image_out); s->image_out = s->image_pending; s->image_pending = NULL;
+    lrdp_files_free(s->files_out); s->files_out = s->files_pending; s->files_pending = NULL;
+    s->files_owned = s->files_out != NULL; s->files_descriptor_served = FALSE;
     s->clipboard_out_paste = s->clipboard_pending_paste;
     s->clipboard_out_paste_serial = s->clipboard_pending_paste ? s->paste_serial : 0;
     s->clipboard_pending_paste = FALSE;
@@ -990,6 +1174,7 @@ int lrdp_input(lrdp_session* s, int type, int a, int b, int c) {
 /* Caller holds lock. A deliberate local publication supersedes older remote
  * responses, but must preserve the one-request barrier until its reply arrives. */
 static void local_clipboard_owner(lrdp_session* s) {
+  s->local_clip_serial++;
   s->remote_epoch++; s->remote_format = 0;
   free(s->clipboard_in); s->clipboard_in = NULL;
   free(s->image_in); s->image_in = NULL; s->image_in_size = 0;
@@ -1002,6 +1187,7 @@ int lrdp_clipboard(lrdp_session* s, const char* text) {
   local_clipboard_owner(s);
   free(s->clipboard_pending); s->clipboard_pending = copy;
   free_clip_image(s->image_pending); s->image_pending = NULL;
+  lrdp_files_free(s->files_pending); s->files_pending = NULL;
   s->clipboard_pending_paste = FALSE;
   LeaveCriticalSection(&s->lock); SetEvent(s->wake); return 1;
 }
@@ -1017,6 +1203,7 @@ int lrdp_paste(lrdp_session* s, const char* text) {
   local_clipboard_owner(s);
   free(s->clipboard_pending); s->clipboard_pending = copy;
   free_clip_image(s->image_pending); s->image_pending = NULL;
+  lrdp_files_free(s->files_pending); s->files_pending = NULL;
   s->clipboard_pending_paste = TRUE;
   s->paste_serial++;
   s->paste_ready = s->paste_keys_sent = s->paste_data_served = FALSE;
@@ -1044,6 +1231,27 @@ int lrdp_paste_image(lrdp_session* s, const uint8_t* png, size_t png_size,
   local_clipboard_owner(s);
   free(s->clipboard_pending); s->clipboard_pending = NULL;
   free_clip_image(s->image_pending); s->image_pending = image;
+  lrdp_files_free(s->files_pending); s->files_pending = NULL;
+  s->clipboard_pending_paste = TRUE;
+  s->paste_serial++;
+  s->paste_ready = s->paste_keys_sent = s->paste_data_served = FALSE;
+  s->paste_status = PASTE_PENDING; s->paste_deadline = GetTickCount64() + 5000;
+  LeaveCriticalSection(&s->lock); SetEvent(s->wake); return 1;
+}
+int lrdp_paste_files(lrdp_session* s, const char* const* paths, size_t count) {
+  if (!s) return 0;
+  lrdp_clip_files* files = lrdp_files_open(paths, count);
+  if (!files) return 0;
+  EnterCriticalSection(&s->lock);
+  if (s->state != LRDP_CONNECTED || (s->features & 33) != 33 || !s->clip ||
+      s->paste_status == PASTE_PENDING ||
+      (s->clipboard_waiting && GetTickCount64() - s->clipboard_announced_at >= 5000)) {
+    LeaveCriticalSection(&s->lock); lrdp_files_free(files); return 0;
+  }
+  local_clipboard_owner(s);
+  free(s->clipboard_pending); s->clipboard_pending = NULL;
+  free_clip_image(s->image_pending); s->image_pending = NULL;
+  lrdp_files_free(s->files_pending); s->files_pending = files;
   s->clipboard_pending_paste = TRUE;
   s->paste_serial++;
   s->paste_ready = s->paste_keys_sent = s->paste_data_served = FALSE;
@@ -1085,6 +1293,11 @@ void lrdp_destroy(lrdp_session* s) {
   if (s->wake) CloseHandle(s->wake);
   lrdp_video_store_retire(s->video);
   free(s->cursor_pixels); free(s->clipboard_in); free(s->clipboard_out); free(s->clipboard_pending);
+  lrdp_files_free(s->files_out); lrdp_files_free(s->files_pending);
+  for (unsigned i = 0; i < CLIP_EVENT_COUNT; i++) {
+    clip_event* event = s->clip_events[i];
+    if (event) { free(event->bytes); free(event); }
+  }
   free_clip_image(s->image_out); free_clip_image(s->image_pending); free(s->image_in);
   lrdp_audio_gate_free(s->audio);
   DeleteCriticalSection(&s->lock); free(s);

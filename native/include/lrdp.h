@@ -44,7 +44,8 @@ LRDP_API uint32_t lrdp_error_code(lrdp_session*);
  * 2 an AVC420/AVC444 surface command was successfully decoded,
  * 3 server negotiated Unicode keyboard input,
  * 4 this adapter provides bounded PNG/DIB clipboard operations (not a promise
- * that the server or destination application supports images). */
+ * that the server or destination application supports images),
+ * 5 server negotiated file clipboard streams and this adapter supports them. */
 LRDP_API int lrdp_features(lrdp_session*);
 /* Fields: 0 error, 1 SHA256 fingerprint, 2 received clipboard (consumed),
  * 3 paste status: idle/pending/sent/rejected/timeout/cancelled.
@@ -105,6 +106,13 @@ LRDP_API int lrdp_paste_image(lrdp_session*, const uint8_t* png, size_t png_size
  * negative required capacity without consuming, or positive copied bytes.
  * Peek with NULL/0; successful reads consume. No borrowed pointer escapes. */
 LRDP_API int lrdp_read_image(lrdp_session*, uint8_t*, size_t, int32_t* kind);
+/* Additive ABI v5 extension, feature bit 5 gates lookup. Pins read-only handles
+ * to private staged regular files; caller may remove staged paths after return.
+ * Names only, never local paths, are exposed. Up to 32 files, 256 MiB each,
+ * 512 MiB total; no folders. Uses the single paste slot. "sent" confirms only
+ * descriptor delivery and Ctrl+V; the peer reads file contents asynchronously.
+ * Keep the session/clipboard unchanged until the remote copy finishes. */
+LRDP_API int lrdp_paste_files(lrdp_session*, const char* const* paths, size_t count);
 LRDP_API void lrdp_stop(lrdp_session*);
 /* Joins the network thread. Must only be called by the owning isolate. */
 LRDP_API void lrdp_destroy(lrdp_session*);
