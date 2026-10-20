@@ -26,7 +26,7 @@ void main() {
       expect(FrameRatePolicy.effective(59.94, 0), 60);
       expect(FrameRatePolicy.effective(double.nan, 0), 60);
       expect(FrameRatePolicy.effective(0, 0), 60);
-    expect(FrameRatePolicy.effective(0, 144), 144);
+      expect(FrameRatePolicy.effective(0, 144), 144);
       expect(FrameRatePolicy.effective(360, 0), 240);
       expect(FrameRatePolicy.interval(120).inMicroseconds, 8333);
       expect(FrameRatePolicy.interval(240).inMicroseconds, 4167);

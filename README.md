@@ -4,9 +4,26 @@ LRDP 是基于 **Flutter + FreeRDP** 的开源远程桌面客户端，面向手�
 
 当前版本为 **0.1.0 开发预览**，目标平台为 Linux、Android、Windows、macOS 和 iOS。各平台的构建与验证进度见下表。
 
-[使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
+[下载预览版](https://github.com/lucinhu/LRDP/releases/tag/v0.1.0-preview.1) · [使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
 
 ![LRDP 桌面连接库，使用示例配置](docs/screenshots/workspace.png)
+
+## 手机界面
+
+<table>
+  <tr>
+    <th>连接列表</th>
+    <th>全屏会话与悬浮工具栏</th>
+    <th>文字输入与特殊按键</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/android-workspace.png" alt="Android 连接列表，支持搜索、快速连接、收藏和最近使用" width="240"></td>
+    <td><img src="docs/screenshots/android-fullscreen-tools.png" alt="Android 全屏远程会话中展开的悬浮工具栏" width="240"></td>
+    <td><img src="docs/screenshots/android-ime-control-text.png" alt="Android 文字输入界面，可同时使用特殊按键和操作远程画面" width="240"></td>
+  </tr>
+</table>
+
+以上截图来自 Android 模拟器，使用本地回环测试连接。远程画面中的色块是测试桌面；输入截图展示测试输入法，实际软键盘随设备与输入法变化。
 
 ## 主要功能
 

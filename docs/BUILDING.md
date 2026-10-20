@@ -3,12 +3,19 @@
 所有命令从仓库根目录执行。需要 Flutter ≥ 3.41 / Dart ≥ 3.11、Git、CMake ≥ 3.22、Ninja、
 C/C++ 编译器及 OpenSSL 3。用 `flutter doctor -v` 检查本机工具链。
 
+GitHub Actions 的 `Check` 工作流固定使用 Flutter **3.47.7 stable**，并输出 Flutter 与
+Dart 版本。提交前用同一版本运行以下检查，避免旧 SDK 与 CI 的格式化结果不同。
+
 ```sh
 git submodule update --init --recursive
 flutter pub get
+dart format --output=none --set-exit-if-changed lib test integration_test test_driver
 flutter analyze
 flutter test
 ```
+
+格式检查失败时，运行 `dart format lib test integration_test test_driver`，审查并提交格式调整，
+然后重跑检查。CI 保留格式校验，不会自动修改仓库中的文件。
 
 系统配色依赖 `dynamic_color` 固定为 1.8.1，版本和下载摘要见 `pubspec.lock`；
 源码由 Pub 缓存管理，不复制到仓库，也不修改 Pub 缓存。1.9.0 的 Android Kotlin DSL

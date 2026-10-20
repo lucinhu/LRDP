@@ -442,16 +442,18 @@ void main() {
         215,
         255,
       ], reason: 'XOR must invert the real desktop');
-      expect(
-        await pixel(197, 200),
-        [244, 67, 54, 255],
-        reason: 'Normal cursor pixel must be offset by its hotspot',
-      );
-      expect(
-        await pixel(201, 200),
-        [24, 45, 40, 255],
-        reason: 'Transparent cursor pixels preserve the desktop',
-      );
+      expect(await pixel(197, 200), [
+        244,
+        67,
+        54,
+        255,
+      ], reason: 'Normal cursor pixel must be offset by its hotspot');
+      expect(await pixel(201, 200), [
+        24,
+        45,
+        40,
+        255,
+      ], reason: 'Transparent cursor pixels preserve the desktop');
       transform.value = Matrix4.diagonal3Values(2, 2, 1)
         ..setTranslationRaw(-200, -200, 0);
       await tester.pump();
