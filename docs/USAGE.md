@@ -139,8 +139,10 @@ CapsLock/NumLock/ScrollLock、PrintScreen、Ctrl+Shift+Esc 与 Ctrl+Alt+Del。
 
 文件传输使用微软的 [RDP 文件系统虚拟通道协议 MS-RDPEFS](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpefs/34d9de58-b2b5-40b6-b970-f82d4603bdb5)，
 由未修改的 FreeRDP drive 后端处理。服务器管理员可能通过策略禁用磁盘重定向。
-目前文件复制/粘贴的 [MS-RDPECLIP 通道](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpeclip/fb9b7e0b-6db4-41c2-b83c-f889c1ee7688)
-仅接入文字部分，文件传输走共享目录。
+[MS-RDPECLIP 通道](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpeclip/fb9b7e0b-6db4-41c2-b83c-f889c1ee7688)
+已接入文字、双向图片及选择本机文件粘贴到远端。使用“更多 → 选择文件粘贴”前，先在远端打开
+目标文件夹；服务端需协商文件流。远端文件剪贴板下载和文件夹粘贴仍待实现，反向文件传输继续使用
+共享目录。详细操作和大小限制见 [剪贴板与文件传输](CLIPBOARD.md)。
 
 ## 触控与画面
 

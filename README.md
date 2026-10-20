@@ -1,82 +1,123 @@
 # LRDP
 
-使用 **Flutter + FreeRDP** 构建的跨平台远程桌面客户端。
+LRDP 是基于 **Flutter + FreeRDP** 的开源远程桌面客户端，面向手机和桌面的日常 RDP 连接。Flutter 提供界面与交互，内嵌 FreeRDP 处理远程连接、画面、输入和虚拟通道。
 
-[LRDP 图标与各平台资源](assets/branding/README.md) · [图标预览](assets/branding/preview.png)
+当前版本为 **0.1.0 开发预览**，目标平台为 Linux、Android、Windows、macOS 和 iOS。各平台的构建与验证进度见下表。
 
-![连接库预览（测试配置）](docs/screenshots/workspace.png)
+[使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
 
-当前为 **0.1 开发预览**，目标是以可测量的日常体验超过 aRDP Free。
-FreeRDP 3.32.2 固定为 Git 子模块，所有桥接、通道和构建适配都在 LRDP 中，
-不修改 FreeRDP 源码。
+![LRDP 桌面连接库，使用示例配置](docs/screenshots/workspace.png)
+
+## 主要功能
+
+- **连接管理**：快速连接、分组、收藏、搜索、最近使用、多个会话切换，以及 `.rdp` 配置导入与导出。
+- **手机操作**：全屏会话、可拖动和收起的悬浮工具栏、触控板与直接触控、双指滚动、右键、缩放和拖拽。键盘展开时仍可操作远程画面。
+- **文字与键盘**：中文输入、整段文字粘贴和软键盘按键模拟。Ctrl、Shift、Alt、Win 可保持按下，配合输入法和 F1～F12 等特殊按键使用。
+- **画面显示**：自动分辨率、动态调整分辨率、缩放与平移、远端鼠标光标、H.264 软件解码，以及随屏幕刷新率调整的显示帧率上限。
+- **剪贴板与文件**：文字与双向图片剪贴板、选择本机文件粘贴到远端，以及通过文件中转站双向复制文件。
+- **外观与语言**：系统配色、跟随系统的深浅主题，支持简体中文、繁体中文和 English。
+- **会话恢复与声音**：有次数上限、可取消的掉线重连；可选远程声音播放，离开会话时暂停，回到会话后继续。
+- **凭据与证书**：密码使用系统安全存储；配置导出不含密码。证书指纹需明确确认，可选择仅本次信任或保存指纹。
+
+动态分辨率、剪贴板、文件和声音需要服务端支持并允许相应重定向。显示帧率上限最高可设为 240 帧/秒，实际帧率取决于远端输出、屏幕、网络与设备性能。
+
+## 平台进度
+
+| 平台 | 当前进度 |
+| --- | --- |
+| Linux | 已提供 Release 构建；私有 X11 环境中的窗口、输入、全屏和实际回环协议测试通过。Wayland 待验收。 |
+| Android | 已构建 ARM64、x86_64 Release 预览 APK；多项输入、手势、声音和剪贴板功能通过隔离模拟器测试。ARM64 真机与最新文件粘贴的设备验收待完成。 |
+| Windows | 已接入原生构建与显示；x64 连接核心、部分协议和文件句柄处理通过 Wine 测试。Flutter 主窗口与真实 Windows 系统待验收。 |
+| macOS | 已接入工程与原生桥接，构建及设备验收待完成。 |
+| iOS | 已接入工程与原生桥接，构建及设备验收待完成。 |
+
+不同功能的验证范围并不相同；具体版本、测试方法和限制记录在 [VERIFICATION.md](docs/VERIFICATION.md)。Windows RDP、xrdp 和 GNOME 的文件剪贴板互操作仍需实测。
+
+## 开始使用
+
+1. 点击“添加电脑”，填写地址、用户名、密码，以及需要的域信息。地址可直接包含端口，例如 `192.168.1.10:3390`；IPv6 使用 `[2001:db8::1]:3389`。
+2. 在“连接偏好”中按需开启共享剪贴板、文件传输或远程声音。远程分辨率默认自动，也可手动指定。
+3. 首次遇到需要确认的证书时，核对服务器的 SHA-256 指纹，再选择信任方式。保存连接后点击电脑卡片进入会话。
+
+会话默认全屏，常用功能集中在悬浮工具栏。返回连接列表可保留会话，桌面端可通过标签切换连接。`Ctrl + Alt + Home` 可将键盘焦点交还给本地界面。
+
+## 手机触控与输入
+
+触控板模式适合操作较小的远端控件；直接触控模式可按画面位置点击。
+
+| 触控板手势 | 操作 |
+| --- | --- |
+| 单指滑动 | 移动远端光标 |
+| 单指轻点 | 鼠标左键单击 |
+| 双击后按住第二次触摸并移动 | 按住鼠标左键拖拽 |
+| 双指轻点 | 鼠标右键单击 |
+| 双指上下或左右滑动 | 竖向或横向滚动 |
+| 双指捏合 | 缩放画面 |
+
+放大后，光标接近屏幕边缘时视野会跟随移动。桌面实体触控板也支持双指滚动和捏合缩放。
+
+打开工具栏中的“键盘”，可按输入场景选择模式：
+
+| 输入模式 | 适用场景 |
+| --- | --- |
+| 文字输入 | 使用本机输入法选好中文等文字，再点击发送；通过 Unicode 按键提交。 |
+| 粘贴输入 | 将完整文字通过共享剪贴板发送，适合不接受直接 Unicode 输入的远端应用。 |
+| 键盘模拟 | 即时发送英文、数字、符号和编辑按键；也可输入拼音交给远端输入法选词。 |
+
+键盘模拟隐藏本地输入框。软键盘上方提供保持修饰键、方向键、功能键及组合键操作；输入时可继续触控远程画面。详细说明见 [使用指南](docs/USAGE.md)。
+
+[手机连接列表](docs/screenshots/phone-workspace.png) · [手机会话工具](docs/screenshots/phone-remote.png) · [Android 模拟器中文输入](docs/screenshots/android-keyboard.png) · [横屏键盘](docs/screenshots/android-landscape-keyboard.png)
+
+## 剪贴板与文件
+
+连接前开启“共享剪贴板”，再选择需要的操作：
+
+| 内容 | 使用方法 |
+| --- | --- |
+| 本机文字 | 点选远端输入位置，选择“更多 → 粘贴本机文字”。 |
+| 图片内容 | 选择“更多 → 粘贴本机图片”或“选择图片粘贴”；远端复制的图片可同步到当前活动会话的本机剪贴板。 |
+| 本机文件 | 先在远端打开目标文件夹，再选择“更多 → 选择文件粘贴”。 |
+| 双向文件复制 | 在连接偏好中开启“文件传输”并重新连接，通过“文件中转站”交换文件。 |
+
+文件粘贴保留原始文件字节和文件名，支持中文名称、多文件和空文件。每次最多 **32 个文件**，单文件最大 **256 MiB**，合计最大 **512 MiB**。请保持连接，等待远端文件管理器完成复制；“已发送粘贴请求”不代表远端已保存完毕。
+
+中转站在远程 Windows 中的路径为 `\\tsclient\LRDP`。远端为 Linux 时，访问方式取决于运行的 RDP 服务端。图片粘贴传输的是图片内容；需要原始图片文件时，使用文件粘贴或中转站。
+
+当前尚未实现远端文件剪贴板下载、读取本机文件管理器的“复制文件”内容及文件夹粘贴。反向传输可使用中转站。完整操作与限制见 [剪贴板与文件传输](docs/CLIPBOARD.md)。
+
+## 从源码运行
+
+需要 Flutter ≥ 3.41、Dart ≥ 3.11、CMake ≥ 3.22、Ninja、C/C++ 工具链、OpenSSL 3，以及目标平台的 Flutter 构建依赖。
+
+以下以 Linux 为例：
 
 ```sh
-git submodule update --init --recursive
+git clone --recurse-submodules https://github.com/lucinhu/LRDP.git
+cd LRDP
 flutter pub get
 bash scripts/build_ffmpeg.sh linux-x64
 export LRDP_FFMPEG_ROOT="$PWD/build/deps/ffmpeg/linux-x64"
 flutter run -d linux
 ```
 
-构建需要 Flutter ≥ 3.41 / Dart ≥ 3.11、CMake ≥ 3.22、Ninja、C/C++ 工具链、OpenSSL 3，以及各平台 Flutter
-依赖。H.264 使用 FFmpeg 9.0.2 的最小静态解码器；完整说明见 [构建指南](docs/BUILDING.md)。
+已有工作区可用 `git submodule update --init --recursive` 初始化依赖。FreeRDP 3.32.2 固定在 `third_party/FreeRDP` 子模块中，适配代码独立维护，保持上游源码不变。H.264 使用 FFmpeg 9.0.2 的最小静态软件解码器。
 
-已实现连接库、快速连接、分组/收藏/搜索/最近使用、多会话切换、系统配色与自动明暗外观、
-`.rdp` 导入导出、后台 RDP 连接与 BGRA 画面、键鼠和组合键、中文文字发送、
-带确认的中文/图片粘贴、文字与双向图片剪贴板、选择本机文件粘贴到远端、H.264 软件解码、动态分辨率通道、服务器光标形状/热点与单色反相、RDP 磁盘重定向文件中转站，以及可取消、有次数上限的掉线重连。密码使用系统安全存储；未验证证书需要明确核对
-SHA-256 指纹，支持临时确认或保存指纹。
+Linux 系统依赖、Android SDK/NDK 与签名、Windows 工具链和 Apple 平台构建步骤见 [BUILDING.md](docs/BUILDING.md)。
 
-Linux 已完成真实回环 RDP、NLA、文件传输和原生界面联调，并提供发布构建。
-Android ARM64 Release 预览 APK 已完成构建，使用明确启用的本地开发证书签名；API 36 / x86_64 / 16 KiB 模拟器已通过
-实际协议、系统安全存储和手机操作流程。Windows、macOS、iOS 均有工程与
-构建接入，各平台真机验收仍在进行。远程声音采用平台后端，Linux 与 Windows 核心/Wine
-通过私有声卡波形检查；Android 模拟器通过实际音轨播放、后台暂停、回到会话继续及音频焦点恢复检查。
-本机文件粘贴通过独立 TLS 协议测试，真实文件管理器互操作仍待验收；操作及限制见 [剪贴板与文件传输](docs/CLIPBOARD.md)。
-远端文件剪贴板下载、文件夹粘贴、RD Gateway、
-多显示器和硬件视频解码尚未实现。浏览器不是本项目的原生
-RDP 运行目标。
-
-Windows x64 连接核心已交叉编译为 PE DLL，并通过 Wine 下的实际协议回归；
-NLA 使用显式 WinPR SSPI 模式通过。Wine 原生 SSPI 路径仍失败，Flutter
-Windows 窗口与真实 Windows 系统仍待验收，详见 [验收记录](docs/VERIFICATION.md)。
-
-手机使用底部导航、全屏连接表单和底部会话操作栏；默认触控板，支持双指轻点右键、
-横竖滚动、捏合缩放、双击按住拖拽、Unicode 中文发送、显式粘贴与英文软键盘模拟；
-Ctrl/Shift/Alt/Win 可保持并与输入法组合，支持 F1～F12 及扩展特殊键。放大后视野随光标到达边缘移动。
-键盘展开时可继续操控画面；模拟模式隐藏本地输入框，支持重新唤起键盘。已覆盖横竖屏和软键盘避让的
-自动化测试；Android 模拟器还验证了真实系统键盘、触控、旋转、后台恢复、
-文件选择器及分享窗口；真实流量故障注入验证了后台掉线不消耗重试、返回恢复画面，及后台换证书延后确认。ARM64 Android / iOS 真机仍待验收。
-
-画面帧率默认跟随屏幕，可设置最高 240 帧/秒的客户端上限。Android 与 Linux 原生显示
-使用系统垂直同步，CPU 回退保留单帧背压；实际效果受远端输出、网络和设备性能影响。
-实体高刷新率屏幕的性能、延迟与耗电仍需真机验收。
-
-[手机连接列表预览](docs/screenshots/phone-workspace.png) ·
-[手机会话操作栏](docs/screenshots/phone-remote.png) ·
-[中文输入栏](docs/screenshots/phone-keyboard.png)
-
-[保持 Shift 与扩展按键（当前 Android 模拟器）](docs/screenshots/android-sticky-shift.png)
-
-Android 模拟器实际截图：[竖屏中文栏](docs/screenshots/android-keyboard.png) ·
-[横屏键盘](docs/screenshots/android-landscape-keyboard.png) ·
-[系统分享](docs/screenshots/android-share-sheet.png) ·
-[换证书确认](docs/screenshots/android-certificate-changed.png)。
-
-- [使用指南：连接、中文、文件传输](docs/USAGE.md)
-- [架构与资源所有权](docs/ARCHITECTURE.md)
-- [开发目标和验收清单](docs/ROADMAP.md)
-- [构建与 FreeRDP 升级](docs/BUILDING.md)
+## 开发与验证
 
 ```text
-lib/                     Flutter 界面、配置、RDP isolate 与 FFI
-native/                  独立 C ABI、FreeRDP 回调、线程与生命周期
-packages/lrdp_native/    五个平台的原生构建接入
-third_party/FreeRDP/     上游子模块；保持源码未修改
-scripts/                 平台依赖构建、隔离回环协议回归
+lib/                     Flutter 界面、连接配置、worker isolate 与 FFI
+native/                  C ABI、协议适配、连接线程与生命周期
+packages/lrdp_native/    各平台的原生构建与显示接入
+third_party/FreeRDP/     固定版本的上游 Git 子模块
+scripts/                 依赖构建、打包与隔离协议测试
 ```
 
-运行 `flutter analyze`、`flutter test` 和原生 CTest 检查；真实协议回归使用
-`python3 scripts/run_protocol_test.py`。协议测试启动私有虚拟桌面，不接触用户
-当前桌面。`python3 scripts/run_file_test.py` 验证独立 TLS/RDPDR 文件双向传输与 Unicode 输入。详细测试范围记录在 [验收记录](docs/VERIFICATION.md)。
+常规检查使用 `flutter analyze` 和 `flutter test`。原生变更还需运行 CTest 与隔离回环协议测试；测试步骤见 [构建指南](docs/BUILDING.md)，实际结果见 [验收记录](docs/VERIFICATION.md)。
 
-Apache-2.0。第三方项目保留其各自许可。
+协议测试使用私有服务和虚拟桌面，单元测试、协议通过与平台设备验收分别记录。后续工作见 [开发进度](docs/ROADMAP.md)；RD Gateway、RemoteApp、多显示器和硬件视频解码仍待实现。
+
+## 许可
+
+LRDP 使用 [Apache-2.0](LICENSE) 许可。FreeRDP、FFmpeg、OpenSSL 等第三方组件遵循各自许可，详见 [NOTICE](NOTICE) 与 [第三方许可文件](assets/licenses/)。
