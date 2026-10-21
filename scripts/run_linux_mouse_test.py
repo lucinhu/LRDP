@@ -284,6 +284,12 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
     os_input('key', 'ctrl+alt+Home')
     wait_for(lambda: not hint_is_remote(), 'Release-control state did not paint')
     capture('control-released')
+    probe = (round(layout[0]+600*layout[2]), round(layout[1]+600*layout[2]))
+    subprocess.run(['xsetroot','-solid','#223344'],env=server_env,check=True)
+    wait_for(lambda: all(abs(a-b)<=5 for a,b in zip(
+        ImageGrab.grab(xdisplay=client_env['DISPLAY']).convert('RGB').getpixel(probe), (34,51,68))),
+        'Video froze while local control was released')
+    subprocess.run(['xsetroot','-solid','#182d28'],env=server_env,check=True)
     start = len(desktop.events)
     move(360, 240)
     os_input('click', 1)
@@ -308,6 +314,15 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
         wait_for(lambda: window_fullscreen() and window_geometry()['WIDTH']==1440,
             'Full-screen keyboard shortcut did not reenter OS full screen from local focus')
         capture('local-control-fullscreen')
+        # The desktop composer is a modal route outside the surface's focus
+        # subtree. It must explicitly route the same local escape shortcut.
+        click(1440-340-8+68*2, 8+52+1+6+32)
+        wait_for(lambda: sum(ImageGrab.grab(xdisplay=client_env['DISPLAY']).convert('RGB').getpixel((720,500)))>400,
+            'Desktop keyboard dialog did not paint')
+        os_input('key','ctrl+alt+Home')
+        wait_for(lambda: sum(ImageGrab.grab(xdisplay=client_env['DISPLAY']).convert('RGB').getpixel((720,500)))<200,
+            'Keyboard dialog swallowed the local escape shortcut')
+        capture('keyboard-dialog-released')
         # First floating action is Back to computers. The panel has seven 68px
         # actions, a 52px drag header and an 8px margin on this 1440x1000 screen.
         click(1440-340-8+68, 8+52+1+6+32)
@@ -315,6 +330,8 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
             and window_geometry()['HEIGHT']==initial_geometry['HEIGHT'], 'Leaving the session did not restore the OS window')
         capture('window-restored')
         fullscreen_case = ['Ctrl+Alt+Home releases remote control; first click resumes without forwarding it',
+            'video continues updating while local control is released',
+            'Ctrl+Alt+Home closes desktop keyboard dialog and releases control',
             'Ctrl+Alt+Enter restores and reenters actual OS full screen from local focus',
             'actual OS full screen and original window size restored through floating Back action']
     (out / 'events.json').write_text(json.dumps(desktop.events, indent=2) + '\n')

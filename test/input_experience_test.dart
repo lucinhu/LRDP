@@ -135,6 +135,19 @@ void main() {
       await tester.pump();
       expect(session.scans.last, (0x2a, false));
       expect(tester.testTextInput.isVisible, isTrue);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('remoteInputMode')))
+            .focusNode!
+            .hasFocus,
+        isTrue,
+        reason:
+            'The simulator must retain keyboard access to the local mode menu',
+      );
       await tester.pumpWidget(const SizedBox());
       session.dispose();
     },
@@ -172,6 +185,24 @@ void main() {
         await tester.pumpAndSettle();
         await open();
         expect(find.byTooltip('输入模式：键盘模拟'), findsOneWidget);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.home);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        await tester.pumpAndSettle();
+        expect(find.byType(MobileKeyboard), findsNothing);
+        expect(
+          tester.widget<RemoteSurface>(find.byType(RemoteSurface)).inputEnabled,
+          isFalse,
+        );
+        expect(
+          session.inputs.where((e) => e.$1 == 1 && e.$3 == 0x147),
+          isEmpty,
+        );
+        await tester.tap(find.byType(RemoteSurface));
+        await tester.pumpAndSettle();
+        await open();
         expect(find.byKey(const Key('remoteTextInput')), findsNothing);
         await chooseMode(tester, mode);
         expect(
@@ -304,6 +335,17 @@ void main() {
       expect(session.inputs.where((e) => e.$1 == 1 && e.$3 == 0x1c), isEmpty);
       await tester.tap(find.byKey(const Key('exitSessionFullscreen')));
       expect(toggles, 2);
+      await tester.tap(find.text('键盘'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(tester.widget<RemoteSurface>(surface).inputEnabled, isFalse);
       await tester.pumpWidget(const SizedBox());
       session.dispose();
     },

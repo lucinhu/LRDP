@@ -501,6 +501,17 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
     widget.onInputModeChanged?.call(mode);
   }
 
+  void _hideKeyboard() {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _keyboard = false;
+      _memory.controlsCollapsed = _localControl
+          ? false
+          : _controlsBeforeKeyboard;
+    });
+    if (_localControl) _localFocus.requestFocus();
+  }
+
   KeyEventResult _key(FocusNode node, KeyEvent event) {
     final shortcut = _shortcut(node, event);
     if (shortcut == KeyEventResult.handled) return shortcut;
@@ -538,12 +549,19 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
             onInputModeChanged: _inputModeChanged,
             initialDraft: _memory.textDraft,
             onDraftChanged: (draft) => _memory.textDraft = draft,
+            onSessionShortcut: (event) {
+              final result = _shortcut(_localFocus, event);
+              if (result == KeyEventResult.handled && event is KeyDownEvent) {
+                Navigator.pop(context);
+              }
+              return result;
+            },
             close: () => Navigator.pop(context),
           ),
         ),
       ),
     );
-    if (mounted) _focus.requestFocus();
+    if (mounted && !_localControl) _focus.requestFocus();
   }
 
   @override
@@ -771,14 +789,16 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                         onInputModeChanged: _inputModeChanged,
                         initialDraft: _memory.textDraft,
                         onDraftChanged: (draft) => _memory.textDraft = draft,
-                        shortcuts: bounds.maxHeight > 320,
-                        close: () {
-                          FocusScope.of(context).unfocus();
-                          setState(() {
-                            _keyboard = false;
-                            _memory.controlsCollapsed = _controlsBeforeKeyboard;
-                          });
+                        onSessionShortcut: (event) {
+                          final result = _shortcut(_localFocus, event);
+                          if (result == KeyEventResult.handled &&
+                              event is KeyDownEvent) {
+                            _hideKeyboard();
+                          }
+                          return result;
                         },
+                        shortcuts: bounds.maxHeight > 320,
+                        close: _hideKeyboard,
                       ),
                     ),
                   ),

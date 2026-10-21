@@ -18,6 +18,7 @@ class MobileKeyboard extends StatefulWidget {
     this.onInputModeChanged,
     this.initialDraft = TextEditingValue.empty,
     this.onDraftChanged,
+    this.onSessionShortcut,
   });
   final RdpSession session;
   final VoidCallback close;
@@ -29,6 +30,7 @@ class MobileKeyboard extends StatefulWidget {
   final ValueChanged<RemoteInputMode>? onInputModeChanged;
   final TextEditingValue initialDraft;
   final ValueChanged<TextEditingValue>? onDraftChanged;
+  final KeyEventResult Function(KeyEvent)? onSessionShortcut;
   @override
   State<MobileKeyboard> createState() => _MobileKeyboardState();
 }
@@ -292,10 +294,18 @@ class _MobileKeyboardState extends State<MobileKeyboard>
   // Android IMEs can deliver editing keys as hardware events instead of text
   // edits. Handle them before EditableText moves its invisible local caret.
   KeyEventResult _editingKey(FocusNode node, KeyEvent event) {
+    final shortcut = widget.onSessionShortcut?.call(event);
+    if (shortcut == KeyEventResult.handled) return KeyEventResult.handled;
     if (!_simulateKeys ||
         !_focus.hasFocus ||
         widget.session.state != SessionState.connected) {
       return KeyEventResult.ignored;
+    }
+    // The hidden editor has no traversal position. Give keyboard users a
+    // predictable local escape to the mode menu; remote Tab is on the key bar.
+    if (event.logicalKey == LogicalKeyboardKey.tab) {
+      if (event is KeyDownEvent) _modeFocus.requestFocus();
+      return KeyEventResult.handled;
     }
     final code = <LogicalKeyboardKey, int>{
       LogicalKeyboardKey.enter: 0x1c,
@@ -310,7 +320,6 @@ class _MobileKeyboardState extends State<MobileKeyboard>
       LogicalKeyboardKey.end: 0x14f,
       LogicalKeyboardKey.pageUp: 0x149,
       LogicalKeyboardKey.pageDown: 0x151,
-      LogicalKeyboardKey.tab: 0x0f,
       LogicalKeyboardKey.escape: 0x01,
     }[event.logicalKey];
     if (code == null) return KeyEventResult.ignored;
