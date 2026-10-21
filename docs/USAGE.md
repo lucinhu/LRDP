@@ -123,10 +123,12 @@ CLIPRDR。协议确认表示文字和快捷键已传输，目标应用是否接�
 软键盘上方可点亮 Ctrl、Shift、Alt、Win 来保持按下，再点一次释放；可同时保持多个键。
 在“键盘模拟”中，本机输入法输入的字母、数字和空格会与这些键组合，例如保持 Ctrl 后按空格，
 或保持 Shift 连续输入大写字母。保持 Shift 时输入法自身产生的大写字母不会提前释放 Shift，
-远程画面的触控操作也可与保持键组合。按键栏支持横向滑动；“展开特殊按键”中提供
-F1～F12、Esc、Tab、方向键、Home/End、PgUp/PgDn、Insert/Delete、退格、回车、
-CapsLock/NumLock/ScrollLock、PrintScreen、Ctrl+Shift+Esc 与 Ctrl+Alt+Del。
-屏幕空间较小时默认折叠扩展栏。切换文字模式、发送整段文字、收起键盘、失去输入焦点或进入后台
+远程画面的触控操作也可与保持键组合。每次打开键盘，特殊按键栏默认只显示一排。
+按键栏支持横向滑动；“展开特殊按键”的第二排优先提供 Esc、Tab、方向键、Home/End、
+PgUp/PgDn、Insert/Delete、退格、回车，以及复制、粘贴、剪切、全选、撤销和重做组合键。
+同排还提供 CapsLock/NumLock/ScrollLock、PrintScreen、Ctrl+Shift+Esc 与 Ctrl+Alt+Del；
+F1～F12 放在该排末尾。
+切换文字模式、发送整段文字、收起键盘、失去输入焦点或进入后台
 会释放保持键，避免影响下一次操作；保持状态不保存到配置文件。
 也可随时点击修饰键栏右侧的解锁按钮，一次释放所有保持键。
 

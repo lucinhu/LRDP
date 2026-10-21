@@ -797,7 +797,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                           }
                           return result;
                         },
-                        shortcuts: bounds.maxHeight > 320,
+                        shortcuts: false,
                         close: _hideKeyboard,
                       ),
                     ),
@@ -843,97 +843,118 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
     ),
   );
 
+  String? get _filePasteUnavailableReason {
+    if (session.state != SessionState.connected) return '连接成功后才能粘贴文件';
+    if (!session.profile.clipboard) {
+      return '请在连接偏好中开启“共享剪贴板”，然后重新连接';
+    }
+    if (!session.clipboardSupported) {
+      return '剪贴板尚未就绪，请稍候；若持续不可用，请检查服务端设置';
+    }
+    if (!session.fileClipboardSupported) {
+      return '当前连接未启用文件剪贴板，请检查服务端设置或尝试文件中转站';
+    }
+    if (session.pasteInProgress) return '正在处理粘贴，请完成后重试';
+    return null;
+  }
+
   Future<void> _phoneMore() async {
-    final connected = session.state == SessionState.connected;
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       useSafeArea: true,
       isScrollControlled: true,
-      builder: (context) => SafeArea(
-        top: false,
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-              child: Text(
-                '${session.profile.address}  ·  ${session.hasVideo ? session.desktopWidth : session.profile.width} × ${session.hasVideo ? session.desktopHeight : session.profile.height}',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+      builder: (context) => ListenableBuilder(
+        listenable: session,
+        builder: (context, _) {
+          final connected = session.state == SessionState.connected;
+          final filePasteUnavailableReason = _filePasteUnavailableReason;
+          return SafeArea(
+            top: false,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                  child: Text(
+                    '${session.profile.address}  ·  ${session.hasVideo ? session.desktopWidth : session.profile.width} × ${session.hasVideo ? session.desktopHeight : session.profile.height}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                for (final entry in <String, (IconData, String, bool)>{
+                  'fit': (Icons.fit_screen, '适应屏幕', true),
+                  'resize': (
+                    Icons.aspect_ratio,
+                    '匹配画面分辨率',
+                    connected && session.displayResizeSupported,
+                  ),
+                  'files': (
+                    Icons.folder_outlined,
+                    '文件中转站',
+                    session.transferDirectory != null,
+                  ),
+                  'clipboard': (
+                    Icons.content_paste_outlined,
+                    '同步剪贴板',
+                    connected && session.clipboardSupported,
+                  ),
+                  'paste': (
+                    Icons.content_paste_go_outlined,
+                    '粘贴本机文字',
+                    connected &&
+                        session.profile.clipboard &&
+                        session.clipboardSupported &&
+                        !session.pasteInProgress,
+                  ),
+                  'pasteImage': (
+                    Icons.image_outlined,
+                    '粘贴本机图片',
+                    connected &&
+                        session.profile.clipboard &&
+                        session.imageClipboardSupported &&
+                        !session.pasteInProgress,
+                  ),
+                  'imageFile': (
+                    Icons.add_photo_alternate_outlined,
+                    '选择图片粘贴',
+                    connected &&
+                        session.profile.clipboard &&
+                        session.imageClipboardSupported &&
+                        !session.pasteInProgress,
+                  ),
+                  'pasteFiles': (
+                    Icons.upload_file_outlined,
+                    '选择文件粘贴',
+                    filePasteUnavailableReason == null,
+                  ),
+                  'cad': (
+                    Icons.security_outlined,
+                    'Ctrl + Alt + Del',
+                    connected,
+                  ),
+                  'win': (Icons.window, 'Windows 键', connected),
+                  'help': (Icons.gesture_outlined, '触控手势说明', true),
+                  'disconnect': (Icons.power_settings_new, '断开连接', true),
+                }.entries)
+                  ListTile(
+                    minTileHeight: 56,
+                    leading: Icon(entry.value.$1),
+                    title: Text(context.tr(entry.value.$2)),
+                    subtitle: entry.key == 'pasteFiles'
+                        ? Text(
+                            context.tr(
+                              filePasteUnavailableReason ??
+                                  '先在远端打开目标文件夹；每次最多 32 个文件',
+                            ),
+                          )
+                        : null,
+                    enabled: entry.value.$3,
+                    onTap: () => Navigator.pop(context, entry.key),
+                  ),
+              ],
             ),
-            for (final entry in <String, (IconData, String, bool)>{
-              'fit': (Icons.fit_screen, '适应屏幕', true),
-              'resize': (
-                Icons.aspect_ratio,
-                '匹配画面分辨率',
-                connected && session.displayResizeSupported,
-              ),
-              'files': (
-                Icons.folder_outlined,
-                '文件中转站',
-                session.transferDirectory != null,
-              ),
-              'clipboard': (
-                Icons.content_paste_outlined,
-                '同步剪贴板',
-                connected && session.clipboardSupported,
-              ),
-              'paste': (
-                Icons.content_paste_go_outlined,
-                '粘贴本机文字',
-                connected &&
-                    session.profile.clipboard &&
-                    session.clipboardSupported &&
-                    !session.pasteInProgress,
-              ),
-              'pasteImage': (
-                Icons.image_outlined,
-                '粘贴本机图片',
-                connected &&
-                    session.profile.clipboard &&
-                    session.imageClipboardSupported &&
-                    !session.pasteInProgress,
-              ),
-              'imageFile': (
-                Icons.add_photo_alternate_outlined,
-                '选择图片粘贴',
-                connected &&
-                    session.profile.clipboard &&
-                    session.imageClipboardSupported &&
-                    !session.pasteInProgress,
-              ),
-              'pasteFiles': (
-                Icons.upload_file_outlined,
-                '选择文件粘贴',
-                connected &&
-                    session.profile.clipboard &&
-                    session.fileClipboardSupported &&
-                    !session.pasteInProgress,
-              ),
-              'cad': (Icons.security_outlined, 'Ctrl + Alt + Del', connected),
-              'win': (Icons.window, 'Windows 键', connected),
-              'help': (Icons.gesture_outlined, '触控手势说明', true),
-              'disconnect': (Icons.power_settings_new, '断开连接', true),
-            }.entries)
-              ListTile(
-                minTileHeight: 56,
-                leading: Icon(entry.value.$1),
-                title: Text(context.tr(entry.value.$2)),
-                subtitle: entry.key == 'pasteFiles'
-                    ? Text(
-                        context.tr(
-                          session.fileClipboardSupported
-                              ? '先在远端打开目标文件夹；每次最多 32 个文件'
-                              : '文件剪贴板不可用，可检查连接偏好或使用文件中转站',
-                        ),
-                      )
-                    : null,
-                enabled: entry.value.$3,
-                onTap: () => Navigator.pop(context, entry.key),
-              ),
-          ],
-        ),
+          );
+        },
       ),
     );
     if (!mounted) return;

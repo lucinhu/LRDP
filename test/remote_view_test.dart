@@ -14,13 +14,14 @@ import 'package:lrdp/ui/remote_view_memory.dart';
 import 'package:lrdp/ui/theme.dart';
 
 class RecordingSession extends RdpSession {
-  RecordingSession({bool automaticResolution = true})
+  RecordingSession({bool automaticResolution = true, bool clipboard = true})
     : super(
         ConnectionProfile(
           id: 'touch',
           name: '测试电脑',
           host: '192.0.2.1',
           automaticResolution: automaticResolution,
+          clipboard: clipboard,
         ),
       ) {
     state = SessionState.connected;
@@ -58,7 +59,104 @@ class ClipboardRecordingSession extends RecordingSession {
   void clipboard(String text) => announced.add(text);
 }
 
+class FileClipboardRecordingSession extends RecordingSession {
+  FileClipboardRecordingSession({super.clipboard});
+  bool busy = false;
+  @override
+  bool get pasteInProgress => busy;
+  void refresh() => notifyListeners();
+}
+
 void main() {
+  testWidgets('file paste menu follows clipboard negotiation and paste state', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(410, 850);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final session = FileClipboardRecordingSession();
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.android),
+        home: Scaffold(
+          body: RemoteView(
+            session: session,
+            reconnect: () {},
+            disconnect: () {},
+            active: true,
+            toggleFullscreen: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('更多'));
+    await tester.pumpAndSettle();
+    final entry = find.ancestor(
+      of: find.text('选择文件粘贴'),
+      matching: find.byType(ListTile),
+    );
+    Future<void> check(String hint, bool enabled) async {
+      await tester.ensureVisible(entry);
+      await tester.pumpAndSettle();
+      expect(find.text(hint), findsOneWidget);
+      expect(tester.widget<ListTile>(entry).enabled, enabled);
+      expect(tester.takeException(), isNull);
+    }
+
+    await check('剪贴板尚未就绪，请稍候；若持续不可用，请检查服务端设置', false);
+    session.features |= 1;
+    session.refresh();
+    await check('当前连接未启用文件剪贴板，请检查服务端设置或尝试文件中转站', false);
+    session.features |= 32;
+    session.refresh();
+    await check('先在远端打开目标文件夹；每次最多 32 个文件', true);
+    session.busy = true;
+    session.refresh();
+    await check('正在处理粘贴，请完成后重试', false);
+    session.busy = false;
+    session.refresh();
+    await check('先在远端打开目标文件夹；每次最多 32 个文件', true);
+    session.state = SessionState.closed;
+    session.refresh();
+    await check('连接成功后才能粘贴文件', false);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('file paste explains disabled clipboard preference', (
+    tester,
+  ) async {
+    final session = FileClipboardRecordingSession(clipboard: false)
+      ..features = 33;
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RemoteView(
+            session: session,
+            reconnect: () {},
+            disconnect: () {},
+            active: true,
+            toggleFullscreen: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('更多'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('选择文件粘贴'));
+    await tester.pumpAndSettle();
+    expect(find.text('请在连接偏好中开启“共享剪贴板”，然后重新连接'), findsOneWidget);
+    final entry = find.ancestor(
+      of: find.text('选择文件粘贴'),
+      matching: find.byType(ListTile),
+    );
+    expect(tester.widget<ListTile>(entry).enabled, false);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   for (final payload in ['本机复制的中文 😀', '', null]) {
     testWidgets('paste local clipboard reads text explicitly: $payload', (
       tester,
@@ -1445,11 +1543,27 @@ void main() {
           isEmpty,
         );
         if (size.height > 600) {
-          await tester.tap(find.text('Ctrl+C'));
+          expect(find.byKey(const Key('remoteSpecialKeys')), findsNothing);
+          await tester.tap(find.byKey(const Key('remoteExtraKeys')));
+          await tester.pumpAndSettle();
+          final copy = find.byKey(const Key('remoteKeyCtrl+C'));
+          await tester.scrollUntilVisible(
+            copy,
+            180,
+            scrollable: find.descendant(
+              of: find.byKey(const Key('remoteSpecialKeys')),
+              matching: find.byType(Scrollable),
+            ),
+          );
+          await Scrollable.ensureVisible(tester.element(copy), alignment: .5);
+          await tester.pumpAndSettle();
+          await tester.tap(copy);
           expect(
             session.inputs.where((e) => e.$1 == 1).map((e) => (e.$2, e.$3)),
             [(0, 0x1d), (0, 0x2e), (0x8000, 0x2e), (0x8000, 0x1d)],
           );
+          await tester.tap(find.byKey(const Key('remoteExtraKeys')));
+          await tester.pumpAndSettle();
         }
         await tester.tap(find.byKey(const Key('remoteInputMode')));
         await tester.pumpAndSettle();

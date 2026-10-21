@@ -95,7 +95,7 @@ void main() {
       await tester.ensureVisible(find.text('选择文件粘贴'));
       await tester.pump();
       if (mode == 'unsupported') {
-        expect(find.text('文件剪贴板不可用，可检查连接偏好或使用文件中转站'), findsOneWidget);
+        expect(find.text('当前连接未启用文件剪贴板，请检查服务端设置或尝试文件中转站'), findsOneWidget);
         final tile = tester.widget<ListTile>(
           find.ancestor(
             of: find.text('选择文件粘贴'),

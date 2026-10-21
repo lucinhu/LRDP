@@ -91,7 +91,7 @@ void main() {
     },
   );
   testWidgets(
-    'all function keys and Ctrl Alt Delete preserve latched modifiers',
+    'editing and function keys preserve latched modifiers in the expanded row',
     (tester) async {
       final session = PasteSession();
       await mount(tester, session);
@@ -103,23 +103,43 @@ void main() {
         of: find.byKey(const Key('remoteSpecialKeys')),
         matching: find.byType(Scrollable),
       );
-      for (var i = 1; i <= 12; i++) {
-        final key = find.byKey(Key('remoteKeyF$i'));
+      final editing = <String, int>{
+        'Home': 0x147,
+        'End': 0x14f,
+        'PgUp': 0x149,
+        'PgDn': 0x151,
+        'Insert': 0x152,
+        'Delete': 0x153,
+        '退格': 0x0e,
+        '回车': 0x1c,
+        'Ctrl+X': 0x2d,
+        'Ctrl+Z': 0x2c,
+        'Ctrl+Y': 0x15,
+      };
+      for (final label in [...editing.keys, 'Ctrl+Alt+Del']) {
+        final key = find.byKey(Key('remoteKey$label'));
         await tester.scrollUntilVisible(key, 250, scrollable: scroll);
+        await Scrollable.ensureVisible(tester.element(key), alignment: .5);
+        await tester.pumpAndSettle();
         await tester.tap(key);
         await tester.pump();
       }
-      final delete = find.byKey(const Key('remoteKeyCtrl+Alt+Del'));
-      await tester.scrollUntilVisible(delete, 250, scrollable: scroll);
-      await tester.tap(delete);
-      await tester.pump();
+      for (var i = 1; i <= 12; i++) {
+        final key = find.byKey(Key('remoteKeyF$i'));
+        await tester.scrollUntilVisible(key, 250, scrollable: scroll);
+        await Scrollable.ensureVisible(tester.element(key), alignment: .5);
+        await tester.pumpAndSettle();
+        await tester.tap(key);
+        await tester.pump();
+      }
       expect(session.scans.take(2), [(0x1d, true), (0x38, true)]);
       expect(session.scans.sublist(2), [
         for (final code in [
+          ...editing.values,
+          0x153,
           for (var i = 1; i <= 10; i++) 0x3a + i,
           0x57,
           0x58,
-          0x153,
         ]) ...[(code, true), (code, false)],
       ]);
       expect(tester.testTextInput.isVisible, isTrue);

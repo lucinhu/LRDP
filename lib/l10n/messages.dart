@@ -333,7 +333,6 @@ const localizedMessages = <String, Map<String, String>>{
     "图片剪贴板暂不可用，请稍候或重新连接": "图片剪贴板暂不可用，请稍候或重新连接",
     "无法准备图片，图片未发送": "无法准备图片，图片未发送",
     "共享剪贴板": "共享剪贴板",
-    "文字与图片；仅在当前会话激活时同步": "文字与图片；仅在当前会话激活时同步",
     "先在远端打开目标文件夹；每次最多 32 个文件": "先在远端打开目标文件夹；每次最多 32 个文件",
     "已发送文件粘贴请求，请保持连接并在远端确认复制完成": "已发送文件粘贴请求，请保持连接并在远端确认复制完成",
     "所选文件名重复，请分次粘贴": "所选文件名重复，请分次粘贴",
@@ -341,7 +340,6 @@ const localizedMessages = <String, Map<String, String>>{
     "文件在读取时发生变化，请重新选择": "文件在读取时发生变化，请重新选择",
     "文件粘贴未完成，可使用文件中转站": "文件粘贴未完成，可使用文件中转站",
     "无法准备文件，请重新选择": "无法准备文件，请重新选择",
-    "文件剪贴板不可用，可检查连接偏好或使用文件中转站": "文件剪贴板不可用，可检查连接偏好或使用文件中转站",
     "本机剪贴板没有文字；可使用“粘贴本机图片”或“选择文件粘贴”": "本机剪贴板没有文字；可使用“粘贴本机图片”或“选择文件粘贴”",
     "正在准备文件…": "正在准备文件…",
     "每个文件最大 256 MiB，每次合计最大 512 MiB": "每个文件最大 256 MiB，每次合计最大 512 MiB",
@@ -357,6 +355,12 @@ const localizedMessages = <String, Map<String, String>>{
     "退出全屏（Ctrl + Alt + Enter）": "退出全屏（Ctrl + Alt + Enter）",
     "释放修饰键": "释放修饰键",
     "释放控制": "释放控制",
+    "连接成功后才能粘贴文件": "连接成功后才能粘贴文件",
+    "请在连接偏好中开启“共享剪贴板”，然后重新连接": "请在连接偏好中开启“共享剪贴板”，然后重新连接",
+    "剪贴板尚未就绪，请稍候；若持续不可用，请检查服务端设置": "剪贴板尚未就绪，请稍候；若持续不可用，请检查服务端设置",
+    "当前连接未启用文件剪贴板，请检查服务端设置或尝试文件中转站": "当前连接未启用文件剪贴板，请检查服务端设置或尝试文件中转站",
+    "正在处理粘贴，请完成后重试": "正在处理粘贴，请完成后重试",
+    "文字、图片及文件粘贴；需服务端支持": "文字、图片及文件粘贴；需服务端支持",
   },
   "zh-TW": {
     "IPv6 地址格式不正确": "IPv6 地址格式不正確",
@@ -691,7 +695,6 @@ const localizedMessages = <String, Map<String, String>>{
     "图片剪贴板暂不可用，请稍候或重新连接": "圖片剪貼簿暫時無法使用，請稍候或重新連線",
     "无法准备图片，图片未发送": "無法準備圖片，圖片未傳送",
     "共享剪贴板": "共享剪貼簿",
-    "文字与图片；仅在当前会话激活时同步": "文字與圖片；僅在目前工作階段啟用時同步",
     "先在远端打开目标文件夹；每次最多 32 个文件": "先在遠端開啟目標資料夾；每次最多 32 個檔案",
     "已发送文件粘贴请求，请保持连接并在远端确认复制完成": "已傳送檔案貼上請求，請保持連線並在遠端確認複製完成",
     "所选文件名重复，请分次粘贴": "所選檔案名稱重複，請分次貼上",
@@ -699,7 +702,6 @@ const localizedMessages = <String, Map<String, String>>{
     "文件在读取时发生变化，请重新选择": "檔案在讀取時發生變更，請重新選擇",
     "文件粘贴未完成，可使用文件中转站": "檔案貼上未完成，可使用檔案中轉站",
     "无法准备文件，请重新选择": "無法準備檔案，請重新選擇",
-    "文件剪贴板不可用，可检查连接偏好或使用文件中转站": "檔案剪貼簿不可用，可檢查連線偏好或使用檔案中轉站",
     "本机剪贴板没有文字；可使用“粘贴本机图片”或“选择文件粘贴”": "本機剪貼簿沒有文字；可使用「貼上本機圖片」或「選擇檔案貼上」",
     "正在准备文件…": "正在準備檔案…",
     "每个文件最大 256 MiB，每次合计最大 512 MiB": "每個檔案最大 256 MiB，每次合計最大 512 MiB",
@@ -715,6 +717,12 @@ const localizedMessages = <String, Map<String, String>>{
     "退出全屏（Ctrl + Alt + Enter）": "退出全屏（Ctrl + Alt + Enter）",
     "释放修饰键": "釋放修飾鍵",
     "释放控制": "釋放控制",
+    "连接成功后才能粘贴文件": "連線成功後才能貼上檔案",
+    "请在连接偏好中开启“共享剪贴板”，然后重新连接": "請在連線偏好中開啟「共用剪貼簿」，然後重新連線",
+    "剪贴板尚未就绪，请稍候；若持续不可用，请检查服务端设置": "剪貼簿尚未就緒，請稍候；若持續無法使用，請檢查伺服器設定",
+    "当前连接未启用文件剪贴板，请检查服务端设置或尝试文件中转站": "目前連線未啟用檔案剪貼簿，請檢查伺服器設定或嘗試檔案中轉站",
+    "正在处理粘贴，请完成后重试": "正在處理貼上，請完成後重試",
+    "文字、图片及文件粘贴；需服务端支持": "文字、圖片及檔案貼上；需伺服器支援",
   },
   "en": {
     "IPv6 地址格式不正确": "Invalid IPv6 address",
@@ -1107,7 +1115,6 @@ const localizedMessages = <String, Map<String, String>>{
     "图片剪贴板暂不可用，请稍候或重新连接": "Image clipboard unavailable. Wait or reconnect.",
     "无法准备图片，图片未发送": "Cannot prepare image. Nothing was sent.",
     "共享剪贴板": "Share clipboard",
-    "文字与图片；仅在当前会话激活时同步": "Text and images; sync only in the active session",
     "先在远端打开目标文件夹；每次最多 32 个文件":
         "Open the destination folder remotely first. Up to 32 files per paste.",
     "已发送文件粘贴请求，请保持连接并在远端确认复制完成":
@@ -1120,8 +1127,6 @@ const localizedMessages = <String, Map<String, String>>{
     "文件粘贴未完成，可使用文件中转站":
         "File paste did not complete. You can use File exchange.",
     "无法准备文件，请重新选择": "Unable to prepare files. Select them again.",
-    "文件剪贴板不可用，可检查连接偏好或使用文件中转站":
-        "File clipboard unavailable. Check connection preferences or use File exchange.",
     "本机剪贴板没有文字；可使用“粘贴本机图片”或“选择文件粘贴”":
         "No text in the local clipboard. Use Paste local image or Select files to paste.",
     "正在准备文件…": "Preparing files…",
@@ -1141,5 +1146,15 @@ const localizedMessages = <String, Map<String, String>>{
     "退出全屏（Ctrl + Alt + Enter）": "Exit full screen (Ctrl + Alt + Enter)",
     "释放修饰键": "Release modifiers",
     "释放控制": "Release control",
+    "连接成功后才能粘贴文件": "Connect to the remote computer before pasting files.",
+    "请在连接偏好中开启“共享剪贴板”，然后重新连接":
+        "Enable Share clipboard in connection preferences, then reconnect.",
+    "剪贴板尚未就绪，请稍候；若持续不可用，请检查服务端设置":
+        "The clipboard is not ready. Wait, or check server settings if it remains unavailable.",
+    "当前连接未启用文件剪贴板，请检查服务端设置或尝试文件中转站":
+        "File clipboard is not enabled for this connection. Check server settings or try File exchange.",
+    "正在处理粘贴，请完成后重试":
+        "A paste is in progress. Wait for it to finish, then try again.",
+    "文字、图片及文件粘贴；需服务端支持": "Text, images and file paste; requires server support",
   },
 };

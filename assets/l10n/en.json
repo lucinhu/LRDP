@@ -320,7 +320,6 @@
   "图片剪贴板暂不可用，请稍候或重新连接": "Image clipboard unavailable. Wait or reconnect.",
   "无法准备图片，图片未发送": "Cannot prepare image. Nothing was sent.",
   "共享剪贴板": "Share clipboard",
-  "文字与图片；仅在当前会话激活时同步": "Text and images; sync only in the active session",
   "先在远端打开目标文件夹；每次最多 32 个文件": "Open the destination folder remotely first. Up to 32 files per paste.",
   "已发送文件粘贴请求，请保持连接并在远端确认复制完成": "File paste requested. Stay connected and confirm the copy finishes remotely.",
   "所选文件名重复，请分次粘贴": "Selected filenames overlap. Paste these files separately.",
@@ -328,7 +327,6 @@
   "文件在读取时发生变化，请重新选择": "A file changed while being read. Select it again.",
   "文件粘贴未完成，可使用文件中转站": "File paste did not complete. You can use File exchange.",
   "无法准备文件，请重新选择": "Unable to prepare files. Select them again.",
-  "文件剪贴板不可用，可检查连接偏好或使用文件中转站": "File clipboard unavailable. Check connection preferences or use File exchange.",
   "本机剪贴板没有文字；可使用“粘贴本机图片”或“选择文件粘贴”": "No text in the local clipboard. Use Paste local image or Select files to paste.",
   "正在准备文件…": "Preparing files…",
   "每个文件最大 256 MiB，每次合计最大 512 MiB": "Each file may be up to 256 MiB; the total limit is 512 MiB.",
@@ -343,5 +341,11 @@
   "输入文字后发送": "Type text, then send",
   "退出全屏（Ctrl + Alt + Enter）": "Exit full screen (Ctrl + Alt + Enter)",
   "释放修饰键": "Release modifiers",
-  "释放控制": "Release control"
+  "释放控制": "Release control",
+  "连接成功后才能粘贴文件": "Connect to the remote computer before pasting files.",
+  "请在连接偏好中开启“共享剪贴板”，然后重新连接": "Enable Share clipboard in connection preferences, then reconnect.",
+  "剪贴板尚未就绪，请稍候；若持续不可用，请检查服务端设置": "The clipboard is not ready. Wait, or check server settings if it remains unavailable.",
+  "当前连接未启用文件剪贴板，请检查服务端设置或尝试文件中转站": "File clipboard is not enabled for this connection. Check server settings or try File exchange.",
+  "正在处理粘贴，请完成后重试": "A paste is in progress. Wait for it to finish, then try again.",
+  "文字、图片及文件粘贴；需服务端支持": "Text, images and file paste; requires server support"
 }

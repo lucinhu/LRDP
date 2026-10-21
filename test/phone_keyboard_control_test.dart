@@ -32,10 +32,26 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('键盘'));
         await tester.pumpAndSettle();
+        expect(find.byKey(const Key('remoteSpecialKeys')), findsNothing);
         tester.view.viewInsets = FakeViewPadding(
           bottom: size.height > 500 ? 280 : 170,
         );
         await tester.pumpAndSettle();
+        expect(find.byKey(const Key('remoteSpecialKeys')), findsNothing);
+        await tester.tap(find.byKey(const Key('remoteExtraKeys')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('remoteSpecialKeys')), findsOneWidget);
+        tester.view.viewInsets = FakeViewPadding(
+          bottom: size.height > 500 ? 320 : 190,
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('remoteSpecialKeys')), findsOneWidget);
+        // A tall IME may scroll the expanded panel to keep its editor visible.
+        await tester.ensureVisible(find.byKey(const Key('remoteExtraKeys')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('remoteExtraKeys')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('remoteSpecialKeys')), findsNothing);
         if (!keys) {
           await tester.tap(find.byKey(const Key('remoteInputMode')));
           await tester.pumpAndSettle();
