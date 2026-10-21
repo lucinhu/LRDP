@@ -126,12 +126,14 @@ void main() {
       );
       await tester.pump();
       expect(session.scans, [(0x1c, true), (0x1c, false)]);
+      await tester.tap(find.byKey(const Key('remoteModifierLock')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('remoteModifierShift')));
       await tester.pump();
       session.scans.clear();
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
       expect(session.scans, [(0x14b, true), (0x14b, false)]);
-      await tester.tap(find.byKey(const Key('releaseRemoteModifiers')));
+      await tester.tap(find.byKey(const Key('remoteModifierLock')));
       await tester.pump();
       expect(session.scans.last, (0x2a, false));
       expect(tester.testTextInput.isVisible, isTrue);
@@ -248,6 +250,85 @@ void main() {
         );
         expect(session.texts, isEmpty);
         expect(RemoteViewMemory().textDraft.text, isEmpty);
+        await tester.pumpWidget(const SizedBox());
+        session.dispose();
+      },
+    );
+  }
+
+  for (final platform in [TargetPlatform.android, TargetPlatform.linux]) {
+    testWidgets(
+      'modifier lock preference belongs to the open $platform session',
+      (tester) async {
+        tester.view.physicalSize = platform == TargetPlatform.android
+            ? const Size(390, 844)
+            : const Size(1200, 800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final session = RecordingSession();
+        var memory = RemoteViewMemory();
+        Widget view() => MaterialApp(
+          theme: ThemeData(platform: platform),
+          home: Scaffold(
+            body: RemoteView(
+              session: session,
+              memory: memory,
+              active: true,
+              reconnect: () {},
+              disconnect: () {},
+              toggleFullscreen: () {},
+            ),
+          ),
+        );
+        Future<void> open() async {
+          await tester.tap(find.text('键盘'));
+          await tester.pumpAndSettle();
+        }
+
+        final toggle = find.byKey(const Key('remoteModifierLock'));
+        await tester.pumpWidget(view());
+        await tester.pumpAndSettle();
+        await open();
+        expect(tester.widget<IconButton>(toggle).isSelected, isFalse);
+        await tester.tap(toggle);
+        await tester.pump();
+        expect(memory.modifierLock, isTrue);
+        await tester.tap(find.byKey(const Key('remoteModifierCtrl')));
+        await tester.pump();
+        await tester.tap(find.byTooltip('收起键盘'));
+        await tester.pumpAndSettle();
+        expect(
+          session.inputs.where(
+            (e) => e.$1 == 1 && e.$2 == 0x8000 && e.$3 == 0x1d,
+          ),
+          hasLength(1),
+        );
+        await open();
+        expect(tester.widget<IconButton>(toggle).isSelected, isTrue);
+        session.inputs.clear();
+        tester.testTextInput.updateEditingValue(
+          const TextEditingValue(
+            text: '\u200ba',
+            selection: TextSelection.collapsed(offset: 2),
+          ),
+        );
+        await tester.pump();
+        expect(
+          session.inputs.where((e) => e.$1 == 1 && e.$3 == 0x1d),
+          isEmpty,
+          reason: 'Restoring the preference must not restore a held key',
+        );
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(view());
+        await tester.pumpAndSettle();
+        await open();
+        expect(tester.widget<IconButton>(toggle).isSelected, isTrue);
+        await tester.pumpWidget(const SizedBox());
+        memory = RemoteViewMemory();
+        await tester.pumpWidget(view());
+        await tester.pumpAndSettle();
+        await open();
+        expect(tester.widget<IconButton>(toggle).isSelected, isFalse);
         await tester.pumpWidget(const SizedBox());
         session.dispose();
       },

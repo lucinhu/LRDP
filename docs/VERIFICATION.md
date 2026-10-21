@@ -2,7 +2,35 @@
 
 记录日期：2026-10-22。当前为开发预览。构建、真实协议和平台设备验收分别记录。
 
-## Linux AppImage 发布包（当前批次）
+## 修饰键锁定模式（当前批次）
+
+键盘栏右侧的解锁图标改为可随时切换的锁定模式。默认关闭，Ctrl/Shift/Alt/Win
+用于下一次按键后按反序释放；同一批 IME 提交中的后续字符不带这次修饰键。
+开启后持续保持，再点该键或关闭锁定模式会释放；关闭锁定会一次松开所有保持键。
+输入法编辑/完成动作、原始编辑键和扩展按键栏采用相同规则。
+当前连接仅在 UI 内存里记住模式选择，收起或重建面板不恢复已按下的键。
+新连接默认关闭；失焦、进入后台、切换文字模式和销毁仍释放修饰键。
+
+本次实际检查：
+
+- 格式检查与 `flutter analyze` 通过；Flutter 全量 **183 项通过、11 项外部协议测试按常规入口跳过**。
+  覆盖单次 Ctrl+Space、多个修饰键与一批 IME 字符、原始编辑键和工具栏组合键、
+  切换锁定时释放、手机和桌面面板的偏好恢复，以及两种模式下的失焦/后台/关闭释放。
+- 原生 CTest **5/5**；Python 检查 **9/9**。
+- `scripts/run_keyboard_test.py` 通过私有 TLS RDP/X11 核对真实按键，包含单次 Ctrl+Space、
+  Shift 批量输入、Ctrl+方向键、开启锁定后的连续输入、关闭锁定后按键不再带修饰键，
+  以及 F1～F12 与销毁时 Alt 释放。所有按下都有对应释放。
+- Android ARM64 `lib/main.dart` Release AOT 构建通过；单 ABI、16 KiB ELF/RELRO/ZIP 对齐、
+  主入口、非 debuggable、签名和 27 个原生导出检查通过。AOT 中核对到新模式文案，
+  原生库字节和预览签名证书与上一批相同；本次未运行 Android 设备验收。
+
+记录在 `build/ci-repair/modifier-lock-*.log` 与 `build/keyboard-runtime/VERDICT.json`。
+真实协议项使用 Flutter 测试输入连接，不等于 Android 系统输入法验收。
+
+Android 系统验收脚本已将持续保持场景改为显式开启锁定；本批次手机厂商输入法、
+ARM64 真机、TalkBack 与其他平台设备行为仍待验收。FreeRDP 子模块、原生实现和 ABI v5 未改动。
+
+## Linux AppImage 发布包（上一批次）
 
 新增 x86_64 AppImage。使用固定 Ubuntu 22.04 镜像、clang 工具链与 glibc 2.35 重新构建
 FFmpeg、原生库和 Flutter 主入口；未复用 Arch 构建的系统库。固定下载工具摘要，

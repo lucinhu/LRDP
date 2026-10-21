@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lrdp/ui/mobile_keyboard.dart';
 import 'mobile_keyboard_test.dart' show PasteSession;
 
 void main() {
-  Future<void> mount(WidgetTester tester, PasteSession session) async {
+  Future<void> mount(
+    WidgetTester tester,
+    PasteSession session, {
+    bool locked = false,
+    ValueChanged<bool>? onLockChanged,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -15,6 +21,8 @@ void main() {
               close: () {},
               shortcuts: false,
               simulateKeys: true,
+              initialModifierLock: locked,
+              onModifierLockChanged: onLockChanged,
             ),
           ),
         ),
@@ -38,10 +46,142 @@ void main() {
   }
 
   testWidgets(
-    'latched Ctrl combines with IME space and letters until explicitly released',
+    'modifiers apply once by default, including a batch of IME text',
     (tester) async {
       final session = PasteSession();
       await mount(tester, session);
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('remoteModifierLock')))
+            .isSelected,
+        isFalse,
+      );
+      await modifier(tester, 'Ctrl');
+      edit(tester, ' ');
+      edit(tester, ' a');
+      expect(session.scans, [
+        (0x1d, true),
+        (0x39, true),
+        (0x39, false),
+        (0x1d, false),
+        (0x1e, true),
+        (0x1e, false),
+      ]);
+      session.scans.clear();
+      await modifier(tester, 'Ctrl');
+      await modifier(tester, 'Shift');
+      edit(tester, 'Ab');
+      await tester.pump();
+      expect(session.scans, [
+        (0x1d, true),
+        (0x2a, true),
+        (0x1e, true),
+        (0x1e, false),
+        (0x2a, false),
+        (0x1d, false),
+        (0x30, true),
+        (0x30, false),
+      ]);
+      expect(tester.testTextInput.isVisible, isTrue);
+      await tester.pumpWidget(const SizedBox());
+      expect(session.scans.length, 8, reason: 'Do not release modifiers twice');
+      session.dispose();
+    },
+  );
+
+  testWidgets(
+    'lock switch promotes pending keys and releases them on disable',
+    (tester) async {
+      final session = PasteSession();
+      final changes = <bool>[];
+      await mount(tester, session, onLockChanged: changes.add);
+      await modifier(tester, 'Shift');
+      final toggle = find.byKey(const Key('remoteModifierLock'));
+      await tester.tap(toggle);
+      await tester.pump();
+      expect(changes, [true]);
+      expect(tester.widget<IconButton>(toggle).isSelected, isTrue);
+      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+      edit(tester, 'Ab');
+      expect(session.scans, [
+        (0x2a, true),
+        (0x1e, true),
+        (0x1e, false),
+        (0x30, true),
+        (0x30, false),
+      ]);
+      await tester.tap(toggle);
+      await tester.pump();
+      expect(changes, [true, false]);
+      expect(session.scans.last, (0x2a, false));
+      expect(tester.widget<IconButton>(toggle).isSelected, isFalse);
+      edit(tester, 'Abc');
+      expect(session.scans.sublist(6), [(0x2e, true), (0x2e, false)]);
+      expect(tester.testTextInput.isVisible, isTrue);
+      await tester.tap(toggle);
+      await tester.pump();
+      await tester.tap(toggle);
+      await tester.pump();
+      expect(
+        session.scans.length,
+        8,
+        reason: 'An idle switch sends no remote key',
+      );
+      expect(changes, [true, false, true, false]);
+      await tester.pumpWidget(const SizedBox());
+      session.dispose();
+    },
+  );
+
+  testWidgets(
+    'raw editing keys and toolbar shortcuts consume pending modifiers',
+    (tester) async {
+      final session = PasteSession();
+      await mount(tester, session);
+      await modifier(tester, 'Ctrl');
+      await modifier(tester, 'Shift');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      expect(session.scans, [
+        (0x1d, true),
+        (0x2a, true),
+        (0x14b, true),
+        (0x14b, false),
+        (0x2a, false),
+        (0x1d, false),
+        (0x14b, true),
+        (0x14b, false),
+      ]);
+      session.scans.clear();
+      await modifier(tester, 'Ctrl');
+      await tester.tap(find.byKey(const Key('remoteExtraKeys')));
+      await tester.pumpAndSettle();
+      final scroll = find.descendant(
+        of: find.byKey(const Key('remoteSpecialKeys')),
+        matching: find.byType(Scrollable),
+      );
+      final shortcut = find.byKey(const Key('remoteKeyCtrl+Z'));
+      await tester.scrollUntilVisible(shortcut, 250, scrollable: scroll);
+      await Scrollable.ensureVisible(tester.element(shortcut), alignment: .5);
+      await tester.pumpAndSettle();
+      await tester.tap(shortcut);
+      await tester.pump();
+      expect(session.scans, [
+        (0x1d, true),
+        (0x2c, true),
+        (0x2c, false),
+        (0x1d, false),
+      ]);
+      await tester.pumpWidget(const SizedBox());
+      session.dispose();
+    },
+  );
+
+  testWidgets(
+    'latched Ctrl combines with IME space and letters until explicitly released',
+    (tester) async {
+      final session = PasteSession();
+      await mount(tester, session, locked: true);
       await modifier(tester, 'Ctrl');
       edit(tester, ' ');
       edit(tester, ' a');
@@ -64,7 +204,7 @@ void main() {
     'latched Shift survives an uppercase IME chord and subsequent typing',
     (tester) async {
       final session = PasteSession();
-      await mount(tester, session);
+      await mount(tester, session, locked: true);
       await modifier(tester, 'Shift');
       edit(tester, 'A');
       edit(tester, 'Ab');
@@ -94,7 +234,7 @@ void main() {
     'editing and function keys preserve latched modifiers in the expanded row',
     (tester) async {
       final session = PasteSession();
-      await mount(tester, session);
+      await mount(tester, session, locked: true);
       await modifier(tester, 'Ctrl');
       await modifier(tester, 'Alt');
       await tester.tap(find.byKey(const Key('remoteExtraKeys')));
@@ -151,42 +291,46 @@ void main() {
       session.dispose();
     },
   );
-  for (final action in ['close', 'background', 'focus']) {
-    testWidgets('$action releases held keys exactly once', (tester) async {
-      final session = PasteSession();
-      await mount(tester, session);
-      await modifier(tester, 'Ctrl');
-      await modifier(tester, 'Shift');
-      if (action == 'close') {
+  for (final locked in [false, true]) {
+    for (final action in ['close', 'background', 'focus']) {
+      testWidgets('$action releases held keys exactly once (lock=$locked)', (
+        tester,
+      ) async {
+        final session = PasteSession();
+        await mount(tester, session, locked: locked);
+        await modifier(tester, 'Ctrl');
+        await modifier(tester, 'Shift');
+        if (action == 'close') {
+          await tester.pumpWidget(const SizedBox());
+        } else if (action == 'background') {
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.inactive,
+          );
+          await tester.pump();
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+          await tester.pump();
+        } else {
+          tester
+              .widget<TextField>(
+                find.byKey(const Key('remoteTextInput'), skipOffstage: false),
+              )
+              .focusNode!
+              .unfocus();
+          await tester.pumpAndSettle();
+        }
+        expect(session.scans, [
+          (0x1d, true),
+          (0x2a, true),
+          (0x2a, false),
+          (0x1d, false),
+        ]);
         await tester.pumpWidget(const SizedBox());
-      } else if (action == 'background') {
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.inactive,
-        );
-        await tester.pump();
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        );
-        await tester.pump();
-      } else {
-        tester
-            .widget<TextField>(
-              find.byKey(const Key('remoteTextInput'), skipOffstage: false),
-            )
-            .focusNode!
-            .unfocus();
-        await tester.pumpAndSettle();
-      }
-      expect(session.scans, [
-        (0x1d, true),
-        (0x2a, true),
-        (0x2a, false),
-        (0x1d, false),
-      ]);
-      await tester.pumpWidget(const SizedBox());
-      expect(session.scans.length, 4);
-      session.dispose();
-    });
+        expect(session.scans.length, 4);
+        session.dispose();
+      });
+    }
   }
   testWidgets(
     'switching to text input releases held modifiers before Unicode send',

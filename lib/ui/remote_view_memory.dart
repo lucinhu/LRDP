@@ -10,6 +10,7 @@ class RemoteViewMemory {
   bool? trackpad;
   bool pan = false;
   bool keyboardSimulation = true;
+  bool modifierLock = false;
   bool pasteText = false;
   TextEditingValue textDraft = TextEditingValue.empty;
   RemoteInputMode get mode => keyboardSimulation

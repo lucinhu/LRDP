@@ -19,6 +19,8 @@ class MobileKeyboard extends StatefulWidget {
     this.initialDraft = TextEditingValue.empty,
     this.onDraftChanged,
     this.onSessionShortcut,
+    this.initialModifierLock = false,
+    this.onModifierLockChanged,
   });
   final RdpSession session;
   final VoidCallback close;
@@ -31,6 +33,8 @@ class MobileKeyboard extends StatefulWidget {
   final TextEditingValue initialDraft;
   final ValueChanged<TextEditingValue>? onDraftChanged;
   final KeyEventResult Function(KeyEvent)? onSessionShortcut;
+  final bool initialModifierLock;
+  final ValueChanged<bool>? onModifierLockChanged;
   @override
   State<MobileKeyboard> createState() => _MobileKeyboardState();
 }
@@ -48,6 +52,7 @@ class _MobileKeyboardState extends State<MobileKeyboard>
   static const _anchor = '\u200b';
   late bool _simulateKeys;
   late bool _pasteText;
+  late bool _modifierLock;
   bool _updating = false;
   String _keyText = '';
   TextEditingValue _draft = TextEditingValue.empty;
@@ -60,6 +65,7 @@ class _MobileKeyboardState extends State<MobileKeyboard>
     _extraKeys = widget.shortcuts;
     _simulateKeys = widget.simulateKeys;
     _pasteText = widget.pasteText;
+    _modifierLock = widget.initialModifierLock;
     _draft = widget.initialDraft.copyWith(composing: TextRange.empty);
     if (_simulateKeys) {
       _resetKeys();
@@ -121,6 +127,16 @@ class _MobileKeyboardState extends State<MobileKeyboard>
     widget.session.chord(
       keys.where((code) => !_heldModifiers.contains(code)).toList(),
     );
+    if (!_modifierLock && _releaseModifiers()) setState(() {});
+  }
+
+  void _toggleModifierLock() {
+    setState(() {
+      _modifierLock = !_modifierLock;
+      if (!_modifierLock) _releaseModifiers();
+    });
+    widget.onModifierLockChanged?.call(_modifierLock);
+    _focus.requestFocus();
   }
 
   void _shortcut(List<int> keys) {
@@ -389,16 +405,18 @@ class _MobileKeyboardState extends State<MobileKeyboard>
                     ],
                   ),
                 ),
-                IconButton(
-                  key: const Key('releaseRemoteModifiers'),
-                  tooltip: context.tr('释放修饰键'),
-                  onPressed: _heldModifiers.isEmpty
-                      ? null
-                      : () {
-                          setState(() => _releaseModifiers());
-                          _focus.requestFocus();
-                        },
-                  icon: const Icon(Icons.lock_open_outlined),
+                Semantics(
+                  toggled: _modifierLock,
+                  child: IconButton.filledTonal(
+                    key: const Key('remoteModifierLock'),
+                    tooltip: _modifierLock
+                        ? context.tr('锁定模式已开启：点击关闭并释放修饰键')
+                        : context.tr('锁定模式已关闭：修饰键使用一次后释放，点击开启'),
+                    isSelected: _modifierLock,
+                    onPressed: _sending ? null : _toggleModifierLock,
+                    icon: const Icon(Icons.lock_open_outlined),
+                    selectedIcon: const Icon(Icons.lock_outline),
+                  ),
                 ),
                 IconButton(
                   key: const Key('remoteExtraKeys'),

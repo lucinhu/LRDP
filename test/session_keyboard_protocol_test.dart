@@ -64,16 +64,28 @@ void main() {
         );
       }
 
-      edit('a', composing: true);
-      edit('a'); // IME commit must not duplicate the already delivered letter.
-      edit('aA1!');
-      edit('aA1');
-      await tester.testTextInput.receiveAction(TextInputAction.done);
       Future<void> modifier(String label) async {
         await tester.tap(find.byKey(Key('remoteModifier$label')));
         await tester.pump();
       }
 
+      // The default mode consumes pending modifiers only for the next key.
+      await modifier('Ctrl');
+      edit(' ');
+      edit(' a');
+      await modifier('Shift');
+      edit('Ab');
+      await modifier('Ctrl');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.tap(find.byKey(const Key('remoteModifierLock')));
+      await tester.pump();
+
+      edit('a', composing: true);
+      edit('a'); // IME commit must not duplicate the already delivered letter.
+      edit('aA1!');
+      edit('aA1');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await modifier('Ctrl');
       edit(' ');
       await modifier('Ctrl');
@@ -112,6 +124,13 @@ void main() {
         await tester.sendKeyEvent(arrow);
       }
       expect(tester.testTextInput.isVisible, isTrue);
+      await modifier('Ctrl');
+      await modifier('Shift');
+      await tester.tap(find.byKey(const Key('remoteModifierLock')));
+      await tester.pump();
+      edit('c');
+      await tester.tap(find.byKey(const Key('remoteModifierLock')));
+      await tester.pump();
       // Widget disposal must release a still-latched Alt before disconnect.
       await modifier('Alt');
       await tester.runAsync(

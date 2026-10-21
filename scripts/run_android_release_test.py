@@ -558,6 +558,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-main-release-') as temporary,ExitS
         'typed':typed(),'events':desktop.keys[key_start:],'keyboard':'isolated test IME, no app permission'})
     capture('keyboard-simulation')
     if device.api >= 36:
+        tap('锁定模式已关闭：修饰键使用一次后释放，点击开启')
         desktop.pump();modifier_start=len(desktop.keys)
         tap('Ctrl');ime.send('commit',' ')
         pump_until(lambda:any(e['type']==2 and e['symbol']==32 and e['state']&4 for e in desktop.keys[modifier_start:]),

@@ -78,6 +78,8 @@ void main() {
         expect(focus.hasFocus, isTrue);
         expect(tester.testTextInput.isVisible, isTrue);
         if (keys) {
+          await tester.tap(find.byKey(const Key('remoteModifierLock')));
+          await tester.pump();
           await tester.tap(find.byKey(const Key('remoteModifierShift')));
           await tester.pump();
         }

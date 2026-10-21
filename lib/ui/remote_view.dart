@@ -545,6 +545,8 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
             session: session,
             shortcuts: false,
             simulateKeys: _memory.keyboardSimulation,
+            initialModifierLock: _memory.modifierLock,
+            onModifierLockChanged: (value) => _memory.modifierLock = value,
             pasteText: _memory.pasteText,
             onInputModeChanged: _inputModeChanged,
             initialDraft: _memory.textDraft,
@@ -785,6 +787,9 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                       child: MobileKeyboard(
                         session: session,
                         simulateKeys: _memory.keyboardSimulation,
+                        initialModifierLock: _memory.modifierLock,
+                        onModifierLockChanged: (value) =>
+                            _memory.modifierLock = value,
                         pasteText: _memory.pasteText,
                         onInputModeChanged: _inputModeChanged,
                         initialDraft: _memory.textDraft,
