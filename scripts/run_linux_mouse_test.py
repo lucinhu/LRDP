@@ -317,10 +317,11 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
         # The desktop composer is a modal route outside the surface's focus
         # subtree. It must explicitly route the same local escape shortcut.
         click(1440-340-8+68*2, 8+52+1+6+32)
-        wait_for(lambda: sum(ImageGrab.grab(xdisplay=client_env['DISPLAY']).convert('RGB').getpixel((720,500)))>400,
+        # Probe blank dialog padding, away from shortcut labels and their ink.
+        wait_for(lambda: sum(ImageGrab.grab(xdisplay=client_env['DISPLAY']).convert('RGB').getpixel((720,425)))>400,
             'Desktop keyboard dialog did not paint')
         os_input('key','ctrl+alt+Home')
-        wait_for(lambda: sum(ImageGrab.grab(xdisplay=client_env['DISPLAY']).convert('RGB').getpixel((720,500)))<200,
+        wait_for(lambda: sum(ImageGrab.grab(xdisplay=client_env['DISPLAY']).convert('RGB').getpixel((720,425)))<200,
             'Keyboard dialog swallowed the local escape shortcut')
         capture('keyboard-dialog-released')
         # First floating action is Back to computers. The panel has seven 68px
