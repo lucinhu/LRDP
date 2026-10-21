@@ -1383,6 +1383,10 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('键盘'));
         await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('remoteInputMode')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(MenuItemButton, '文字输入'));
+        await tester.pumpAndSettle();
         expect(
           tester
               .widget<EditableText>(find.byType(EditableText))
@@ -1459,7 +1463,7 @@ void main() {
           ),
         );
         await tester.pump();
-        expect(find.textContaining('键盘模拟请使用英文输入法'), findsOneWidget);
+        expect(find.textContaining('此内容无法模拟为按键'), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.ensureVisible(find.byTooltip('收起键盘'));
         await tester.pumpAndSettle();

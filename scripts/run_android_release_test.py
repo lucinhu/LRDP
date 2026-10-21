@@ -168,7 +168,7 @@ class UI:
                 matches=[fields[{'用户名':0,'域（选填）':1,'密码':2}[label]]]
             elif len(fields)==1 and (
                 (label=='文字输入' and any('发送文字' in self.label(n) for n in nodes)) or
-                (label in ('键盘模拟','键盘模拟 · 输入即发送') and any('使用英文键盘' in self.label(n) for n in nodes))):
+                (label in ('键盘模拟','键盘模拟 · 输入即发送') and any('显示键盘' in self.label(n) for n in nodes))):
                 matches=fields
             if matches:self.legacy_field_lookups+=1
         exact=[n for n in matches if any(n.get(key,'').strip() in labels for key in ('text','content-desc','hint'))]
@@ -486,6 +486,9 @@ with tempfile.TemporaryDirectory(prefix='lrdp-main-release-') as temporary,ExitS
     cases.append({'name':'two-finger scroll','events':wheel})
     ime=TestIme(sdk,adb,out,device=args.device);cleanup.callback(ime.close)
     tap('键盘')
+    until(lambda:ui.find('输入模式：键盘模拟') is not None,'New connections must default to keyboard simulation')
+    cases.append({'name':'Default input mode is keyboard simulation; local input box is hidden'})
+    tap('输入模式：键盘模拟');tap('文字输入')
     until(lambda:ui.find('文字输入',field=True) is not None,'Mobile text composer did not open')
     def check_ime_control(keys):
         mode='keys' if keys else 'text'
@@ -611,7 +614,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-main-release-') as temporary,ExitS
     if args.small_phone and args.font_scale==2.0:
         key_count=len(desktop.keys)
         ime.send('compose','中文');ime.send('finish')
-        error='键盘模拟请使用英文输入法'
+        error='此内容无法模拟为按键'
         def ime_rectangle():
             # UIAutomator's active application tree omits the separate IME
             # window. Read its visible WindowManager inset instead.
@@ -725,7 +728,10 @@ with tempfile.TemporaryDirectory(prefix='lrdp-main-release-') as temporary,ExitS
     stop(peer);peer,log=paste_peer('unicode-confirmed',mode='unicode')
     tap('在此设备记住这个指纹',scroll=True);tap('指纹匹配，继续')
     until(lambda:ui.find('键盘') is not None,'Clipboard session did not connect',60)
-    tap('键盘');until(lambda:ui.find('文字输入',field=True) is not None,'Chinese text composer did not open')
+    tap('键盘')
+    if ui.find('输入模式：键盘模拟') is not None:
+        tap('输入模式：键盘模拟');tap('文字输入')
+    until(lambda:ui.find('文字输入',field=True) is not None,'Explicit text composer did not open')
     direct_text='LRDP 中文输入验证 你好 😀'
     ime.send('compose','zhong')
     time.sleep(.3)
@@ -741,7 +747,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-main-release-') as temporary,ExitS
     log.flush();direct_report=next(json.loads(l) for l in (out/'unicode-confirmed.log').read_text().splitlines() if l.startswith('{"mode"'))
     assert direct_report=={'mode':'unicode','passed':True,'unicode_events':len(direct_text.encode('utf-16-le')),
                           'keys':0,'data':0,'publications':0},direct_report
-    cases.append({'name':'Default explicit Send commits Android Chinese composition as paired Unicode key events without clipboard or Ctrl+V',
+    cases.append({'name':'Explicit Send commits Android Chinese composition as paired Unicode key events without clipboard or Ctrl+V',
                   'text':direct_text,'wire':direct_report,'provisional_pinyin_sent':False})
     peer,log=paste_peer('paste-confirmed')
     launch();open_profile('Chinese IME test')

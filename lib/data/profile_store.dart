@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/connection_profile.dart';
+import '../models/remote_input_mode.dart';
 
 class ProfileStore extends ChangeNotifier {
   ProfileStore(this._preferences, {FlutterSecureStorage? vault})
@@ -54,6 +55,21 @@ class ProfileStore extends ChangeNotifier {
     notifyListeners();
   });
   bool get openFullscreen => _preferences.getBool('openFullscreen') ?? true;
+  RemoteInputMode get remoteInputMode {
+    final saved = _preferences.getString('remoteInputMode');
+    return RemoteInputMode.values.firstWhere(
+      (mode) => mode.name == saved,
+      orElse: () => RemoteInputMode.keyboard,
+    );
+  }
+
+  Future<void> setRemoteInputMode(RemoteInputMode mode) => _serialize(() async {
+    if (!await _preferences.setString('remoteInputMode', mode.name)) {
+      throw StateError('无法保存输入模式');
+    }
+    notifyListeners();
+  });
+
   Future<void> setOpenFullscreen(bool value) => _serialize(() async {
     if (!await _preferences.setBool('openFullscreen', value)) {
       throw StateError('无法保存全屏设置');

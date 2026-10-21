@@ -59,12 +59,13 @@ with tempfile.TemporaryDirectory(prefix='lrdp-keys-') as temporary, ExitStack() 
         stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
     desktop.pump()
     typed = [e['text'] for e in desktop.keys if e['type'] == 2 and e['text']]
-    assert typed == ['a', 'A', '1', '!', '\b', '\r', '\x00', 'A', 'B'], desktop.keys
+    assert typed == ['a', 'A', '1', '!', '\b', '\r', '\x00', 'A', 'B', '\b', '\r', '\b'], desktop.keys
     downs = [e for e in desktop.keys if e['type'] == 2]
     assert len([e for e in downs if e['symbol'] == 32 and e['state'] & 4]) == 1, desktop.keys
     assert [e['symbol'] for e in downs if 65470 <= e['symbol'] <= 65481] == list(range(65470, 65482)), desktop.keys
     assert all(e['state'] & 1 for e in downs if e['text'] in ('A', 'B')), desktop.keys
     assert len([e for e in downs if e['symbol'] == 65505]) == 3, desktop.keys
+    assert [e['symbol'] for e in downs if 65361 <= e['symbol'] <= 65364] == [65361, 65363, 65362, 65364], desktop.keys
     pressed = [e['symbol'] for e in desktop.keys if e['type'] == 2]
     released = [e['symbol'] for e in desktop.keys if e['type'] == 3]
     # Shift changes lookup of alphabetic releases, so compare physical pairing
@@ -72,6 +73,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-keys-') as temporary, ExitStack() 
     assert sorted(pressed) == sorted(released), desktop.keys
     report = {'passed': True, 'library_sha256': hashlib.sha256((root/'build/native/liblrdp.so').read_bytes()).hexdigest(),
         'typed': typed, 'events': desktop.keys, 'composing_commit_duplicated': False, 'latched_ctrl_space': True, 'sticky_shift_preserved': True, 'function_keys': list(range(1, 13)), 'held_alt_released_on_dispose': True,
+        'ime_empty_backspace': True, 'raw_enter_backspace': True, 'raw_arrow_keys': ['Left','Right','Up','Down'],
         'platform': 'Flutter headless + actual TLS RDP + isolated X11, not Android IME'}
     (out/'VERDICT.json').write_text(json.dumps(report, indent=2)+'\n')
     print('PASS: actual RDP Latin IME, latched Ctrl+Space and Shift, F1-F12 and modifier release')

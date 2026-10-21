@@ -299,7 +299,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         RdpSession(p, protocolDirectory: widget.protocolDirectory);
     session.setVisible(_foreground);
     _sessions[p.id] = session;
-    _viewMemories[p.id] = RemoteViewMemory();
+    _viewMemories[p.id] = RemoteViewMemory(inputMode: store.remoteInputMode);
     _requestedProfiles[p.id] = requested;
     _recoveries[p.id] = SessionRecovery(
       session,
@@ -742,6 +742,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                 key: ValueKey(session),
                                 session: session,
                                 memory: _viewMemories[session.profile.id],
+                                onInputModeChanged: (mode) => _saveSetting(
+                                  () => store.setRemoteInputMode(mode),
+                                ),
                                 recovery: _recoveries[session.profile.id],
                                 active: true,
                                 leave: _leaveSession,
@@ -1934,7 +1937,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               SizedBox(height: 16),
               Text(
                 context.tr(
-                  "远程控制：点按左键，长按右键；可切换触控板模式或平移缩放画面。\n桌面键盘：Ctrl + Alt + Home 将键盘控制返回本地。",
+                  "远程控制：点按左键，长按右键；可切换触控板模式或平移缩放画面。\n桌面：Ctrl + Alt + Home 释放控制；Ctrl + Alt + Enter 切换全屏。",
                 ),
                 style: TextStyle(fontSize: 12, height: 1.8),
               ),

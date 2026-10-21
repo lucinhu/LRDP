@@ -1,12 +1,27 @@
-import 'dart:ui';
+import 'package:flutter/services.dart';
+import '../models/remote_input_mode.dart';
 
 /// UI data for one open connection; discarded when that connection is removed.
 /// No controllers, pending gestures, credentials or persistent storage.
 class RemoteViewMemory {
+  RemoteViewMemory({RemoteInputMode inputMode = RemoteInputMode.keyboard}) {
+    mode = inputMode;
+  }
   bool? trackpad;
   bool pan = false;
-  bool keyboardSimulation = false;
+  bool keyboardSimulation = true;
   bool pasteText = false;
+  TextEditingValue textDraft = TextEditingValue.empty;
+  RemoteInputMode get mode => keyboardSimulation
+      ? RemoteInputMode.keyboard
+      : pasteText
+      ? RemoteInputMode.paste
+      : RemoteInputMode.text;
+  set mode(RemoteInputMode value) {
+    keyboardSimulation = value == RemoteInputMode.keyboard;
+    pasteText = value == RemoteInputMode.paste;
+  }
+
   bool controlsCollapsed = false;
   Offset controlsPosition = const Offset(1, 0);
   final surface = RemoteSurfaceMemory();

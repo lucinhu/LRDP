@@ -17,6 +17,13 @@ flutter test
 格式检查失败时，运行 `dart format lib test integration_test test_driver`，审查并提交格式调整，
 然后重跑检查。CI 保留格式校验，不会自动修改仓库中的文件。
 
+输入体验回归可单独运行 `flutter test test/input_experience_test.dart`，覆盖模式、草稿、软键盘
+编辑事件与全屏释放布局。实际按键传输使用 `python3 scripts/run_keyboard_test.py`，
+输入释放与堵塞取消使用 `python3 scripts/run_input_stop_test.py`；这些脚本只使用隔离回环服务。
+桌面系统级验证需先构建主入口 Release，再运行 `scripts/run_linux_mouse_test.py`，
+可用 `--window-manager /path/to/openbox` 在私有 X11 内验证真实全屏与快捷键恢复。
+上述 Flutter/协议检查不替代手机厂商输入法、Wayland 或其他桌面系统验收。
+
 系统配色依赖 `dynamic_color` 固定为 1.8.1，版本和下载摘要见 `pubspec.lock`；
 源码由 Pub 缓存管理，不复制到仓库，也不修改 Pub 缓存。1.9.0 的 Android Kotlin DSL
 在本项目 AGP 8.12.1 / Kotlin 2.2.20 下编译失败，因此没有采用。升级前应重新验证

@@ -11,6 +11,7 @@ import '../rdp/rdp_session.dart';
 import '../rdp/session_recovery.dart';
 import '../rdp/session_issue.dart';
 import '../rdp/frame_rate.dart';
+import '../models/remote_input_mode.dart';
 import 'transfer_dialog.dart';
 import 'adaptive.dart';
 import 'remote_surface.dart';
@@ -33,6 +34,7 @@ class RemoteView extends StatefulWidget {
     this.memory,
     this.frameRateLimit = 0,
     this.leave,
+    this.onInputModeChanged,
   });
   final RdpSession session;
   final RemoteViewMemory? memory;
@@ -42,12 +44,14 @@ class RemoteView extends StatefulWidget {
   final bool active, fullscreen;
   final int frameRateLimit;
   final VoidCallback? leave;
+  final ValueChanged<RemoteInputMode>? onInputModeChanged;
   @override
   State<RemoteView> createState() => _RemoteViewState();
 }
 
 class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
   final _focus = FocusNode();
+  final _localFocus = FocusNode();
   final _transform = TransformationController();
   late final _memory = widget.memory ?? RemoteViewMemory();
   final _pressed = <int>{};
@@ -59,6 +63,8 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
   bool get _trackpad => _memory.trackpad ?? false;
   set _trackpad(bool value) => _memory.trackpad = value;
   bool _keyboard = false;
+  bool _localControl = false;
+  final _localShortcutKeys = <PhysicalKeyboardKey>{};
   bool _controlsBeforeKeyboard = false;
   final _displayToken = DisplayRefresh.allocate();
   (bool, int)? _displayRequest;
@@ -85,6 +91,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
     }
     _updateFrameRate();
     if (!widget.active) {
+      _localShortcutKeys.clear();
       _releaseKeys();
     }
   }
@@ -153,7 +160,10 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) _releaseKeys();
+    if (state != AppLifecycleState.resumed) {
+      _localShortcutKeys.clear();
+      _releaseKeys();
+    }
     _updateDisplayRequest();
   }
 
@@ -444,21 +454,60 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
     _releaseKeys();
     _focus.removeListener(_focusChanged);
     _focus.dispose();
+    _localFocus.dispose();
     _transform.dispose();
     super.dispose();
   }
 
-  KeyEventResult _key(FocusNode node, KeyEvent event) {
-    if (!widget.active || session.state != SessionState.connected) {
-      return KeyEventResult.ignored;
-    }
-    // Ctrl+Alt+Home always returns keyboard control to the local toolbar.
-    if (event.logicalKey == LogicalKeyboardKey.home &&
-        HardwareKeyboard.instance.isControlPressed &&
-        HardwareKeyboard.instance.isAltPressed) {
-      _focus.unfocus();
-      setState(() => _memory.controlsCollapsed = false);
+  void _returnLocal() {
+    _releaseKeys();
+    _localFocus.requestFocus();
+    setState(() {
+      _localControl = true;
+      _memory.controlsCollapsed = false;
+    });
+  }
+
+  void _resumeRemote() {
+    setState(() => _localControl = false);
+    _focus.requestFocus();
+  }
+
+  KeyEventResult _shortcut(FocusNode node, KeyEvent event) {
+    if (!widget.active) return KeyEventResult.ignored;
+    if (_localShortcutKeys.contains(event.physicalKey)) {
+      if (event is KeyUpEvent) _localShortcutKeys.remove(event.physicalKey);
       return KeyEventResult.handled;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isControlPressed &&
+        keyboard.isAltPressed &&
+        (event.logicalKey == LogicalKeyboardKey.home ||
+            event.logicalKey == LogicalKeyboardKey.enter)) {
+      if (event is KeyDownEvent) {
+        _localShortcutKeys.add(event.physicalKey);
+        _returnLocal();
+        if (event.logicalKey == LogicalKeyboardKey.enter) {
+          widget.toggleFullscreen();
+        }
+      }
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _inputModeChanged(RemoteInputMode mode) {
+    _memory.mode = mode;
+    widget.onInputModeChanged?.call(mode);
+  }
+
+  KeyEventResult _key(FocusNode node, KeyEvent event) {
+    final shortcut = _shortcut(node, event);
+    if (shortcut == KeyEventResult.handled) return shortcut;
+    if (!widget.active ||
+        _localControl ||
+        session.state != SessionState.connected) {
+      return KeyEventResult.ignored;
     }
     final scan = rdpScancode(event.physicalKey);
     if (scan == null) return KeyEventResult.ignored;
@@ -486,8 +535,9 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
             shortcuts: false,
             simulateKeys: _memory.keyboardSimulation,
             pasteText: _memory.pasteText,
-            onPasteTextChanged: (paste) => _memory.pasteText = paste,
-            onModeChanged: (keys) => _memory.keyboardSimulation = keys,
+            onInputModeChanged: _inputModeChanged,
+            initialDraft: _memory.textDraft,
+            onDraftChanged: (draft) => _memory.textDraft = draft,
             close: () => Navigator.pop(context),
           ),
         ),
@@ -497,157 +547,247 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
   }
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([session, widget.recovery]),
-    builder: (context, _) {
-      final connected = session.state == SessionState.connected;
-      final phone = phoneLayout(context);
-      _memory.trackpad ??= phone;
-      return LayoutBuilder(
-        builder: (context, bounds) => Column(
-          children: [
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, viewport) {
-                  if (widget.active &&
-                      !_keyboard &&
-                      MediaQuery.viewInsetsOf(context).bottom == 0) {
-                    session.setViewportSize(
-                      viewport.maxWidth.round(),
-                      viewport.maxHeight.round(),
-                    );
-                  }
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Material(
-                        color: const Color(0xFF0C1512),
-                        child: connected && session.hasVideo
-                            ? TextFieldTapRegion(
-                                enabled: phone && _keyboard,
-                                child: Focus(
-                                  focusNode: _focus,
-                                  onKeyEvent: _key,
-                                  child: RemoteSurface(
-                                    session: session,
-                                    focus: _focus,
-                                    transform: _transform,
-                                    trackpad: _trackpad,
-                                    pan: _pan,
-                                    active: widget.active,
-                                    preserveKeyboardFocus: phone && _keyboard,
-                                    memory: _memory.surface,
+  Widget build(BuildContext context) => Focus(
+    focusNode: _localFocus,
+    onKeyEvent: _shortcut,
+    child: ListenableBuilder(
+      listenable: Listenable.merge([session, widget.recovery]),
+      builder: (context, _) {
+        final connected = session.state == SessionState.connected;
+        final phone = phoneLayout(context);
+        final desktop = {
+          TargetPlatform.linux,
+          TargetPlatform.windows,
+          TargetPlatform.macOS,
+        }.contains(Theme.of(context).platform);
+        _memory.trackpad ??= phone;
+        return LayoutBuilder(
+          builder: (context, bounds) => Column(
+            children: [
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, viewport) {
+                    if (widget.active &&
+                        !_keyboard &&
+                        MediaQuery.viewInsetsOf(context).bottom == 0) {
+                      session.setViewportSize(
+                        viewport.maxWidth.round(),
+                        viewport.maxHeight.round(),
+                      );
+                    }
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Listener(
+                          onPointerDown: _localControl
+                              ? (_) => _resumeRemote()
+                              : null,
+                          child: Material(
+                            color: const Color(0xFF0C1512),
+                            child: connected && session.hasVideo
+                                ? TextFieldTapRegion(
+                                    enabled: phone && _keyboard,
+                                    child: Focus(
+                                      focusNode: _focus,
+                                      skipTraversal: _localControl,
+                                      onKeyEvent: _key,
+                                      child: RemoteSurface(
+                                        session: session,
+                                        focus: _focus,
+                                        transform: _transform,
+                                        trackpad: _trackpad,
+                                        pan: _pan,
+                                        active: widget.active,
+                                        inputEnabled: !_localControl,
+                                        preserveKeyboardFocus:
+                                            phone && _keyboard,
+                                        memory: _memory.surface,
+                                      ),
+                                    ),
+                                  )
+                                : _status(context),
+                          ),
+                        ),
+                        TextFieldTapRegion(
+                          enabled: phone && _keyboard,
+                          child: FloatingControls(
+                            memory: _memory,
+                            title: session.profile.name,
+                            actions: [
+                              _action(
+                                Icons.arrow_back,
+                                context.tr("电脑列表"),
+                                widget.leave,
+                                tooltip: context.tr("返回电脑列表（保持连接）"),
+                              ),
+                              _action(
+                                Icons.keyboard_outlined,
+                                context.tr("键盘"),
+                                connected
+                                    ? () {
+                                        if (phone) {
+                                          setState(() {
+                                            _controlsBeforeKeyboard =
+                                                _memory.controlsCollapsed;
+                                            _keyboard = true;
+                                            _memory.controlsCollapsed = true;
+                                          });
+                                        } else {
+                                          _sendText();
+                                        }
+                                      }
+                                    : null,
+                              ),
+                              _action(
+                                _trackpad
+                                    ? Icons.mouse_outlined
+                                    : Icons.touch_app_outlined,
+                                _trackpad
+                                    ? context.tr("触控板")
+                                    : context.tr("触屏"),
+                                () => setState(() {
+                                  _trackpad = !_trackpad;
+                                  _pan = false;
+                                }),
+                              ),
+                              _action(
+                                _pan
+                                    ? Icons.pan_tool_outlined
+                                    : Icons.pinch_outlined,
+                                _pan ? context.tr("控制电脑") : context.tr("移动画面"),
+                                () => setState(() => _pan = !_pan),
+                              ),
+                              _action(Icons.fit_screen, context.tr("适应屏幕"), () {
+                                _transform.value = Matrix4.identity();
+                                setState(() => _pan = false);
+                              }),
+                              _action(
+                                widget.fullscreen
+                                    ? Icons.fullscreen_exit
+                                    : Icons.fullscreen,
+                                widget.fullscreen
+                                    ? context.tr("退出全屏")
+                                    : context.tr("全屏"),
+                                widget.toggleFullscreen,
+                              ),
+                              _action(
+                                Icons.more_horiz,
+                                context.tr("更多"),
+                                _phoneMore,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (desktop && widget.fullscreen)
+                          Positioned(
+                            top: MediaQuery.paddingOf(context).top + 8,
+                            left: MediaQuery.paddingOf(context).left + 8,
+                            child: Material(
+                              key: const Key('fullscreenControlHint'),
+                              elevation: 3,
+                              borderRadius: BorderRadius.circular(12),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHigh,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: math.min(
+                                    480,
+                                    viewport.maxWidth - 16,
                                   ),
                                 ),
-                              )
-                            : _status(context),
-                      ),
-                      TextFieldTapRegion(
-                        enabled: phone && _keyboard,
-                        child: FloatingControls(
-                          memory: _memory,
-                          title: session.profile.name,
-                          actions: [
-                            _action(
-                              Icons.arrow_back,
-                              context.tr("电脑列表"),
-                              widget.leave,
-                              tooltip: context.tr("返回电脑列表（保持连接）"),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Tooltip(
+                                        message: _localControl
+                                            ? context.tr('点击远程画面继续控制')
+                                            : 'Ctrl + Alt + Home',
+                                        child: TextButton.icon(
+                                          key: const Key(
+                                            'releaseSessionControl',
+                                          ),
+                                          onPressed: _localControl
+                                              ? _resumeRemote
+                                              : _returnLocal,
+                                          icon: Icon(
+                                            _localControl
+                                                ? Icons.mouse_outlined
+                                                : Icons.lock_open_outlined,
+                                          ),
+                                          label: Text(
+                                            context.tr(
+                                              _localControl ? '继续控制' : '释放控制',
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    if (!_localControl)
+                                      const Flexible(
+                                        child: Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                          ),
+                                          child: Text('Ctrl + Alt + Home'),
+                                        ),
+                                      ),
+                                    IconButton(
+                                      key: const Key('exitSessionFullscreen'),
+                                      tooltip: context.tr(
+                                        '退出全屏（Ctrl + Alt + Enter）',
+                                      ),
+                                      onPressed: () {
+                                        _returnLocal();
+                                        widget.toggleFullscreen();
+                                      },
+                                      icon: const Icon(Icons.fullscreen_exit),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            _action(
-                              Icons.keyboard_outlined,
-                              context.tr("键盘"),
-                              connected
-                                  ? () {
-                                      if (phone) {
-                                        setState(() {
-                                          _controlsBeforeKeyboard =
-                                              _memory.controlsCollapsed;
-                                          _keyboard = true;
-                                          _memory.controlsCollapsed = true;
-                                        });
-                                      } else {
-                                        _sendText();
-                                      }
-                                    }
-                                  : null,
-                            ),
-                            _action(
-                              _trackpad
-                                  ? Icons.mouse_outlined
-                                  : Icons.touch_app_outlined,
-                              _trackpad ? context.tr("触控板") : context.tr("触屏"),
-                              () => setState(() {
-                                _trackpad = !_trackpad;
-                                _pan = false;
-                              }),
-                            ),
-                            _action(
-                              _pan
-                                  ? Icons.pan_tool_outlined
-                                  : Icons.pinch_outlined,
-                              _pan ? context.tr("控制电脑") : context.tr("移动画面"),
-                              () => setState(() => _pan = !_pan),
-                            ),
-                            _action(Icons.fit_screen, context.tr("适应屏幕"), () {
-                              _transform.value = Matrix4.identity();
-                              setState(() => _pan = false);
-                            }),
-                            _action(
-                              widget.fullscreen
-                                  ? Icons.fullscreen_exit
-                                  : Icons.fullscreen,
-                              widget.fullscreen
-                                  ? context.tr("退出全屏")
-                                  : context.tr("全屏"),
-                              widget.toggleFullscreen,
-                            ),
-                            _action(
-                              Icons.more_horiz,
-                              context.tr("更多"),
-                              _phoneMore,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-            if (phone && _keyboard && connected)
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight:
-                      bounds.maxHeight - math.min(72, bounds.maxHeight * .35),
+                          ),
+                      ],
+                    );
+                  },
                 ),
-                child: SingleChildScrollView(
-                  primary: false,
-                  child: SafeArea(
-                    top: false,
-                    child: MobileKeyboard(
-                      session: session,
-                      simulateKeys: _memory.keyboardSimulation,
-                      pasteText: _memory.pasteText,
-                      onPasteTextChanged: (paste) => _memory.pasteText = paste,
-                      onModeChanged: (keys) =>
-                          _memory.keyboardSimulation = keys,
-                      shortcuts: bounds.maxHeight > 320,
-                      close: () {
-                        FocusScope.of(context).unfocus();
-                        setState(() {
-                          _keyboard = false;
-                          _memory.controlsCollapsed = _controlsBeforeKeyboard;
-                        });
-                      },
+              ),
+              if (phone && _keyboard && connected)
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight:
+                        bounds.maxHeight - math.min(72, bounds.maxHeight * .35),
+                  ),
+                  child: SingleChildScrollView(
+                    primary: false,
+                    child: SafeArea(
+                      top: false,
+                      child: MobileKeyboard(
+                        session: session,
+                        simulateKeys: _memory.keyboardSimulation,
+                        pasteText: _memory.pasteText,
+                        onInputModeChanged: _inputModeChanged,
+                        initialDraft: _memory.textDraft,
+                        onDraftChanged: (draft) => _memory.textDraft = draft,
+                        shortcuts: bounds.maxHeight > 320,
+                        close: () {
+                          FocusScope.of(context).unfocus();
+                          setState(() {
+                            _keyboard = false;
+                            _memory.controlsCollapsed = _controlsBeforeKeyboard;
+                          });
+                        },
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
-      );
-    },
+            ],
+          ),
+        );
+      },
+    ),
   );
 
   Widget _action(
@@ -812,7 +952,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
               padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
               child: Text(
                 context.tr(
-                  "触控板：单指移动光标，轻点左键。\n触屏：轻点画面上的位置。\n双指轻点或长按后松开：鼠标右键。\n双击后按住并移动：拖拽，松手结束。\n双指上下或左右滑动：滚动页面。\n双指捏合：缩放画面。\n放大后光标靠近边缘：自动移动视野。\n移动画面按钮：切换为单指移动画面。\n键盘：本机输入法选词后点发送；上方有常用快捷键。\n返回列表会保持当前连接、缩放位置和操作模式。",
+                  "触控板：单指移动光标，轻点左键。\n触屏：轻点画面上的位置。\n双指轻点或长按后松开：鼠标右键。\n双击后按住并移动：拖拽，松手结束。\n双指上下或左右滑动：滚动页面。\n双指捏合：缩放画面。\n放大后光标靠近边缘：自动移动视野。\n移动画面按钮：切换为单指移动画面。\n键盘：默认模拟按键；可切换文字或粘贴输入，上方有特殊按键。\n返回列表会保持当前连接、缩放位置和操作模式。",
                 ),
                 style: TextStyle(fontSize: 15, height: 2),
               ),

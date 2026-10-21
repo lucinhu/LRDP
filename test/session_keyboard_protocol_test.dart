@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lrdp/models/connection_profile.dart';
 import 'package:lrdp/rdp/rdp_session.dart';
@@ -92,6 +93,25 @@ void main() {
         await tester.tap(key);
         await tester.pump();
       }
+      // Exercise both actual IME editing updates and Android-style key events.
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: '',
+          selection: TextSelection.collapsed(offset: 0),
+        ),
+      );
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      for (final arrow in [
+        LogicalKeyboardKey.arrowLeft,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowUp,
+        LogicalKeyboardKey.arrowDown,
+      ]) {
+        await tester.sendKeyEvent(arrow);
+      }
+      expect(tester.testTextInput.isVisible, isTrue);
       // Widget disposal must release a still-latched Alt before disconnect.
       await modifier('Alt');
       await tester.runAsync(

@@ -36,6 +36,12 @@ void main() {
           bottom: size.height > 500 ? 280 : 170,
         );
         await tester.pumpAndSettle();
+        if (!keys) {
+          await tester.tap(find.byKey(const Key('remoteInputMode')));
+          await tester.pumpAndSettle();
+          await tester.tap(find.widgetWithText(MenuItemButton, '文字输入'));
+          await tester.pumpAndSettle();
+        }
         if (keys) {
           await tester.tap(find.byKey(const Key('remoteInputMode')));
           await tester.pumpAndSettle();

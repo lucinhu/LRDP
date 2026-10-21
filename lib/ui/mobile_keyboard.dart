@@ -1,5 +1,7 @@
 import '../l10n/app_strings.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../models/remote_input_mode.dart';
 import '../rdp/key_mapping.dart';
 import '../rdp/rdp_session.dart';
 
@@ -13,6 +15,9 @@ class MobileKeyboard extends StatefulWidget {
     this.onModeChanged,
     this.pasteText = false,
     this.onPasteTextChanged,
+    this.onInputModeChanged,
+    this.initialDraft = TextEditingValue.empty,
+    this.onDraftChanged,
   });
   final RdpSession session;
   final VoidCallback close;
@@ -21,6 +26,9 @@ class MobileKeyboard extends StatefulWidget {
   final ValueChanged<bool>? onModeChanged;
   final bool pasteText;
   final ValueChanged<bool>? onPasteTextChanged;
+  final ValueChanged<RemoteInputMode>? onInputModeChanged;
+  final TextEditingValue initialDraft;
+  final ValueChanged<TextEditingValue>? onDraftChanged;
   @override
   State<MobileKeyboard> createState() => _MobileKeyboardState();
 }
@@ -50,7 +58,12 @@ class _MobileKeyboardState extends State<MobileKeyboard>
     _extraKeys = widget.shortcuts;
     _simulateKeys = widget.simulateKeys;
     _pasteText = widget.pasteText;
-    if (_simulateKeys) _resetKeys();
+    _draft = widget.initialDraft.copyWith(composing: TextRange.empty);
+    if (_simulateKeys) {
+      _resetKeys();
+    } else {
+      _text.value = _draft;
+    }
     _text.addListener(_keysChanged);
     // Autofocus only fills an empty focus scope. The remote surface usually
     // already owns focus after a touch, so opening the composer must take it.
@@ -156,7 +169,9 @@ class _MobileKeyboardState extends State<MobileKeyboard>
   }
 
   void _mode(bool keys, {bool paste = false}) {
-    if (_sending || (keys == _simulateKeys && (keys || paste == _pasteText))) {
+    if (_sending) return;
+    if (keys == _simulateKeys && (keys || paste == _pasteText)) {
+      _showKeyboard();
       return;
     }
     _releaseModifiers();
@@ -174,11 +189,23 @@ class _MobileKeyboardState extends State<MobileKeyboard>
     });
     widget.onModeChanged?.call(keys);
     widget.onPasteTextChanged?.call(paste);
+    widget.onInputModeChanged?.call(
+      keys
+          ? RemoteInputMode.keyboard
+          : paste
+          ? RemoteInputMode.paste
+          : RemoteInputMode.text,
+    );
     _focus.requestFocus();
   }
 
   void _keysChanged() {
-    if (!_simulateKeys || _updating) return;
+    if (_updating) return;
+    if (!_simulateKeys) {
+      _draft = _text.value;
+      widget.onDraftChanged?.call(_draft);
+      return;
+    }
     final value = _text.value;
     final next = value.text.startsWith(_anchor)
         ? value.text.substring(1)
@@ -204,7 +231,7 @@ class _MobileKeyboardState extends State<MobileKeyboard>
         chords.length + _keyText.length - prefix > 64) {
       setState(() {
         _error = chords.any((chord) => chord == null)
-            ? '键盘模拟请使用英文输入法；本地中文请切换“文字输入”。'
+            ? '此内容无法模拟为按键，请切换“文字输入”或“粘贴输入”。'
             : '请逐字输入；长段文字请切换“文字输入”。';
       });
       _resetKeys(_keyText);
@@ -262,6 +289,44 @@ class _MobileKeyboardState extends State<MobileKeyboard>
     });
   }
 
+  // Android IMEs can deliver editing keys as hardware events instead of text
+  // edits. Handle them before EditableText moves its invisible local caret.
+  KeyEventResult _editingKey(FocusNode node, KeyEvent event) {
+    if (!_simulateKeys ||
+        !_focus.hasFocus ||
+        widget.session.state != SessionState.connected) {
+      return KeyEventResult.ignored;
+    }
+    final code = <LogicalKeyboardKey, int>{
+      LogicalKeyboardKey.enter: 0x1c,
+      LogicalKeyboardKey.numpadEnter: 0x11c,
+      LogicalKeyboardKey.backspace: 0x0e,
+      LogicalKeyboardKey.delete: 0x153,
+      LogicalKeyboardKey.arrowLeft: 0x14b,
+      LogicalKeyboardKey.arrowRight: 0x14d,
+      LogicalKeyboardKey.arrowUp: 0x148,
+      LogicalKeyboardKey.arrowDown: 0x150,
+      LogicalKeyboardKey.home: 0x147,
+      LogicalKeyboardKey.end: 0x14f,
+      LogicalKeyboardKey.pageUp: 0x149,
+      LogicalKeyboardKey.pageDown: 0x151,
+      LogicalKeyboardKey.tab: 0x0f,
+      LogicalKeyboardKey.escape: 0x01,
+    }[event.logicalKey];
+    if (code == null) return KeyEventResult.ignored;
+    final modifiers = HardwareKeyboard.instance;
+    if (event is! KeyUpEvent) {
+      _shortcut([
+        if (modifiers.isControlPressed) 0x1d,
+        if (modifiers.isShiftPressed) 0x2a,
+        if (modifiers.isAltPressed) 0x38,
+        if (modifiers.isMetaPressed) 0x15b,
+        code,
+      ]);
+    }
+    return KeyEventResult.handled;
+  }
+
   Widget _modifier(String label, int code) {
     final held = _heldModifiers.contains(code);
     return Semantics(
@@ -316,6 +381,17 @@ class _MobileKeyboardState extends State<MobileKeyboard>
                   ),
                 ),
                 IconButton(
+                  key: const Key('releaseRemoteModifiers'),
+                  tooltip: context.tr('释放修饰键'),
+                  onPressed: _heldModifiers.isEmpty
+                      ? null
+                      : () {
+                          setState(() => _releaseModifiers());
+                          _focus.requestFocus();
+                        },
+                  icon: const Icon(Icons.lock_open_outlined),
+                ),
+                IconButton(
                   key: const Key('remoteExtraKeys'),
                   tooltip: _extraKeys
                       ? context.tr("收起特殊按键")
@@ -340,13 +416,13 @@ class _MobileKeyboardState extends State<MobileKeyboard>
                     'Ctrl+C': [0x1d, 0x2e],
                     'Ctrl+V': [0x1d, 0x2f],
                     'Ctrl+A': [0x1d, 0x1e],
-                    for (var i = 1; i <= 10; i++) 'F$i': [0x3a + i],
-                    'F11': [0x57],
-                    'F12': [0x58],
                     '←': [0x14b],
                     '↑': [0x148],
                     '↓': [0x150],
                     '→': [0x14d],
+                    for (var i = 1; i <= 10; i++) 'F$i': [0x3a + i],
+                    'F11': [0x57],
+                    'F12': [0x58],
                     'Home': [0x147],
                     'End': [0x14f],
                     'PgUp': [0x149],
@@ -439,36 +515,42 @@ class _MobileKeyboardState extends State<MobileKeyboard>
                         offstage: _simulateKeys,
                         // Keep the real InputConnection alive without painting
                         // a local input box in keyboard simulation mode.
-                        child: TextField(
-                          key: const Key('remoteTextInput'),
-                          controller: _text,
-                          focusNode: _focus,
-                          autofocus: true,
-                          showCursor: !_simulateKeys,
-                          minLines: 1,
-                          maxLines: _simulateKeys ? 1 : 2,
-                          keyboardType: _simulateKeys
-                              ? TextInputType.visiblePassword
-                              : TextInputType.multiline,
-                          textInputAction: _simulateKeys
-                              ? TextInputAction.done
-                              : TextInputAction.newline,
-                          onSubmitted: _simulateKeys
-                              ? (_) => _keyAction(0x1c)
-                              : null,
-                          autocorrect: !_simulateKeys,
-                          enableSuggestions: !_simulateKeys,
-                          enableInteractiveSelection: !_simulateKeys,
-                          smartDashesType: SmartDashesType.disabled,
-                          smartQuotesType: SmartQuotesType.disabled,
-                          decoration: InputDecoration(
-                            labelText: _simulateKeys
-                                ? context.tr("键盘模拟 · 输入即发送")
-                                : context.tr("文字输入"),
-                            hintText: context.tr("输入中文后发送"),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
+                        child: Focus(
+                          canRequestFocus: false,
+                          skipTraversal: true,
+                          onKeyEvent: _editingKey,
+                          child: TextField(
+                            key: const Key('remoteTextInput'),
+                            controller: _text,
+                            focusNode: _focus,
+                            autofocus: true,
+                            showCursor: !_simulateKeys,
+                            minLines: 1,
+                            maxLines: _simulateKeys ? null : 2,
+                            keyboardType: _simulateKeys
+                                ? TextInputType.visiblePassword
+                                : TextInputType.multiline,
+                            textInputAction: _simulateKeys
+                                ? TextInputAction.done
+                                : TextInputAction.newline,
+                            onSubmitted: _simulateKeys
+                                ? (_) => _keyAction(0x1c)
+                                : null,
+                            onEditingComplete: _simulateKeys ? () {} : null,
+                            autocorrect: !_simulateKeys,
+                            enableSuggestions: !_simulateKeys,
+                            enableInteractiveSelection: !_simulateKeys,
+                            smartDashesType: SmartDashesType.disabled,
+                            smartQuotesType: SmartQuotesType.disabled,
+                            decoration: InputDecoration(
+                              labelText: _simulateKeys
+                                  ? context.tr("键盘模拟 · 输入即发送")
+                                  : context.tr("文字输入"),
+                              hintText: context.tr("输入文字后发送"),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                             ),
                           ),
                         ),
@@ -526,14 +608,6 @@ class _MobileKeyboardState extends State<MobileKeyboard>
               ],
             ),
           ),
-          if (_simulateKeys && MediaQuery.sizeOf(context).height >= 500)
-            Padding(
-              padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: Text(
-                context.tr("使用英文键盘；中文由远程输入法转换"),
-                style: TextStyle(fontSize: 12),
-              ),
-            ),
           if (_error case final error?)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),

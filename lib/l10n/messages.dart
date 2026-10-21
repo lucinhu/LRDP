@@ -33,7 +33,6 @@ const localizedMessages = <String, Map<String, String>>{
     "使用文件中转站": "使用文件中转站",
     "使用此设备的系统钥匙串或加密存储": "使用此设备的系统钥匙串或加密存储",
     "使用系统配色": "使用系统配色",
-    "使用英文键盘；中文由远程输入法转换": "使用英文键盘；中文由远程输入法转换",
     "例如：办公室工作站": "例如：办公室工作站",
     "保存失败：{0}": "保存失败：{0}",
     "保存并连接": "保存并连接",
@@ -221,8 +220,8 @@ const localizedMessages = <String, Map<String, String>>{
     "触屏": "触屏",
     "触控手势说明": "触控手势说明",
     "触控板": "触控板",
-    "触控板：单指移动光标，轻点左键。\n触屏：轻点画面上的位置。\n双指轻点或长按后松开：鼠标右键。\n双击后按住并移动：拖拽，松手结束。\n双指上下或左右滑动：滚动页面。\n双指捏合：缩放画面。\n放大后光标靠近边缘：自动移动视野。\n移动画面按钮：切换为单指移动画面。\n键盘：本机输入法选词后点发送；上方有常用快捷键。\n返回列表会保持当前连接、缩放位置和操作模式。":
-        "触控板：单指移动光标，轻点左键。\n触屏：轻点画面上的位置。\n双指轻点或长按后松开：鼠标右键。\n双击后按住并移动：拖拽，松手结束。\n双指上下或左右滑动：滚动页面。\n双指捏合：缩放画面。\n放大后光标靠近边缘：自动移动视野。\n移动画面按钮：切换为单指移动画面。\n键盘：本机输入法选词后点发送；上方有常用快捷键。\n返回列表会保持当前连接、缩放位置和操作模式。",
+    "触控板：单指移动光标，轻点左键。\n触屏：轻点画面上的位置。\n双指轻点或长按后松开：鼠标右键。\n双击后按住并移动：拖拽，松手结束。\n双指上下或左右滑动：滚动页面。\n双指捏合：缩放画面。\n放大后光标靠近边缘：自动移动视野。\n移动画面按钮：切换为单指移动画面。\n键盘：默认模拟按键；可切换文字或粘贴输入，上方有特殊按键。\n返回列表会保持当前连接、缩放位置和操作模式。":
+        "触控板：单指移动光标，轻点左键。\n触屏：轻点画面上的位置。\n双指轻点或长按后松开：鼠标右键。\n双击后按住并移动：拖拽，松手结束。\n双指上下或左右滑动：滚动页面。\n双指捏合：缩放画面。\n放大后光标靠近边缘：自动移动视野。\n移动画面按钮：切换为单指移动画面。\n键盘：默认模拟按键；可切换文字或粘贴输入，上方有特殊按键。\n返回列表会保持当前连接、缩放位置和操作模式。",
     "设置": "设置",
     "设置未能保存，请检查存储空间后重试": "设置未能保存，请检查存储空间后重试",
     "证书变化时会再次询问": "证书变化时会再次询问",
@@ -256,7 +255,6 @@ const localizedMessages = <String, Map<String, String>>{
     "账号已锁定": "账号已锁定",
     "账号无法使用远程桌面": "账号无法使用远程桌面",
     "跟随系统": "跟随系统",
-    "输入中文后发送": "输入中文后发送",
     "输入地址，快速连接": "输入地址，快速连接",
     "输入模式：文字输入": "输入模式：文字输入",
     "输入模式：粘贴输入": "输入模式：粘贴输入",
@@ -270,8 +268,8 @@ const localizedMessages = <String, Map<String, String>>{
     "远程会话已注销": "远程会话已注销",
     "远程分辨率": "远程分辨率",
     "远程剪贴板暂不可用，文字已保留": "远程剪贴板暂不可用，文字已保留",
-    "远程控制：点按左键，长按右键；可切换触控板模式或平移缩放画面。\n桌面键盘：Ctrl + Alt + Home 将键盘控制返回本地。":
-        "远程控制：点按左键，长按右键；可切换触控板模式或平移缩放画面。\n桌面键盘：Ctrl + Alt + Home 将键盘控制返回本地。",
+    "远程控制：点按左键，长按右键；可切换触控板模式或平移缩放画面。\n桌面：Ctrl + Alt + Home 释放控制；Ctrl + Alt + Enter 切换全屏。":
+        "远程控制：点按左键，长按右键；可切换触控板模式或平移缩放画面。\n桌面：Ctrl + Alt + Home 释放控制；Ctrl + Alt + Enter 切换全屏。",
     "远程桌面。轻点左键，双指轻点或长按右键，双击按住拖拽；双指滚动、捏合缩放，光标靠近边缘自动移动视野。":
         "远程桌面。轻点左键，双指轻点或长按右键，双击按住拖拽；双指滚动、捏合缩放，光标靠近边缘自动移动视野。",
     "远程电脑中的共享路径 · 点按查看用法": "远程电脑中的共享路径 · 点按查看用法",
@@ -314,7 +312,6 @@ const localizedMessages = <String, Map<String, String>>{
     "键盘": "键盘",
     "键盘模拟": "键盘模拟",
     "键盘模拟 · 输入即发送": "键盘模拟 · 输入即发送",
-    "键盘模拟请使用英文输入法；本地中文请切换“文字输入”。": "键盘模拟请使用英文输入法；本地中文请切换“文字输入”。",
     "隐藏密码": "隐藏密码",
     "需要提供登录信息": "需要提供登录信息",
     "需要更新远程密码": "需要更新远程密码",
@@ -352,6 +349,14 @@ const localizedMessages = <String, Map<String, String>>{
     "远端未确认文件粘贴，可使用文件中转站": "远端未确认文件粘贴，可使用文件中转站",
     "连接已结束，文件粘贴未完成": "连接已结束，文件粘贴未完成",
     "选择文件粘贴": "选择文件粘贴",
+    "无法保存输入模式": "无法保存输入模式",
+    "此内容无法模拟为按键，请切换“文字输入”或“粘贴输入”。": "此内容无法模拟为按键，请切换“文字输入”或“粘贴输入”。",
+    "点击远程画面继续控制": "点击远程画面继续控制",
+    "继续控制": "继续控制",
+    "输入文字后发送": "输入文字后发送",
+    "退出全屏（Ctrl + Alt + Enter）": "退出全屏（Ctrl + Alt + Enter）",
+    "释放修饰键": "释放修饰键",
+    "释放控制": "释放控制",
   },
   "zh-TW": {
     "IPv6 地址格式不正确": "IPv6 地址格式不正確",
@@ -386,7 +391,6 @@ const localizedMessages = <String, Map<String, String>>{
     "使用文件中转站": "使用檔案中轉站",
     "使用此设备的系统钥匙串或加密存储": "使用此裝置的系統鑰匙串或加密儲存",
     "使用系统配色": "使用系統配色",
-    "使用英文键盘；中文由远程输入法转换": "使用英文鍵盤；中文由遠端輸入法轉換",
     "例如：办公室工作站": "例如：辦公室工作站",
     "保存失败：{0}": "儲存失敗：{0}",
     "保存并连接": "儲存並連線",
@@ -574,8 +578,8 @@ const localizedMessages = <String, Map<String, String>>{
     "触屏": "觸屏",
     "触控手势说明": "觸控手勢說明",
     "触控板": "觸控板",
-    "触控板：单指移动光标，轻点左键。\n触屏：轻点画面上的位置。\n双指轻点或长按后松开：鼠标右键。\n双击后按住并移动：拖拽，松手结束。\n双指上下或左右滑动：滚动页面。\n双指捏合：缩放画面。\n放大后光标靠近边缘：自动移动视野。\n移动画面按钮：切换为单指移动画面。\n键盘：本机输入法选词后点发送；上方有常用快捷键。\n返回列表会保持当前连接、缩放位置和操作模式。":
-        "觸控板：單指移動游標，輕點左鍵。\n觸屏：輕點畫面上的位置。\n雙指輕點或長按後鬆開：滑鼠右鍵。\n雙擊後按住並移動：拖拽，鬆手結束。\n雙指上下或左右滑動：滾動頁面。\n雙指捏合：縮放畫面。\n放大後游標靠近邊緣：自動移動視野。\n移動畫面按鈕：切換為單指移動畫面。\n鍵盤：本機輸入法選詞後點傳送；上方有常用快捷鍵。\n返回列表會保持當前連線、縮放位置和操作模式。",
+    "触控板：单指移动光标，轻点左键。\n触屏：轻点画面上的位置。\n双指轻点或长按后松开：鼠标右键。\n双击后按住并移动：拖拽，松手结束。\n双指上下或左右滑动：滚动页面。\n双指捏合：缩放画面。\n放大后光标靠近边缘：自动移动视野。\n移动画面按钮：切换为单指移动画面。\n键盘：默认模拟按键；可切换文字或粘贴输入，上方有特殊按键。\n返回列表会保持当前连接、缩放位置和操作模式。":
+        "觸控板：單指移動游標，輕點左鍵。\n觸屏：輕點畫面上的位置。\n雙指輕點或長按後鬆開：滑鼠右鍵。\n雙擊後按住並移動：拖拽，鬆手結束。\n雙指上下或左右滑動：滾動頁面。\n雙指捏合：縮放畫面。\n放大後游標靠近邊緣：自動移動視野。\n移動畫面按鈕：切換為單指移動畫面。\n鍵盤：預設模擬按鍵；可切換文字或貼上輸入，上方有特殊按鍵。\n返回列表會保持當前連線、縮放位置和操作模式。",
     "设置": "設定",
     "设置未能保存，请检查存储空间后重试": "設定未能儲存，請檢查儲存空間後重試",
     "证书变化时会再次询问": "證書變化時會再次詢問",
@@ -609,7 +613,6 @@ const localizedMessages = <String, Map<String, String>>{
     "账号已锁定": "賬號已鎖定",
     "账号无法使用远程桌面": "賬號無法使用遠端桌面",
     "跟随系统": "跟隨系統",
-    "输入中文后发送": "輸入中文後傳送",
     "输入地址，快速连接": "輸入地址，快速連線",
     "输入模式：文字输入": "輸入模式：文字輸入",
     "输入模式：粘贴输入": "輸入模式：貼上輸入",
@@ -623,8 +626,8 @@ const localizedMessages = <String, Map<String, String>>{
     "远程会话已注销": "遠端會話已登出",
     "远程分辨率": "遠端解析度",
     "远程剪贴板暂不可用，文字已保留": "遠端剪貼簿暫不可用，文字已保留",
-    "远程控制：点按左键，长按右键；可切换触控板模式或平移缩放画面。\n桌面键盘：Ctrl + Alt + Home 将键盘控制返回本地。":
-        "遠端控制：點按左鍵，長按右鍵；可切換觸控板模式或平移縮放畫面。\n桌面鍵盤：Ctrl + Alt + Home 將鍵盤控制返回本地。",
+    "远程控制：点按左键，长按右键；可切换触控板模式或平移缩放画面。\n桌面：Ctrl + Alt + Home 释放控制；Ctrl + Alt + Enter 切换全屏。":
+        "遠端控制：點按左鍵，長按右鍵；可切換觸控板模式或平移縮放畫面。\n桌面：Ctrl + Alt + Home 釋放控制；Ctrl + Alt + Enter 切換全屏。",
     "远程桌面。轻点左键，双指轻点或长按右键，双击按住拖拽；双指滚动、捏合缩放，光标靠近边缘自动移动视野。":
         "遠端桌面。輕點左鍵，雙指輕點或長按右鍵，雙擊按住拖拽；雙指滾動、捏合縮放，游標靠近邊緣自動移動視野。",
     "远程电脑中的共享路径 · 点按查看用法": "遠端電腦中的共享路徑 · 點按檢視用法",
@@ -667,7 +670,6 @@ const localizedMessages = <String, Map<String, String>>{
     "键盘": "鍵盤",
     "键盘模拟": "鍵盤模擬",
     "键盘模拟 · 输入即发送": "鍵盤模擬 · 輸入即傳送",
-    "键盘模拟请使用英文输入法；本地中文请切换“文字输入”。": "鍵盤模擬請使用英文輸入法；本地中文請切換“文字輸入”。",
     "隐藏密码": "隱藏密碼",
     "需要提供登录信息": "需要提供登入資訊",
     "需要更新远程密码": "需要更新遠端密碼",
@@ -705,6 +707,14 @@ const localizedMessages = <String, Map<String, String>>{
     "远端未确认文件粘贴，可使用文件中转站": "遠端未確認檔案貼上，可使用檔案中轉站",
     "连接已结束，文件粘贴未完成": "連線已結束，檔案貼上未完成",
     "选择文件粘贴": "選擇檔案貼上",
+    "无法保存输入模式": "無法儲存輸入模式",
+    "此内容无法模拟为按键，请切换“文字输入”或“粘贴输入”。": "此內容無法模擬為按鍵，請切換「文字輸入」或「貼上輸入」。",
+    "点击远程画面继续控制": "點選遠端畫面繼續控制",
+    "继续控制": "繼續控制",
+    "输入文字后发送": "輸入文字後傳送",
+    "退出全屏（Ctrl + Alt + Enter）": "退出全屏（Ctrl + Alt + Enter）",
+    "释放修饰键": "釋放修飾鍵",
+    "释放控制": "釋放控制",
   },
   "en": {
     "IPv6 地址格式不正确": "Invalid IPv6 address",
@@ -743,8 +753,6 @@ const localizedMessages = <String, Map<String, String>>{
     "使用文件中转站": "Use transfer folder",
     "使用此设备的系统钥匙串或加密存储": "Use this device's keychain or encrypted storage",
     "使用系统配色": "Use system colors",
-    "使用英文键盘；中文由远程输入法转换":
-        "Use an English keyboard; the remote IME converts Chinese",
     "例如：办公室工作站": "For example: Office workstation",
     "保存失败：{0}": "Could not save: {0}",
     "保存并连接": "Save and connect",
@@ -954,8 +962,8 @@ const localizedMessages = <String, Map<String, String>>{
     "触屏": "Touch",
     "触控手势说明": "Touch gestures",
     "触控板": "Trackpad",
-    "触控板：单指移动光标，轻点左键。\n触屏：轻点画面上的位置。\n双指轻点或长按后松开：鼠标右键。\n双击后按住并移动：拖拽，松手结束。\n双指上下或左右滑动：滚动页面。\n双指捏合：缩放画面。\n放大后光标靠近边缘：自动移动视野。\n移动画面按钮：切换为单指移动画面。\n键盘：本机输入法选词后点发送；上方有常用快捷键。\n返回列表会保持当前连接、缩放位置和操作模式。":
-        "Trackpad: move with one finger; tap to left-click.\nTouch: tap the position on screen.\nTwo-finger tap or long press and release: right-click.\nDouble-tap, hold and move: drag; release to drop.\nSwipe with two fingers: scroll vertically or horizontally.\nPinch: zoom.\nWhen zoomed, moving the cursor to an edge pans the view.\nPan view: move the view with one finger.\nKeyboard: compose locally, then send; special keys are available above.\nReturning to the list keeps your connection, viewport and input mode.",
+    "触控板：单指移动光标，轻点左键。\n触屏：轻点画面上的位置。\n双指轻点或长按后松开：鼠标右键。\n双击后按住并移动：拖拽，松手结束。\n双指上下或左右滑动：滚动页面。\n双指捏合：缩放画面。\n放大后光标靠近边缘：自动移动视野。\n移动画面按钮：切换为单指移动画面。\n键盘：默认模拟按键；可切换文字或粘贴输入，上方有特殊按键。\n返回列表会保持当前连接、缩放位置和操作模式。":
+        "Trackpad: move with one finger; tap to left-click.\nTouch: tap the position on screen.\nTwo-finger tap or long press and release: right-click.\nDouble-tap, hold and move: drag; release to drop.\nSwipe with two fingers: scroll vertically or horizontally.\nPinch: zoom.\nWhen zoomed, moving the cursor to an edge pans the view.\nPan view: move the view with one finger.\nKeyboard: simulate keys by default, or select Text input or Paste input. Special keys are above.\nReturning to the list keeps your connection, viewport and input mode.",
     "设置": "Settings",
     "设置未能保存，请检查存储空间后重试":
         "Could not save settings. Check available storage and try again.",
@@ -1003,7 +1011,6 @@ const localizedMessages = <String, Map<String, String>>{
     "账号已锁定": "Account locked",
     "账号无法使用远程桌面": "Account cannot use Remote Desktop",
     "跟随系统": "Follow system",
-    "输入中文后发送": "Type text, then send",
     "输入地址，快速连接": "Enter an address to connect",
     "输入模式：文字输入": "Input mode: Text input",
     "输入模式：粘贴输入": "Input mode: Paste input",
@@ -1021,8 +1028,8 @@ const localizedMessages = <String, Map<String, String>>{
     "远程分辨率": "Remote resolution",
     "远程剪贴板暂不可用，文字已保留":
         "The remote clipboard is unavailable. Your text has been kept.",
-    "远程控制：点按左键，长按右键；可切换触控板模式或平移缩放画面。\n桌面键盘：Ctrl + Alt + Home 将键盘控制返回本地。":
-        "Remote control: tap to left-click; long press to right-click. Switch to trackpad mode, pan or zoom.\nDesktop keyboard: Ctrl + Alt + Home returns keyboard control to this device.",
+    "远程控制：点按左键，长按右键；可切换触控板模式或平移缩放画面。\n桌面：Ctrl + Alt + Home 释放控制；Ctrl + Alt + Enter 切换全屏。":
+        "Remote control: tap to left-click; long press to right-click. Switch to trackpad mode, pan or zoom.\nDesktop: Ctrl + Alt + Home releases control; Ctrl + Alt + Enter toggles full screen.",
     "远程桌面。轻点左键，双指轻点或长按右键，双击按住拖拽；双指滚动、捏合缩放，光标靠近边缘自动移动视野。":
         "Remote desktop. Tap to left-click; two-finger tap or long press to right-click. Double-tap and hold to drag. Scroll with two fingers, pinch to zoom, and move the cursor to an edge to pan.",
     "远程电脑中的共享路径 · 点按查看用法": "Shared path on the remote computer · Tap for help",
@@ -1072,8 +1079,6 @@ const localizedMessages = <String, Map<String, String>>{
     "键盘": "Keyboard",
     "键盘模拟": "Keyboard simulation",
     "键盘模拟 · 输入即发送": "Keyboard simulation · Send as you type",
-    "键盘模拟请使用英文输入法；本地中文请切换“文字输入”。":
-        "Use an English keyboard in simulation mode. For local Chinese input, switch to “Text input”.",
     "隐藏密码": "Hide password",
     "需要提供登录信息": "Credentials required",
     "需要更新远程密码": "Remote password update required",
@@ -1127,5 +1132,14 @@ const localizedMessages = <String, Map<String, String>>{
         "The remote device did not confirm file paste. You can use File exchange.",
     "连接已结束，文件粘贴未完成": "Connection ended before file paste completed.",
     "选择文件粘贴": "Select files to paste",
+    "无法保存输入模式": "Could not save input mode",
+    "此内容无法模拟为按键，请切换“文字输入”或“粘贴输入”。":
+        "This content cannot be simulated as keystrokes. Switch to Text input or Paste input.",
+    "点击远程画面继续控制": "Click the remote desktop to resume control",
+    "继续控制": "Resume control",
+    "输入文字后发送": "Type text, then send",
+    "退出全屏（Ctrl + Alt + Enter）": "Exit full screen (Ctrl + Alt + Enter)",
+    "释放修饰键": "Release modifiers",
+    "释放控制": "Release control",
   },
 };

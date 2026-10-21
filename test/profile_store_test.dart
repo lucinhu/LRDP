@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lrdp/data/profile_store.dart';
 import 'package:lrdp/models/connection_profile.dart';
+import 'package:lrdp/models/remote_input_mode.dart';
 
 class MemoryVault extends Fake implements FlutterSecureStorage {
   final values = <String, String>{};
@@ -29,6 +30,22 @@ class MemoryVault extends Fake implements FlutterSecureStorage {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'input mode defaults safely and survives reload independently of profiles',
+    () async {
+      SharedPreferences.setMockInitialValues({'remoteInputMode': 'unknown'});
+      final preferences = await SharedPreferences.getInstance();
+      final store = ProfileStore(preferences);
+      expect(store.remoteInputMode, RemoteInputMode.keyboard);
+      for (final mode in RemoteInputMode.values) {
+        await store.setRemoteInputMode(mode);
+        expect(ProfileStore(preferences).remoteInputMode, mode);
+      }
+      expect(preferences.getKeys(), {'remoteInputMode'});
+      expect(preferences.getString('profiles.v1'), isNull);
+      store.dispose();
+    },
+  );
   test('profile metadata survives reload without a plaintext secret', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();

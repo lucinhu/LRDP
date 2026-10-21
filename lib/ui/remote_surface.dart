@@ -18,6 +18,7 @@ class RemoteSurface extends StatefulWidget {
     required this.trackpad,
     required this.pan,
     this.active = true,
+    this.inputEnabled = true,
     this.preserveKeyboardFocus = false,
     this.memory,
   });
@@ -25,6 +26,7 @@ class RemoteSurface extends StatefulWidget {
   final FocusNode focus;
   final TransformationController transform;
   final bool trackpad, pan, active;
+  final bool inputEnabled;
   final bool preserveKeyboardFocus;
   final RemoteSurfaceMemory? memory;
   @override
@@ -69,10 +71,12 @@ class _RemoteSurfaceState extends State<RemoteSurface>
     widget.focus.addListener(_focusChanged);
   }
 
+  bool get _interactive => widget.active && widget.inputEnabled;
+
   void _focusChanged() {
     if (!widget.focus.hasFocus) {
       final lifecycle = WidgetsBinding.instance.lifecycleState;
-      if (widget.active &&
+      if (_interactive &&
           widget.session.state == SessionState.connected &&
           (lifecycle == null || lifecycle == AppLifecycleState.resumed)) {
         // Tapping a remote text field then immediately opening the local
@@ -92,7 +96,8 @@ class _RemoteSurfaceState extends State<RemoteSurface>
     }
     if (oldWidget.trackpad != widget.trackpad ||
         oldWidget.pan != widget.pan ||
-        !widget.active ||
+        oldWidget.inputEnabled != widget.inputEnabled ||
+        !_interactive ||
         oldWidget.session != widget.session) {
       _cancel();
     }
@@ -332,7 +337,7 @@ class _RemoteSurfaceState extends State<RemoteSurface>
     _edgeLocal = local;
     _edgeTimer ??= Timer.periodic(const Duration(milliseconds: 16), (_) {
       if (!mounted ||
-          !widget.active ||
+          !_interactive ||
           widget.pan ||
           widget.session.state != SessionState.connected ||
           !widget.session.hasVideo) {
@@ -354,7 +359,7 @@ class _RemoteSurfaceState extends State<RemoteSurface>
   }
 
   void _beginDrag() {
-    if (!_dragPending || _multi || widget.pan || !widget.active) return;
+    if (!_dragPending || _multi || widget.pan || !_interactive) return;
     _dragTimer?.cancel();
     _holdTimer?.cancel();
     _dragPending = false;
@@ -376,6 +381,7 @@ class _RemoteSurfaceState extends State<RemoteSurface>
   }
 
   void _wheelEvent(double delta, {bool horizontal = false}) {
+    if (!_interactive) return;
     if (delta == 0) return;
     final negative = delta < 0;
     widget.session.mouse(
@@ -387,7 +393,7 @@ class _RemoteSurfaceState extends State<RemoteSurface>
 
   bool get _canPanZoom {
     final lifecycle = WidgetsBinding.instance.lifecycleState;
-    return widget.active &&
+    return _interactive &&
         widget.session.state == SessionState.connected &&
         (lifecycle == null || lifecycle == AppLifecycleState.resumed);
   }
@@ -453,7 +459,7 @@ class _RemoteSurfaceState extends State<RemoteSurface>
   }
 
   void _down(PointerDownEvent e) {
-    if (!widget.active) return;
+    if (!_interactive) return;
     if (!widget.preserveKeyboardFocus) {
       widget.focus.requestFocus();
     }
@@ -570,7 +576,7 @@ class _RemoteSurfaceState extends State<RemoteSurface>
   }
 
   void _move(PointerMoveEvent e) {
-    if (!widget.active) return;
+    if (!_interactive) return;
     if (e.kind != PointerDeviceKind.touch) {
       if (!widget.pan) {
         // Flutter reports intermediate multi-button presses/releases as Move,
@@ -739,7 +745,9 @@ class _RemoteSurfaceState extends State<RemoteSurface>
       return Semantics(
         label: context.tr("远程桌面。轻点左键，双指轻点或长按右键，双击按住拖拽；双指滚动、捏合缩放，光标靠近边缘自动移动视野。"),
         child: MouseRegion(
-          cursor: widget.pan
+          cursor: !_interactive
+              ? SystemMouseCursors.basic
+              : widget.pan
               ? SystemMouseCursors.grab
               : SystemMouseCursors.none,
           onEnter: (event) {
@@ -773,12 +781,12 @@ class _RemoteSurfaceState extends State<RemoteSurface>
               // It carries an absolute position, not trackpad mouse motion.
               if (e.kind != PointerDeviceKind.touch &&
                   !widget.pan &&
-                  widget.active) {
+                  _interactive) {
                 _hardwareMove(e.localPosition);
               }
             },
             onPointerSignal: (e) {
-              if (e is PointerScrollEvent && !widget.pan && widget.active) {
+              if (e is PointerScrollEvent && !widget.pan && _interactive) {
                 GestureBinding.instance.pointerSignalResolver.register(e, (
                   event,
                 ) {
@@ -808,7 +816,9 @@ class _RemoteSurfaceState extends State<RemoteSurface>
                           baseScale: _baseScale,
                           zoom: widget.transform.value.getMaxScaleOnAxis(),
                           visible:
-                              widget.trackpad || (_mouseInside && !widget.pan),
+                              _interactive &&
+                              (widget.trackpad ||
+                                  (_mouseInside && !widget.pan)),
                         ),
                         child: widget.session.textureId != null
                             ? Texture(

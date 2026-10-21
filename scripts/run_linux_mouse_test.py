@@ -276,15 +276,47 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
     wait_for(lambda: any(e['type'] == 5 and e['button'] == 1 and abs(e['x'] - 340) <= 1
         for e in desktop.events), 'Click after Escape did not work')
     capture('passed')
+    # Return local input without closing the connection or freezing its video.
+    hint_probe = (245, 12)
+    active_hint_pixel = ImageGrab.grab(xdisplay=client_env['DISPLAY']).convert('RGB').getpixel(hint_probe)
+    def hint_is_remote():
+        return ImageGrab.grab(xdisplay=client_env['DISPLAY']).convert('RGB').getpixel(hint_probe) == active_hint_pixel
+    os_input('key', 'ctrl+alt+Home')
+    wait_for(lambda: not hint_is_remote(), 'Release-control state did not paint')
+    capture('control-released')
+    start = len(desktop.events)
+    move(360, 240)
+    os_input('click', 1)
+    time.sleep(.2); desktop.pump()
+    assert not [e for e in desktop.events[start:] if e['type'] in (4, 5)], 'Resume click reached the remote desktop'
+    wait_for(hint_is_remote, 'Resume-control state did not paint')
+    os_input('click', 1)
+    try:
+        wait_for(lambda: len([e for e in desktop.events[start:] if e['type'] in (4, 5)]) == 2,
+            'Remote clicks did not resume after returning local control')
+    except AssertionError:
+        (out/'resume-events.json').write_text(json.dumps(desktop.events[start:], indent=2)+'\n')
+        raise
+    capture('control-resumed')
     fullscreen_case = []
     if args.window_manager:
+        os_input('key', 'ctrl+alt+Return')
+        wait_for(lambda: not window_fullscreen() and window_geometry()['WIDTH']==initial_geometry['WIDTH']
+            and window_geometry()['HEIGHT']==initial_geometry['HEIGHT'], 'Full-screen keyboard shortcut did not restore OS window')
+        capture('shortcut-window-restored')
+        os_input('key', 'ctrl+alt+Return')
+        wait_for(lambda: window_fullscreen() and window_geometry()['WIDTH']==1440,
+            'Full-screen keyboard shortcut did not reenter OS full screen from local focus')
+        capture('local-control-fullscreen')
         # First floating action is Back to computers. The panel has seven 68px
         # actions, a 52px drag header and an 8px margin on this 1440x1000 screen.
         click(1440-340-8+68, 8+52+1+6+32)
         wait_for(lambda: not window_fullscreen() and window_geometry()['WIDTH']==initial_geometry['WIDTH']
             and window_geometry()['HEIGHT']==initial_geometry['HEIGHT'], 'Leaving the session did not restore the OS window')
         capture('window-restored')
-        fullscreen_case = ['actual OS full screen and original window size restored through floating Back action']
+        fullscreen_case = ['Ctrl+Alt+Home releases remote control; first click resumes without forwarding it',
+            'Ctrl+Alt+Enter restores and reenters actual OS full screen from local focus',
+            'actual OS full screen and original window size restored through floating Back action']
     (out / 'events.json').write_text(json.dumps(desktop.events, indent=2) + '\n')
     report = {'passed': True, 'entrypoint': 'lib/main.dart Linux Release', 'backend': 'GTK/X11',
         'native_abi': 5, 'library_sha256': hashlib.sha256((bundle / 'lib/liblrdp.so').read_bytes()).hexdigest(),

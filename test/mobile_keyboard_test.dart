@@ -219,7 +219,7 @@ void main() {
         reason: 'Reject unsupported replacement before deleting remote text',
       );
       expect(session.unicode, isEmpty);
-      expect(find.textContaining('键盘模拟请使用英文输入法'), findsOneWidget);
+      expect(find.textContaining('此内容无法模拟为按键'), findsOneWidget);
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
       expect(session.scans.sublist(before.length), [

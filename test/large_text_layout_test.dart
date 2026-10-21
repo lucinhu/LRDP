@@ -166,7 +166,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      final error = find.textContaining('键盘模拟请使用英文输入法');
+      final error = find.textContaining('此内容无法模拟为按键');
       expect(
         tester.getSize(find.byType(RemoteSurface)).height,
         greaterThanOrEqualTo(48),
@@ -231,7 +231,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final error = find.textContaining('键盘模拟请使用英文输入法');
+    final error = find.textContaining('此内容无法模拟为按键');
     await tester.ensureVisible(error);
     await tester.pumpAndSettle();
     expect(error.hitTestable(), findsOneWidget);
