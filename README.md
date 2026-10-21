@@ -4,7 +4,7 @@ LRDP 是基于 **Flutter + FreeRDP** 的开源远程桌面客户端，面向手�
 
 当前版本为 **0.1.0 开发预览**，目标平台为 Linux、Android、Windows、macOS 和 iOS。各平台的构建与验证进度见下表。
 
-[下载预览版](https://github.com/lucinhu/LRDP/releases/tag/v0.1.0-preview.1) · [使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
+[下载预览版](https://github.com/lucinhu/LRDP/releases/tag/v0.1.0-preview.2) · [使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
 
 ![LRDP 桌面连接库，使用示例配置](docs/screenshots/workspace.png)
 
@@ -42,7 +42,7 @@ LRDP 是基于 **Flutter + FreeRDP** 的开源远程桌面客户端，面向手�
 
 | 平台 | 当前进度 |
 | --- | --- |
-| Linux | 已提供 Release 构建；私有 X11 环境中的窗口、输入、全屏和实际回环协议测试通过。Wayland 待验收。 |
+| Linux | 已提供 x86_64 AppImage，基于 Ubuntu 22.04 构建；Arch 私有 X11 中的 FUSE/解压启动、窗口、输入、全屏和回环 RDP 测试通过。其他发行版与原生 Wayland 待验收。 |
 | Android | 已构建 ARM64、x86_64 Release 预览 APK；多项输入、手势、声音和剪贴板功能通过隔离模拟器测试。ARM64 真机与最新文件粘贴的设备验收待完成。 |
 | Windows | 已接入原生构建与显示；x64 连接核心、部分协议和文件句柄处理通过 Wine 测试。Flutter 主窗口与真实 Windows 系统待验收。 |
 | macOS | 已接入工程与原生桥接，构建及设备验收待完成。 |
@@ -51,6 +51,17 @@ LRDP 是基于 **Flutter + FreeRDP** 的开源远程桌面客户端，面向手�
 不同功能的验证范围并不相同；具体版本、测试方法和限制记录在 [VERIFICATION.md](docs/VERIFICATION.md)。Windows RDP、xrdp 和 GNOME 的文件剪贴板互操作仍需实测。
 
 ## 开始使用
+
+Linux x86_64 可下载 Release 中的 `.AppImage`，赋予执行权限后直接运行：
+
+```sh
+chmod +x lrdp-0.1.0-linux-x64.AppImage
+./lrdp-0.1.0-linux-x64.AppImage
+```
+
+AppImage 已包含 GTK、OpenSSL 等应用运行库；需要 glibc ≥ 2.35 与可用的 OpenGL/EGL 环境。
+如果系统没有 FUSE，可用 `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.1.0-linux-x64.AppImage` 启动。
+Android 下载 ARM64 预览 APK。各包与完整源码、构建信息及 SHA-256 校验文件一同发布。
 
 1. 点击“添加电脑”，填写地址、用户名、密码，以及需要的域信息。地址可直接包含端口，例如 `192.168.1.10:3390`；IPv6 使用 `[2001:db8::1]:3389`。
 2. 在“连接偏好”中按需开启共享剪贴板、文件传输或远程声音。远程分辨率默认自动，也可手动指定。

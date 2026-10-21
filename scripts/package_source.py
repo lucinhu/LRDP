@@ -85,6 +85,11 @@ with tarfile.open(destination, 'w:gz', compresslevel=6) as archive:
         for filename in ('BUILD_INFO.json', 'configure-options.txt', 'LICENSE-FFmpeg.txt'):
             path = root / 'build/deps/ffmpeg' / platform / filename
             archive.add(path, arcname=f'{name}/build-config/ffmpeg/{platform}/{filename}')
+    appimage_ffmpeg = root / 'build/appimage-work/source/build/deps/ffmpeg/linux-x64'
+    if appimage_ffmpeg.is_dir():
+        for filename in ('BUILD_INFO.json', 'configure-options.txt', 'LICENSE-FFmpeg.txt'):
+            archive.add(appimage_ffmpeg / filename,
+                arcname=f'{name}/build-config/ffmpeg/appimage-linux-x64/{filename}')
     for filename, content in (('README-SOURCE.txt', readme),
             ('BUILD_INFO-SOURCE.json', json.dumps(metadata, indent=2) + '\n')):
         data = content.encode()

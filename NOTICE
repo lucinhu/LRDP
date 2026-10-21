@@ -21,3 +21,10 @@ build are documented in scripts/fetch_ffmpeg.sh and scripts/build_ffmpeg.sh.
 See assets/licenses/FFmpeg.txt. GPL, version-3-only and nonfree components are
 disabled. Preserve the corresponding source/rebuild bundle with distributions
 that include statically linked FFmpeg.
+
+The Linux AppImage also bundles libraries and GTK resources from Ubuntu 22.04.
+Their package versions and copyright notices are retained under
+usr/share/doc/lrdp/BUILD_PACKAGES.txt and dependency-copyrights inside the image.
+The pinned AppImage runtime and deployment-tool revisions are recorded in
+usr/share/doc/lrdp/APPIMAGE_BUILD.json; their upstream projects retain their
+respective licenses. See docs/BUILDING.md for rebuilding and extraction.

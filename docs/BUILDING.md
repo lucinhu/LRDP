@@ -75,7 +75,43 @@ bash scripts/package_linux.sh
 无需 root。注册后应保留解压目录的位置。图标源文件和重新生成步骤见
 `assets/branding/README.md`。
 
-单独构建桥接层和回归测试：
+### AppImage
+
+推荐在 Ubuntu 22.04 / glibc 2.35 基线环境构建，避免将新发行版的 glibc 要求带进安装包。
+提供了固定 Ubuntu 镜像摘要的 `scripts/appimage/Containerfile`。自动构建需要 Rootless Podman、
+已下载完整的 Flutter SDK 与 Pub 缓存；先运行 `flutter pub get`。新源文件需先加入 Git 跟踪。
+
+```sh
+python3 scripts/build_appimage.py --flutter-sdk /opt/flutter \
+  --output build/distributions/appimage-preview
+```
+
+脚本使用 `build/appimage-containers/` 下的独立 VFS 存储，不修改系统容器配置；
+在 `build/appimage-work/source/` 内复制 Git 跟踪的源码与原样 FreeRDP，挂载 Flutter SDK/Pub 缓存，
+重新编译最小 FFmpeg 与主入口 Release。应用原工作目录的 Linux 构建不被覆盖。
+`scripts/fetch_appimage_tools.py` 校验固定的 linuxdeploy、GTK 插件、appimagetool 与 Type 2 runtime 摘要；
+若上游移动 continuous 下载导致摘要不同，应审查新版本后更新固定值，不能直接跳过校验。
+
+`scripts/package_appimage.sh` 组合 Flutter 资源、原生库、GTK/OpenSSL/libsecret/PulseAudio 等依赖，
+保留图标、GLib schema、输入法模块与依赖版权信息。glibc、动态加载器、libstdc++ 和显卡驱动使用系统版本；
+包内 ELF 不能要求高于 glibc 2.35，并拒绝绝对 RPATH。桌面仍需可用的 OpenGL/EGL、字体与 Secret Service。
+当前 GTK 部署钩子默认使用 X11；Wayland 下需要 XWayland，原生 Wayland 待验收。
+
+构建 AppImage 不等于通过发布验收。发布前在独立 X11/回环 RDP 中验证实际镜像：
+
+```sh
+python3 scripts/run_linux_mouse_test.py --window-manager /usr/bin/openbox \
+  --appimage build/distributions/appimage-preview/lrdp-0.1.0-linux-x64.AppImage
+python3 scripts/run_linux_mouse_test.py --window-manager /usr/bin/openbox \
+  --appimage build/distributions/appimage-preview/lrdp-0.1.0-linux-x64.AppImage --extract-and-run
+```
+
+运行时先 `chmod +x lrdp-0.1.0-linux-x64.AppImage`，再执行该文件。
+缺少 FUSE 时可执行 `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.1.0-linux-x64.AppImage`；
+也可用 `--appimage-extract` 后运行 `squashfs-root/AppRun`。提取后的库可替换并重新打包。
+只有实际验证过的发行版/显示后端才记入 `docs/VERIFICATION.md`。
+
+### 原生桥接回归
 
 ```sh
 cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLRDP_BUILD_TESTS=ON

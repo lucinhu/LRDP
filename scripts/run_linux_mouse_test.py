@@ -21,9 +21,16 @@ from rdp_test_desktop import Desktop
 root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--window-manager', type=Path, help='Optional Openbox binary for actual full-screen/restore verification')
+parser.add_argument('--appimage', type=Path, help='Test the packaged AppImage instead of the local bundle')
+parser.add_argument('--extract-and-run', action='store_true', help='Exercise the AppImage fallback without FUSE')
 args = parser.parse_args()
 bundle = root / 'build/linux/x64/release/bundle'
-out = root / 'build/linux-mouse-runtime'
+if args.extract_and_run and not args.appimage:
+    parser.error('--extract-and-run requires --appimage')
+if args.appimage:
+    args.appimage = args.appimage.resolve()
+out = (root / 'build/linux-appimage-runtime' / ('extract' if args.extract_and_run else 'fuse')
+       if args.appimage else root / 'build/linux-mouse-runtime')
 out.mkdir(parents=True, exist_ok=True)
 (out / 'VERDICT.json').unlink(missing_ok=True)
 
@@ -40,6 +47,11 @@ def stop(process):
 
 with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitStack() as cleanup:
     private = Path(temporary)
+    if args.appimage:
+        log = cleanup.enter_context((out / 'extract.log').open('w'))
+        subprocess.run([str(args.appimage), '--appimage-extract'], cwd=private,
+                       stdout=log, stderr=subprocess.STDOUT, check=True)
+        bundle = private / 'squashfs-root/usr/bin'
     base = dict(os.environ, XDG_CONFIG_HOME=str(private / 'config'),
         XDG_DATA_HOME=str(private / 'data'), XDG_CACHE_HOME=str(private / 'cache'),
         GDK_BACKEND='x11', WAYLAND_DISPLAY='', WLOG_LEVEL='WARN')
@@ -63,6 +75,8 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
         subprocess.run(['xsetroot', '-solid', '#182d28'], env=env, check=True)
         displays.append(env)
     client_env, server_env = displays
+    if args.extract_and_run:
+        client_env = dict(client_env, APPIMAGE_EXTRACT_AND_RUN='1')
     if args.window_manager:
         manager = args.window_manager.resolve()
         assert manager.is_file()
@@ -110,7 +124,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
         folder.mkdir(parents=True)
         (folder / 'shared_preferences.json').write_text(json.dumps(preferences))
     log = cleanup.enter_context((out / 'application.log').open('w'))
-    app = subprocess.Popen(['dbus-run-session', '--', str(bundle / 'lrdp')],
+    app = subprocess.Popen(['dbus-run-session', '--', str(args.appimage or bundle / 'lrdp')],
         cwd=private, env=client_env, stdout=log, stderr=subprocess.STDOUT)
     cleanup.callback(stop, app)
 
@@ -345,5 +359,8 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
             'subsequent left/right/middle click', 'stationary multi-button release', 'click after Escape']+fullscreen_case,
         'os_fullscreen_verified': bool(args.window_manager),
         'scope': 'private X11 shadow server; KRDP event precedence verified separately; no external host'}
+    if args.appimage:
+        report.update(appimage_sha256=hashlib.sha256(args.appimage.read_bytes()).hexdigest(),
+                      appimage_mode='extract-and-run' if args.extract_and_run else 'FUSE')
     (out / 'VERDICT.json').write_text(json.dumps(report, indent=2) + '\n')
     print('PASS: Linux main Release, OS mouse drag/release, follow-up clicks and multi-button state')

@@ -2,7 +2,37 @@
 
 记录日期：2026-10-22。当前为开发预览。构建、真实协议和平台设备验收分别记录。
 
-## 文件粘贴状态与手机按键栏（当前批次）
+## Linux AppImage 发布包（当前批次）
+
+新增 x86_64 AppImage。使用固定 Ubuntu 22.04 镜像、clang 工具链与 glibc 2.35 重新构建
+FFmpeg、原生库和 Flutter 主入口；未复用 Arch 构建的系统库。固定下载工具摘要，
+包内包含 GTK、OpenSSL、libsecret、PulseAudio、输入法模块、schema、图标与版权信息。
+glibc、动态加载器、libstdc++ 和图形驱动仍由系统提供。
+
+本次实际检查：
+
+- 完整执行 `scripts/build_appimage.py`，验证独立源码复制、私有 Podman VFS 缓存、
+  Ubuntu 编译和最终打包流程。包内 **184 个 ELF** 均满足 glibc ≤ 2.35，
+  原生 ABI v5、相对 RPATH、Flutter 资源、桌面入口和图标检查通过。
+- 在本机 Arch 的私有 X11/Openbox 与回环 RDP 中，分别以 **FUSE** 和
+  **`APPIMAGE_EXTRACT_AND_RUN=1`** 启动最终镜像，每种方式的 **10 项**实际操作通过：
+  窗口拖放/释放、后续点击、多键释放、Esc 后点击、全屏释放/恢复控制、首次恢复点击拦截、
+  释放后继续刷新、输入对话框中的退出快捷键、全屏快捷键与返回列表恢复窗口。
+- 最终镜像提取出的原生库通过正常及接收方堵塞的输入停止检查，以及独立 TLS 文件
+  剪贴板 **10 场景**。测试报告的原生库和镜像 SHA-256 与发布载荷一致。
+- Python 检查 **9/9**。应用 Dart/原生实现没有修改，沿用上一批 **175 项 Flutter 测试**
+  及原生 CTest **5/5** 的通过结果；发布前主应用提交 `20b0f50` 的 GitHub CI 已通过。
+
+记录在 `build/ci-repair/appimage-*.log`、`build/distributions/appimage-preview2/CONTAINER_BUILD.json`、
+`build/linux-appimage-runtime/{fuse,extract}/VERDICT.json`、
+`build/input-stop-runtime/native-custom/VERDICT.json` 与 `build/file-clipboard/native-protocol/VERDICT.json`。
+
+Ubuntu 22.04 是编译/ABI 基线，本次实际窗口操作环境为 Arch X11；其他发行版、原生 Wayland、
+ARM Linux 和真实 Windows/xrdp/GNOME 文件管理器互操作仍待验收。当前 GTK 部署钩子默认 X11，
+Wayland 会话需要 XWayland。Android Release 使用上一批已验证的 ARM64 APK，真机输入法与系统
+文件选择器仍待验收。FreeRDP 源码和子模块指针均保持原样。
+
+## 文件粘贴状态与手机按键栏（上一批次）
 
 “更多”菜单现在监听会话状态变化，文件能力协商完成或粘贴结束后无需重新打开菜单。
 文件粘贴入口分别说明未连接、剪贴板共享关闭、通道尚未就绪、未启用文件剪贴板与粘贴进行中，
