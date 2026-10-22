@@ -1,7 +1,7 @@
 name: lrdp
 description: A local-first Flutter remote desktop client powered by FreeRDP.
 publish_to: none
-version: 0.1.0+1
+version: 0.1.0+3
 
 environment:
   sdk: '>=3.11.0 <4.0.0'

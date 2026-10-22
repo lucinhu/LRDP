@@ -11,6 +11,7 @@ class RemoteViewMemory {
   bool pan = false;
   bool keyboardSimulation = true;
   bool modifierLock = false;
+  bool numberKeys = false;
   bool pasteText = false;
   TextEditingValue textDraft = TextEditingValue.empty;
   RemoteInputMode get mode => keyboardSimulation

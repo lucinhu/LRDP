@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../rdp/rdp_session.dart';
 import '../rdp/rdp_cursor.dart';
+import '../models/remote_image_scaling.dart';
 import 'remote_view_memory.dart';
 
 /// Pointer handling lives outside the transformed image, so zoom never changes
@@ -21,6 +22,8 @@ class RemoteSurface extends StatefulWidget {
     this.inputEnabled = true,
     this.preserveKeyboardFocus = false,
     this.memory,
+    this.pointerSpeed = 100,
+    this.imageScaling = RemoteImageScaling.smooth,
   });
   final RdpSession session;
   final FocusNode focus;
@@ -29,6 +32,8 @@ class RemoteSurface extends StatefulWidget {
   final bool inputEnabled;
   final bool preserveKeyboardFocus;
   final RemoteSurfaceMemory? memory;
+  final int pointerSpeed;
+  final RemoteImageScaling imageScaling;
   @override
   State<RemoteSurface> createState() => _RemoteSurfaceState();
 }
@@ -95,6 +100,7 @@ class _RemoteSurfaceState extends State<RemoteSurface>
       widget.focus.addListener(_focusChanged);
     }
     if (oldWidget.trackpad != widget.trackpad ||
+        oldWidget.pointerSpeed != widget.pointerSpeed ||
         oldWidget.pan != widget.pan ||
         oldWidget.inputEnabled != widget.inputEnabled ||
         !_interactive ||
@@ -623,7 +629,8 @@ class _RemoteSurfaceState extends State<RemoteSurface>
         () => _pointer = widget.trackpad
             ? _clamp(
                 _pointer! +
-                    delta /
+                    delta *
+                        (widget.pointerSpeed.clamp(50, 200) / 100) /
                         (_baseScale *
                             widget.transform.value.getMaxScaleOnAxis()),
               )
@@ -824,12 +831,20 @@ class _RemoteSurfaceState extends State<RemoteSurface>
                             ? Texture(
                                 textureId: widget.session.textureId!,
                                 freeze: !widget.active,
-                                filterQuality: FilterQuality.low,
+                                filterQuality:
+                                    widget.imageScaling ==
+                                        RemoteImageScaling.sharp
+                                    ? FilterQuality.none
+                                    : FilterQuality.low,
                               )
                             : RawImage(
                                 image: widget.session.image,
                                 fit: BoxFit.fill,
-                                filterQuality: FilterQuality.low,
+                                filterQuality:
+                                    widget.imageScaling ==
+                                        RemoteImageScaling.sharp
+                                    ? FilterQuality.none
+                                    : FilterQuality.low,
                               ),
                       ),
                     ),

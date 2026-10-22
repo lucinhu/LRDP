@@ -18,8 +18,11 @@ flutter test
 然后重跑检查。CI 保留格式校验，不会自动修改仓库中的文件。
 
 输入体验回归可单独运行 `flutter test test/input_experience_test.dart test/keyboard_modifiers_test.dart`，
-覆盖模式、草稿、软键盘编辑事件、锁定模式和单次组合键、收起后偏好恢复与全屏释放布局。
+覆盖模式、草稿、软键盘编辑事件、锁定模式和单次组合键、数字／符号页、收起后偏好恢复与全屏释放布局。
+显示偏好与指针速度另运行 `flutter test test/display_controls_test.dart`，
+覆盖纹理/图像采样、缩放后的光标坐标，以及三种语言在 200% 字号下的设置操作。
 实际按键传输使用 `python3 scripts/run_keyboard_test.py`，
+指针速度与双指滚动的实际 PDU 使用 `python3 scripts/run_trackpad_test.py`，
 输入释放与堵塞取消使用 `python3 scripts/run_input_stop_test.py`；这些脚本只使用隔离回环服务。
 桌面系统级验证需先构建主入口 Release，再运行 `scripts/run_linux_mouse_test.py`，
 可用 `--window-manager /path/to/openbox` 在私有 X11 内验证真实全屏与快捷键恢复。

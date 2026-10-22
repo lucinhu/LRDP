@@ -45,6 +45,71 @@ void main() {
     );
   }
 
+  for (final scale in [1.0, 2.0]) {
+    testWidgets(
+      'number keys keep IME focus, combine modifiers and reset scrolling at scale $scale',
+      (tester) async {
+        tester.view.physicalSize = const Size(320, 568);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.view.reset);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final session = PasteSession();
+        await mount(tester, session);
+        expect(find.byKey(const Key('remoteNumberKeys')), findsNothing);
+        await tester.tap(find.byKey(const Key('remoteExtraKeys')));
+        await tester.pumpAndSettle();
+        final scroll = find.descendant(
+          of: find.byKey(const Key('remoteSpecialKeys')),
+          matching: find.byType(Scrollable),
+        );
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('remoteKeyF12')),
+          250,
+          scrollable: scroll,
+        );
+        await modifier(tester, 'Ctrl');
+        await tester.tap(find.byKey(const Key('remoteNumberKeys')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('remoteKey1')).hitTestable(),
+          findsOneWidget,
+        );
+        await tester.tap(find.byKey(const Key('remoteKey1')));
+        await tester.pump();
+        expect(session.scans, [
+          (0x1d, true),
+          (0x02, true),
+          (0x02, false),
+          (0x1d, false),
+        ]);
+        session.scans.clear();
+        final symbol = find.byKey(const Key('remoteKey!'));
+        await tester.scrollUntilVisible(symbol, 250, scrollable: scroll);
+        await Scrollable.ensureVisible(tester.element(symbol), alignment: .5);
+        await tester.pumpAndSettle();
+        await tester.tap(symbol);
+        await tester.pump();
+        expect(session.scans, [
+          (0x2a, true),
+          (0x02, true),
+          (0x02, false),
+          (0x2a, false),
+        ]);
+        await tester.tap(find.byKey(const Key('remoteNumberKeys')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('remoteKeyEsc')).hitTestable(),
+          findsOneWidget,
+        );
+        expect(tester.testTextInput.isVisible, isTrue);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        session.dispose();
+      },
+    );
+  }
+
   testWidgets(
     'modifiers apply once by default, including a batch of IME text',
     (tester) async {

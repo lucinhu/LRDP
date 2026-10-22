@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/connection_profile.dart';
 import '../models/remote_input_mode.dart';
+import '../models/remote_image_scaling.dart';
 
 class ProfileStore extends ChangeNotifier {
   ProfileStore(this._preferences, {FlutterSecureStorage? vault})
@@ -77,6 +78,33 @@ class ProfileStore extends ChangeNotifier {
     notifyListeners();
   });
   static const frameRateOptions = [0, 30, 60, 90, 120, 144, 165, 240];
+  static const pointerSpeedOptions = [50, 75, 100, 125, 150, 200];
+  int get pointerSpeed {
+    final value = _preferences.getInt('pointerSpeed') ?? 100;
+    return pointerSpeedOptions.contains(value) ? value : 100;
+  }
+
+  RemoteImageScaling get imageScaling => RemoteImageScaling.values.firstWhere(
+    (value) => value.name == _preferences.getString('imageScaling'),
+    orElse: () => RemoteImageScaling.smooth,
+  );
+
+  Future<void> setPointerSpeed(int value) => _serialize(() async {
+    if (!pointerSpeedOptions.contains(value)) throw ArgumentError.value(value);
+    if (!await _preferences.setInt('pointerSpeed', value)) {
+      throw StateError('无法保存指针速度');
+    }
+    notifyListeners();
+  });
+
+  Future<void> setImageScaling(RemoteImageScaling value) =>
+      _serialize(() async {
+        if (!await _preferences.setString('imageScaling', value.name)) {
+          throw StateError('无法保存缩放显示设置');
+        }
+        notifyListeners();
+      });
+
   int get frameRateLimit {
     final value = _preferences.getInt('frameRateLimit') ?? 0;
     return frameRateOptions.contains(value) ? value : 0;

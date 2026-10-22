@@ -293,6 +293,11 @@ void main() {
         await tester.tap(toggle);
         await tester.pump();
         expect(memory.modifierLock, isTrue);
+        await tester.tap(find.byKey(const Key('remoteExtraKeys')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('remoteNumberKeys')));
+        await tester.pumpAndSettle();
+        expect(memory.numberKeys, isTrue);
         await tester.tap(find.byKey(const Key('remoteModifierCtrl')));
         await tester.pump();
         await tester.tap(find.byTooltip('收起键盘'));
@@ -305,6 +310,13 @@ void main() {
         );
         await open();
         expect(tester.widget<IconButton>(toggle).isSelected, isTrue);
+        expect(find.byKey(const Key('remoteSpecialKeys')), findsNothing);
+        await tester.tap(find.byKey(const Key('remoteExtraKeys')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('remoteKey1')).hitTestable(),
+          findsOneWidget,
+        );
         session.inputs.clear();
         tester.testTextInput.updateEditingValue(
           const TextEditingValue(

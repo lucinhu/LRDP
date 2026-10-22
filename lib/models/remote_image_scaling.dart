@@ -1,0 +1,1 @@
+enum RemoteImageScaling { smooth, sharp }

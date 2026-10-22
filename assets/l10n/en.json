@@ -348,5 +348,13 @@
   "剪贴板尚未就绪，请稍候；若持续不可用，请检查服务端设置": "The clipboard is not ready. Wait, or check server settings if it remains unavailable.",
   "当前连接未启用文件剪贴板，请检查服务端设置或尝试文件中转站": "File clipboard is not enabled for this connection. Check server settings or try File exchange.",
   "正在处理粘贴，请完成后重试": "A paste is in progress. Wait for it to finish, then try again.",
-  "文字、图片及文件粘贴；需服务端支持": "Text, images and file paste; requires server support"
+  "文字、图片及文件粘贴；需服务端支持": "Text, images and file paste; requires server support",
+  "显示数字和符号": "Show numbers and symbols",
+  "显示导航和功能键": "Show navigation and function keys",
+  "缩放显示": "Image scaling",
+  "平滑缩放": "Smooth scaling",
+  "锐利像素": "Sharp pixels",
+  "平滑缩放适合日常操作；锐利像素适合查看像素细节。仅影响本机显示，不改变远端编码画质。": "Smooth scaling suits everyday use; sharp pixels preserve pixel detail. This changes local display only, not remote encoding quality.",
+  "触控板指针速度": "Touchpad pointer speed",
+  "调整单指移动光标的速度，不影响直接触控、鼠标定位或双指滚动。": "Adjust one-finger cursor movement without changing direct touch, mouse positioning or two-finger scrolling."
 }

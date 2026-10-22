@@ -72,6 +72,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-trackpad-') as temporary, ExitStac
     result = next(json.loads(line) for line in (output / 'server.log').read_text().splitlines()
         if line.startswith('{"trackpad_passed"'))
     assert result['trackpad_passed'] and result['wheel_pdus'] == 10
+    assert result['pointer_speed_moves'] == 2
     result.update(passed=True, library_sha256=hashlib.sha256(library.read_bytes()).hexdigest(),
         scope='synthetic Flutter desktop trackpad and mouse-wheel events through real worker/FFI/TLS; physical hardware pending')
     verdict.write_text(json.dumps(result, indent=2) + '\n')

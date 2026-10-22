@@ -21,6 +21,8 @@ class MobileKeyboard extends StatefulWidget {
     this.onSessionShortcut,
     this.initialModifierLock = false,
     this.onModifierLockChanged,
+    this.initialNumberKeys = false,
+    this.onNumberKeysChanged,
   });
   final RdpSession session;
   final VoidCallback close;
@@ -35,6 +37,8 @@ class MobileKeyboard extends StatefulWidget {
   final KeyEventResult Function(KeyEvent)? onSessionShortcut;
   final bool initialModifierLock;
   final ValueChanged<bool>? onModifierLockChanged;
+  final bool initialNumberKeys;
+  final ValueChanged<bool>? onNumberKeysChanged;
   @override
   State<MobileKeyboard> createState() => _MobileKeyboardState();
 }
@@ -45,6 +49,7 @@ class _MobileKeyboardState extends State<MobileKeyboard>
   final _focus = FocusNode();
   final _modeFocus = FocusNode();
   final _textModeFocus = FocusNode();
+  final _specialScroll = ScrollController(keepScrollOffset: false);
   final _heldModifiers = <int>{};
   late bool _extraKeys;
   bool _sending = false;
@@ -53,6 +58,7 @@ class _MobileKeyboardState extends State<MobileKeyboard>
   late bool _simulateKeys;
   late bool _pasteText;
   late bool _modifierLock;
+  late bool _numberKeys;
   bool _updating = false;
   String _keyText = '';
   TextEditingValue _draft = TextEditingValue.empty;
@@ -66,6 +72,7 @@ class _MobileKeyboardState extends State<MobileKeyboard>
     _simulateKeys = widget.simulateKeys;
     _pasteText = widget.pasteText;
     _modifierLock = widget.initialModifierLock;
+    _numberKeys = widget.initialNumberKeys;
     _draft = widget.initialDraft.copyWith(composing: TextRange.empty);
     if (_simulateKeys) {
       _resetKeys();
@@ -156,6 +163,7 @@ class _MobileKeyboardState extends State<MobileKeyboard>
     _focus.dispose();
     _modeFocus.dispose();
     _textModeFocus.dispose();
+    _specialScroll.dispose();
     _text.dispose();
     super.dispose();
   }
@@ -376,6 +384,44 @@ class _MobileKeyboardState extends State<MobileKeyboard>
   double get _keyHeight =>
       (MediaQuery.textScalerOf(context).scale(14) + 20).clamp(48.0, 80.0);
 
+  Map<String, List<int>> get _specialKeys => _numberKeys
+      ? {
+          for (final rune
+              in '1234567890-=[]\\;\',./!@#\$%^&*()_+{}|:"<>?`~'.runes)
+            String.fromCharCode(rune): rdpCharacterChord(rune)!,
+        }
+      : {
+          'Esc': [0x01],
+          'Tab': [0x0f],
+          '←': [0x14b],
+          '↑': [0x148],
+          '↓': [0x150],
+          '→': [0x14d],
+          'Home': [0x147],
+          'End': [0x14f],
+          'PgUp': [0x149],
+          'PgDn': [0x151],
+          'Insert': [0x152],
+          'Delete': [0x153],
+          '退格': [0x0e],
+          '回车': [0x1c],
+          'Ctrl+C': [0x1d, 0x2e],
+          'Ctrl+V': [0x1d, 0x2f],
+          'Ctrl+X': [0x1d, 0x2d],
+          'Ctrl+A': [0x1d, 0x1e],
+          'Ctrl+Z': [0x1d, 0x2c],
+          'Ctrl+Y': [0x1d, 0x15],
+          'CapsLock': [0x3a],
+          'NumLock': [0x45],
+          'ScrollLock': [0x46],
+          'PrintScreen': [0x137],
+          'Ctrl+Shift+Esc': [0x1d, 0x2a, 0x01],
+          'Ctrl+Alt+Del': [0x1d, 0x38, 0x153],
+          for (var i = 1; i <= 10; i++) 'F$i': [0x3a + i],
+          'F11': [0x57],
+          'F12': [0x58],
+        };
+
   @override
   Widget build(BuildContext context) => TextFieldTapRegion(
     child: Material(
@@ -432,50 +478,49 @@ class _MobileKeyboardState extends State<MobileKeyboard>
           if (_extraKeys)
             SizedBox(
               height: _keyHeight,
-              child: ListView(
-                key: const Key('remoteSpecialKeys'),
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
                 children: [
-                  for (final entry in <String, List<int>>{
-                    'Esc': [0x01],
-                    'Tab': [0x0f],
-                    '←': [0x14b],
-                    '↑': [0x148],
-                    '↓': [0x150],
-                    '→': [0x14d],
-                    'Home': [0x147],
-                    'End': [0x14f],
-                    'PgUp': [0x149],
-                    'PgDn': [0x151],
-                    'Insert': [0x152],
-                    'Delete': [0x153],
-                    '退格': [0x0e],
-                    '回车': [0x1c],
-                    'Ctrl+C': [0x1d, 0x2e],
-                    'Ctrl+V': [0x1d, 0x2f],
-                    'Ctrl+X': [0x1d, 0x2d],
-                    'Ctrl+A': [0x1d, 0x1e],
-                    'Ctrl+Z': [0x1d, 0x2c],
-                    'Ctrl+Y': [0x1d, 0x15],
-                    'CapsLock': [0x3a],
-                    'NumLock': [0x45],
-                    'ScrollLock': [0x46],
-                    'PrintScreen': [0x137],
-                    'Ctrl+Shift+Esc': [0x1d, 0x2a, 0x01],
-                    'Ctrl+Alt+Del': [0x1d, 0x38, 0x153],
-                    for (var i = 1; i <= 10; i++) 'F$i': [0x3a + i],
-                    'F11': [0x57],
-                    'F12': [0x58],
-                  }.entries)
-                    TextButton(
-                      key: Key('remoteKey${entry.key}'),
-                      onPressed: _sending ? null : () => _shortcut(entry.value),
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(52, 48),
+                  IconButton.filledTonal(
+                    key: const Key('remoteNumberKeys'),
+                    tooltip: _numberKeys
+                        ? context.tr('显示导航和功能键')
+                        : context.tr('显示数字和符号'),
+                    isSelected: _numberKeys,
+                    icon: const Icon(Icons.numbers),
+                    selectedIcon: const Icon(Icons.keyboard_alt_outlined),
+                    onPressed: _sending
+                        ? null
+                        : () {
+                            _editor?.hideToolbar();
+                            setState(() => _numberKeys = !_numberKeys);
+                            widget.onNumberKeysChanged?.call(_numberKeys);
+                            _focus.requestFocus();
+                          },
+                  ),
+                  Expanded(
+                    child: SizedBox(
+                      key: const Key('remoteSpecialKeys'),
+                      child: ListView(
+                        key: ValueKey('remote-number-keys-$_numberKeys'),
+                        controller: _specialScroll,
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        children: [
+                          for (final entry in _specialKeys.entries)
+                            TextButton(
+                              key: Key('remoteKey${entry.key}'),
+                              onPressed: _sending
+                                  ? null
+                                  : () => _shortcut(entry.value),
+                              style: TextButton.styleFrom(
+                                minimumSize: const Size(52, 48),
+                              ),
+                              child: Text(context.tr(entry.key)),
+                            ),
+                        ],
                       ),
-                      child: Text(context.tr(entry.key)),
                     ),
+                  ),
                 ],
               ),
             ),

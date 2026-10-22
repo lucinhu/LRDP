@@ -12,6 +12,7 @@ import '../rdp/session_recovery.dart';
 import '../rdp/session_issue.dart';
 import '../rdp/frame_rate.dart';
 import '../models/remote_input_mode.dart';
+import '../models/remote_image_scaling.dart';
 import 'transfer_dialog.dart';
 import 'adaptive.dart';
 import 'remote_surface.dart';
@@ -35,6 +36,8 @@ class RemoteView extends StatefulWidget {
     this.frameRateLimit = 0,
     this.leave,
     this.onInputModeChanged,
+    this.pointerSpeed = 100,
+    this.imageScaling = RemoteImageScaling.smooth,
   });
   final RdpSession session;
   final RemoteViewMemory? memory;
@@ -45,6 +48,8 @@ class RemoteView extends StatefulWidget {
   final int frameRateLimit;
   final VoidCallback? leave;
   final ValueChanged<RemoteInputMode>? onInputModeChanged;
+  final int pointerSpeed;
+  final RemoteImageScaling imageScaling;
   @override
   State<RemoteView> createState() => _RemoteViewState();
 }
@@ -547,6 +552,8 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
             simulateKeys: _memory.keyboardSimulation,
             initialModifierLock: _memory.modifierLock,
             onModifierLockChanged: (value) => _memory.modifierLock = value,
+            initialNumberKeys: _memory.numberKeys,
+            onNumberKeysChanged: (value) => _memory.numberKeys = value,
             pasteText: _memory.pasteText,
             onInputModeChanged: _inputModeChanged,
             initialDraft: _memory.textDraft,
@@ -622,6 +629,8 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                                         preserveKeyboardFocus:
                                             phone && _keyboard,
                                         memory: _memory.surface,
+                                        pointerSpeed: widget.pointerSpeed,
+                                        imageScaling: widget.imageScaling,
                                       ),
                                     ),
                                   )
@@ -790,6 +799,9 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                         initialModifierLock: _memory.modifierLock,
                         onModifierLockChanged: (value) =>
                             _memory.modifierLock = value,
+                        initialNumberKeys: _memory.numberKeys,
+                        onNumberKeysChanged: (value) =>
+                            _memory.numberKeys = value,
                         pasteText: _memory.pasteText,
                         onInputModeChanged: _inputModeChanged,
                         initialDraft: _memory.textDraft,

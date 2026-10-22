@@ -105,6 +105,16 @@ void main() {
         await tester.tap(key);
         await tester.pump();
       }
+      await tester.tap(find.byKey(const Key('remoteNumberKeys')));
+      await tester.pumpAndSettle();
+      for (final label in ['1', '!']) {
+        final key = find.byKey(Key('remoteKey$label'));
+        await tester.scrollUntilVisible(key, 250, scrollable: scroll);
+        await Scrollable.ensureVisible(tester.element(key), alignment: .5);
+        await tester.pumpAndSettle();
+        await tester.tap(key);
+        await tester.pump();
+      }
       // Exercise both actual IME editing updates and Android-style key events.
       tester.testTextInput.updateEditingValue(
         const TextEditingValue(

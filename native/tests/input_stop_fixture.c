@@ -28,6 +28,7 @@ static unsigned released_scans, released_unicode, released_buttons;
 static unsigned preflight, combined_events;
 static BOOL preflight_drag, preflight_ack;
 static unsigned trackpad_wheels;
+static unsigned trackpad_moves;
 static void check(BOOL condition, const char* message) {
   if (!condition) { failed = TRUE; fprintf(stderr, "FAIL: %s\n", message); }
 }
@@ -69,6 +70,13 @@ static BOOL unicode_key(rdpInput* input, UINT16 flags, UINT16 code) {
 static BOOL mouse(rdpInput* input, UINT16 flags, UINT16 px, UINT16 py) {
   (void)input;
   if (strcmp(mode, "trackpad") == 0) {
+    if (flags == PTR_FLAGS_MOVE) {
+      static const UINT16 xs[] = {216, 280};
+      check(trackpad_moves < 2 && px == xs[trackpad_moves] && py == 200,
+        "50 and 200 percent touch pointer speed reaches exact coordinates");
+      trackpad_moves++;
+      return !failed;
+    }
     static const UINT16 expected[] = {
       0x278, 0x588, 0x278, 0x588, 0x388, 0x478, 0x388, 0x478,
       0x388, 0x478
@@ -135,6 +143,10 @@ static BOOL accepted(freerdp_listener* listener, freerdp_peer* peer) {
   peer->PostConnect = post_connect;
   BOOL blocked = strcmp(mode, "blocked") == 0;
   BOOL trackpad = strcmp(mode, "trackpad") == 0;
+  if (trackpad) {
+    check(freerdp_settings_set_uint32(cfg, FreeRDP_DesktopWidth, 1280) &&
+      freerdp_settings_set_uint32(cfg, FreeRDP_DesktopHeight, 800), "fixed trackpad fixture geometry");
+  }
   BOOL trackpad_frame = FALSE;
   if (blocked) {
     int receive_bytes = 1024;
@@ -177,8 +189,8 @@ static BOOL accepted(freerdp_listener* listener, freerdp_peer* peer) {
     }
   }
   if (trackpad) {
-    check(marker && preflight_ack && trackpad_wheels == 10, "trackpad completion and exact wheel count");
-    printf("{\"trackpad_passed\":%s,\"wheel_pdus\":%u}\n", failed ? "false" : "true", trackpad_wheels);
+    check(marker && preflight_ack && trackpad_wheels == 10 && trackpad_moves == 2, "trackpad completion and exact wheel and pointer count");
+    printf("{\"trackpad_passed\":%s,\"wheel_pdus\":%u,\"pointer_speed_moves\":%u}\n", failed ? "false" : "true", trackpad_wheels, trackpad_moves);
     fflush(stdout);
     peer->Disconnect(peer); freerdp_peer_context_free(peer); freerdp_peer_free(peer);
     finished = TRUE; return TRUE;

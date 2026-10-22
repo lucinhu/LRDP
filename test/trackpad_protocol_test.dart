@@ -4,12 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lrdp/models/connection_profile.dart';
 import 'package:lrdp/rdp/rdp_session.dart';
+import 'package:lrdp/rdp/rdp_cursor.dart';
 import 'package:lrdp/ui/remote_surface.dart';
 
 void main() {
-  testWidgets('desktop gesture streams deliver exact wheel PDUs over TLS', (
+  testWidgets('pointer speeds and desktop gestures deliver exact PDUs over TLS', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final directory = Directory.systemTemp.createTempSync('lrdp-trackpad-');
     final session = RdpSession(
       ConnectionProfile(
@@ -25,6 +29,7 @@ void main() {
     final focus = FocusNode();
     final transform = TransformationController();
     final active = ValueNotifier(true);
+    final speed = ValueNotifier<int?>(50);
     Future<void> until(bool Function() condition) async {
       final deadline = DateTime.now().add(const Duration(seconds: 12));
       while (!condition() && DateTime.now().isBefore(deadline)) {
@@ -46,26 +51,40 @@ void main() {
       await until(
         () => session.state == SessionState.connected && session.hasVideo,
       );
+      expect((session.desktopWidth, session.desktopHeight), (1280, 800));
+      // Seed a known cursor position; movements still use the real worker/TLS path.
+      session.cursor = const RdpCursor(x: 200, y: 200, positionSerial: 1);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: ValueListenableBuilder<bool>(
-              valueListenable: active,
-              builder: (context, enabled, child) => Focus(
+            body: ListenableBuilder(
+              listenable: Listenable.merge([active, speed]),
+              builder: (context, child) => Focus(
                 focusNode: focus,
                 child: RemoteSurface(
                   session: session,
                   focus: focus,
                   transform: transform,
-                  trackpad: false,
+                  trackpad: speed.value != null,
+                  pointerSpeed: speed.value ?? 100,
                   pan: false,
-                  active: enabled,
+                  active: active.value,
                 ),
               ),
             ),
           ),
         ),
       );
+      await tester.pump();
+      for (final percent in [50, 200]) {
+        speed.value = percent;
+        await tester.pump();
+        final touch = await tester.startGesture(const Offset(200, 200));
+        await touch.moveBy(const Offset(20, 0));
+        await touch.up();
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+      speed.value = null;
       await tester.pump();
       final pointer = TestPointer(61, PointerDeviceKind.trackpad);
       const center = Offset(200, 200);
@@ -116,6 +135,7 @@ void main() {
       focus.dispose();
       transform.dispose();
       active.dispose();
+      speed.dispose();
       directory.deleteSync(recursive: true);
     }
   }, skip: Platform.environment['LRDP_TRACKPAD_PORT'] == null);

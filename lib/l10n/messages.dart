@@ -362,6 +362,15 @@ const localizedMessages = <String, Map<String, String>>{
     "当前连接未启用文件剪贴板，请检查服务端设置或尝试文件中转站": "当前连接未启用文件剪贴板，请检查服务端设置或尝试文件中转站",
     "正在处理粘贴，请完成后重试": "正在处理粘贴，请完成后重试",
     "文字、图片及文件粘贴；需服务端支持": "文字、图片及文件粘贴；需服务端支持",
+    "显示数字和符号": "显示数字和符号",
+    "显示导航和功能键": "显示导航和功能键",
+    "缩放显示": "缩放显示",
+    "平滑缩放": "平滑缩放",
+    "锐利像素": "锐利像素",
+    "平滑缩放适合日常操作；锐利像素适合查看像素细节。仅影响本机显示，不改变远端编码画质。":
+        "平滑缩放适合日常操作；锐利像素适合查看像素细节。仅影响本机显示，不改变远端编码画质。",
+    "触控板指针速度": "触控板指针速度",
+    "调整单指移动光标的速度，不影响直接触控、鼠标定位或双指滚动。": "调整单指移动光标的速度，不影响直接触控、鼠标定位或双指滚动。",
   },
   "zh-TW": {
     "IPv6 地址格式不正确": "IPv6 地址格式不正確",
@@ -725,6 +734,15 @@ const localizedMessages = <String, Map<String, String>>{
     "当前连接未启用文件剪贴板，请检查服务端设置或尝试文件中转站": "目前連線未啟用檔案剪貼簿，請檢查伺服器設定或嘗試檔案中轉站",
     "正在处理粘贴，请完成后重试": "正在處理貼上，請完成後重試",
     "文字、图片及文件粘贴；需服务端支持": "文字、圖片及檔案貼上；需伺服器支援",
+    "显示数字和符号": "顯示數字和符號",
+    "显示导航和功能键": "顯示導覽和功能鍵",
+    "缩放显示": "縮放顯示",
+    "平滑缩放": "平滑縮放",
+    "锐利像素": "銳利像素",
+    "平滑缩放适合日常操作；锐利像素适合查看像素细节。仅影响本机显示，不改变远端编码画质。":
+        "平滑縮放適合日常操作；銳利像素適合查看像素細節。僅影響本機顯示，不改變遠端編碼畫質。",
+    "触控板指针速度": "觸控板指標速度",
+    "调整单指移动光标的速度，不影响直接触控、鼠标定位或双指滚动。": "調整單指移動游標的速度，不影響直接觸控、滑鼠定位或雙指捲動。",
   },
   "en": {
     "IPv6 地址格式不正确": "Invalid IPv6 address",
@@ -1160,5 +1178,15 @@ const localizedMessages = <String, Map<String, String>>{
     "正在处理粘贴，请完成后重试":
         "A paste is in progress. Wait for it to finish, then try again.",
     "文字、图片及文件粘贴；需服务端支持": "Text, images and file paste; requires server support",
+    "显示数字和符号": "Show numbers and symbols",
+    "显示导航和功能键": "Show navigation and function keys",
+    "缩放显示": "Image scaling",
+    "平滑缩放": "Smooth scaling",
+    "锐利像素": "Sharp pixels",
+    "平滑缩放适合日常操作；锐利像素适合查看像素细节。仅影响本机显示，不改变远端编码画质。":
+        "Smooth scaling suits everyday use; sharp pixels preserve pixel detail. This changes local display only, not remote encoding quality.",
+    "触控板指针速度": "Touchpad pointer speed",
+    "调整单指移动光标的速度，不影响直接触控、鼠标定位或双指滚动。":
+        "Adjust one-finger cursor movement without changing direct touch, mouse positioning or two-finger scrolling.",
   },
 };

@@ -11,6 +11,7 @@ import '../data/profile_store.dart';
 import '../data/rdp_file.dart';
 import '../data/transfer_folder.dart';
 import '../models/connection_profile.dart';
+import '../models/remote_image_scaling.dart';
 import '../rdp/rdp_session.dart';
 import '../rdp/session_audio_focus.dart';
 import '../rdp/session_issue.dart';
@@ -749,6 +750,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                                 active: true,
                                 leave: _leaveSession,
                                 frameRateLimit: store.frameRateLimit,
+                                pointerSpeed: store.pointerSpeed,
+                                imageScaling: store.imageScaling,
                                 fullscreen: _fullscreen,
                                 toggleFullscreen: () =>
                                     setState(() => _fullscreen = !_fullscreen),
@@ -1903,6 +1906,58 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                 onChanged: (rate) {
                   if (rate != null) {
                     _saveSetting(() => store.setFrameRateLimit(rate));
+                  }
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: DropdownButtonFormField<RemoteImageScaling>(
+                key: ValueKey('image-scaling-${store.imageScaling.name}'),
+                initialValue: store.imageScaling,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: context.tr('缩放显示'),
+                  helperText: context.tr(
+                    '平滑缩放适合日常操作；锐利像素适合查看像素细节。仅影响本机显示，不改变远端编码画质。',
+                  ),
+                  helperMaxLines: 5,
+                ),
+                items: [
+                  DropdownMenuItem(
+                    value: RemoteImageScaling.smooth,
+                    child: Text(context.tr('平滑缩放')),
+                  ),
+                  DropdownMenuItem(
+                    value: RemoteImageScaling.sharp,
+                    child: Text(context.tr('锐利像素')),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    _saveSetting(() => store.setImageScaling(value));
+                  }
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: DropdownButtonFormField<int>(
+                key: ValueKey('pointer-speed-${store.pointerSpeed}'),
+                initialValue: store.pointerSpeed,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: context.tr('触控板指针速度'),
+                  helperText: context.tr('调整单指移动光标的速度，不影响直接触控、鼠标定位或双指滚动。'),
+                  helperMaxLines: 4,
+                ),
+                items: [
+                  for (final speed in ProfileStore.pointerSpeedOptions)
+                    DropdownMenuItem(value: speed, child: Text('$speed%')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    _saveSetting(() => store.setPointerSpeed(value));
                   }
                 },
               ),
