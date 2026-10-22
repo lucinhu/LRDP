@@ -27,6 +27,13 @@
 `build/keyboard-runtime/VERDICT.json` 与 `build/input-stop-runtime/native/VERDICT.json`。
 协议测试使用合成 Flutter 输入及回环服务，不等于真实手机键盘或物理触控板验收。
 
+首次 AppImage 系统验收在全屏重新进入后过早点击工具栏，截图仍包含旧尺寸的过渡帧。
+脚本改为等待完整工具栏与本地控制提示绘制完成，再点击输入按钮，保留原有远端事件断言。
+同次日志发现缺少与捆绑 OpenSSL 匹配的 legacy provider，NTLM 的 MD4/RC4 不可用。
+打包器现包含该模块和进程级启动路径，并增加算法加载检查、SAM-backed NLA 主应用验收及
+正确/错误凭据的独立 NLA 入口。启动器带空格路径、符号链接与参数转发回归通过；Python **11/11**。
+最终 AppImage 的 NLA 与系统操作结果在发布打包完成后另行记录。
+
 FreeRDP 子模块、原生连接实现和 ABI v5 未改动。Android 真机与厂商输入法、系统文件选择器、
 TalkBack、其他 Linux 发行版、原生 Wayland 及 Apple/Windows 设备行为继续待验收。
 

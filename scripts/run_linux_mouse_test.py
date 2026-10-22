@@ -23,6 +23,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--window-manager', type=Path, help='Optional Openbox binary for actual full-screen/restore verification')
 parser.add_argument('--appimage', type=Path, help='Test the packaged AppImage instead of the local bundle')
 parser.add_argument('--extract-and-run', action='store_true', help='Exercise the AppImage fallback without FUSE')
+parser.add_argument('--nla', action='store_true', help='Authenticate against a disposable SAM-backed NLA server')
 args = parser.parse_args()
 bundle = root / 'build/linux/x64/release/bundle'
 if args.extract_and_run and not args.appimage:
@@ -100,8 +101,16 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
         port = sock.getsockname()[1]
     log = cleanup.enter_context((out / 'rdp-server.log').open('w'))
     server_env = dict(server_env, XDG_CONFIG_HOME=str(private / 'server-config'))
+    security = ['/sec:tls', '-auth']
+    if args.nla:
+        digest = subprocess.run(['openssl', 'dgst', '-md4', '-provider', 'legacy'],
+            input='LRDP-test-password-2026'.encode('utf-16le'), capture_output=True, check=True)
+        sam = private / 'SAM'
+        sam.write_text('fixture:::' + digest.stdout.decode().strip().split()[-1] + ':\n')
+        sam.chmod(0o600)
+        security = ['/sec:nla', f'/sam-file:{sam}']
     server = subprocess.Popen(['freerdp-shadow-cli3', '/bind-address:127.0.0.1', f'/port:{port}',
-        '/sec:tls', '-auth', '+may-view', '+may-interact', '-gfx-avc420', '-gfx-avc444',
+        *security, '+may-view', '+may-interact', '-gfx-avc420', '-gfx-avc444',
         '/log-level:WARN'], env=server_env, stdout=log, stderr=subprocess.STDOUT)
     cleanup.callback(stop, server)
     for _ in range(200):
@@ -114,7 +123,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
         raise AssertionError('Private RDP server did not start')
     profile = {'id': 'isolated-linux-mouse', 'name': 'Linux mouse test', 'host': '127.0.0.1',
         'port': port, 'username': 'fixture', 'width': 1280, 'height': 800,
-        'nla': False, 'autoReconnect': False, 'rememberPassword': False}
+        'nla': args.nla, 'autoReconnect': False, 'rememberPassword': False}
     # Keep the pixel-based mouse oracle independent of the host's accent and
     # scheduled dark mode. Appearance has its own system/UI regression.
     preferences = {'flutter.profiles.v1': json.dumps([profile]),
@@ -211,6 +220,11 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
     capture('login')
     action = wait_action()
     print('Login action', action, flush=True)
+    if args.nla:
+        # LoginDialog focuses the password for a prefilled username. Keep the
+        # disposable test secret off command lines and out of logs.
+        subprocess.run(['xdotool', 'type', '--clearmodifiers', '--file', '-'],
+            input='LRDP-test-password-2026', text=True, env=client_env, check=True, timeout=10)
     click((action[0] + action[2]) // 2, action[1])
     wait_action(wide=True)
     time.sleep(.3)
@@ -328,6 +342,11 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
         wait_for(lambda: window_fullscreen() and window_geometry()['WIDTH']==1440,
             'Full-screen keyboard shortcut did not reenter OS full screen from local focus')
         capture('local-control-fullscreen')
+        # The window-manager geometry changes before GTK/Flutter paints its
+        # new hit-test regions. Wait for the full-width toolbar and local hint.
+        wait_for(lambda: not hint_is_remote() and
+            sum(ImageGrab.grab(xdisplay=client_env['DISPLAY']).convert('RGB').getpixel((1420,70)))>500,
+            'Full-screen floating controls did not finish painting')
         # The desktop composer is a modal route outside the surface's focus
         # subtree. It must explicitly route the same local escape shortcut.
         click(1440-340-8+68*2, 8+52+1+6+32)
@@ -351,6 +370,7 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
             'actual OS full screen and original window size restored through floating Back action']
     (out / 'events.json').write_text(json.dumps(desktop.events, indent=2) + '\n')
     report = {'passed': True, 'entrypoint': 'lib/main.dart Linux Release', 'backend': 'GTK/X11',
+        'nla_authentication_verified': args.nla,
         'native_abi': 5, 'library_sha256': hashlib.sha256((bundle / 'lib/liblrdp.so').read_bytes()).hexdigest(),
         'aot_sha256': hashlib.sha256((bundle / 'lib/libapp.so').read_bytes()).hexdigest(),
         'plugin_sha256': hashlib.sha256((bundle / 'lib/liblrdp_native_plugin.so').read_bytes()).hexdigest(),

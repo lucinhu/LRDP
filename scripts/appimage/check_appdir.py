@@ -11,10 +11,11 @@ import sys
 
 appdir = Path(sys.argv[1]).resolve()
 tools = json.loads(Path(sys.argv[2]).read_text())
-for relative in ('AppRun', 'dev.lrdp.lrdp.desktop', 'dev.lrdp.lrdp.png',
+for relative in ('AppRun', 'AppRun.gtk', 'dev.lrdp.lrdp.desktop', 'dev.lrdp.lrdp.png',
                  'usr/bin/lrdp', 'usr/bin/data/icudtl.dat',
                  'usr/lib/libapp.so', 'usr/lib/liblrdp.so',
-                 'usr/lib/liblrdp_native_plugin.so', 'usr/lib/libflutter_linux_gtk.so'):
+                 'usr/lib/liblrdp_native_plugin.so', 'usr/lib/libflutter_linux_gtk.so',
+                 'usr/lib/ossl-modules/legacy.so'):
     if not (appdir / relative).exists():
         raise SystemExit(f'AppDir payload missing: {relative}')
 if not (appdir / 'usr/bin/data/flutter_assets').is_dir():
@@ -22,6 +23,26 @@ if not (appdir / 'usr/bin/data/flutter_assets').is_dir():
 bridge = ctypes.CDLL(str(appdir / 'usr/lib/liblrdp.so'))
 if bridge.lrdp_abi_version() != 5:
     raise SystemExit('Unexpected native ABI')
+crypto = ctypes.CDLL(str(appdir / 'usr/lib/libcrypto.so.3'))
+crypto.OSSL_PROVIDER_set_default_search_path.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+crypto.OSSL_PROVIDER_load.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+crypto.OSSL_PROVIDER_load.restype = ctypes.c_void_p
+crypto.OSSL_PROVIDER_unload.argtypes = [ctypes.c_void_p]
+crypto.EVP_MD_fetch.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+crypto.EVP_MD_fetch.restype = ctypes.c_void_p
+crypto.EVP_MD_free.argtypes = [ctypes.c_void_p]
+crypto.EVP_CIPHER_fetch.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+crypto.EVP_CIPHER_fetch.restype = ctypes.c_void_p
+crypto.EVP_CIPHER_free.argtypes = [ctypes.c_void_p]
+if crypto.OSSL_PROVIDER_set_default_search_path(None, os.fsencode(appdir / 'usr/lib/ossl-modules')) != 1:
+    raise SystemExit('Cannot select the bundled OpenSSL module directory')
+providers = [crypto.OSSL_PROVIDER_load(None, name) for name in (b'default', b'legacy')]
+digest = crypto.EVP_MD_fetch(None, b'MD4', None)
+cipher = crypto.EVP_CIPHER_fetch(None, b'RC4', None)
+if not all(providers) or not digest or not cipher:
+    raise SystemExit('Bundled NLA/NTLM algorithms are unavailable')
+crypto.EVP_MD_free(digest)
+crypto.EVP_CIPHER_free(cipher)
 versions = set()
 elf_files = {}
 for path in sorted(appdir.rglob('*')):
@@ -52,7 +73,10 @@ metadata = {
     'maximum_glibc_requirement': '.'.join(map(str, max(versions))),
     'tools': tools,
     'elf_sha256': elf_files,
+    'openssl_legacy_algorithms_checked': ['MD4', 'RC4'],
     'scope': 'Packaging/ABI checks; actual UI and RDP execution require separate acceptance',
 }
 (appdir / 'usr/share/doc/lrdp/APPIMAGE_BUILD.json').write_text(json.dumps(metadata, indent=2) + '\n')
+for provider in reversed(providers):
+    crypto.OSSL_PROVIDER_unload(provider)
 print(f'PASS: {len(elf_files)} ELF files, native ABI 5, GLIBC <= 2.35, relative runtime paths')

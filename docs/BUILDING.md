@@ -74,6 +74,14 @@ python3 scripts/run_input_stop_test.py --library build/linux/x64/release/bundle/
 bash scripts/package_linux.sh
 ```
 
+AppImage 额外捆绑与 Ubuntu 编译环境中 `libcrypto` 匹配的 OpenSSL legacy provider。
+启动器仅为应用进程设置 `OPENSSL_MODULES`，不修改系统 OpenSSL 配置；此模块供 FreeRDP 的
+NLA/NTLM 使用。打包检查必须能从捆绑目录加载 MD4/RC4，缺少模块时拒绝产包。
+最终镜像还需用 `scripts/run_linux_mouse_test.py --appimage <镜像> --window-manager <openbox> --nla`
+分别验证 FUSE 与 `--extract-and-run`，以及对提取库运行
+`python3 scripts/run_protocol_test.py --nla <提取目录>/usr/lib/liblrdp.so`。
+后者仅为客户端选择该库旁的 provider，隔离服务端仍使用其系统依赖。
+
 窗口图标通过 `glib-compile-resources` 嵌入可执行文件。解压分发包后运行
 `./install-desktop.sh`，可将当前路径注册到当前用户的应用菜单并显示 LRDP 图标，
 无需 root。注册后应保留解压目录的位置。图标源文件和重新生成步骤见

@@ -49,6 +49,19 @@ PATH="$task_tools:$PATH" DEPLOY_GTK_VERSION=3 "$task_deploy" \
   "${task_libraries[@]}" --exclude-library 'libstdc++.so.6' --exclude-library 'libgcc_s.so.1' \
   --desktop-file "$task_staging/dev.lrdp.lrdp.desktop" \
   --icon-file "$task_staging/dev.lrdp.lrdp.png" --plugin gtk
+task_modules="$(pkg-config --variable=modulesdir libcrypto)"
+if [[ -z "$task_modules" ]]; then
+  task_modules="$(pkg-config --variable=libdir libcrypto)/ossl-modules"
+fi
+[[ -f "$task_modules/legacy.so" ]] || {
+  echo 'The matching OpenSSL legacy provider is required for NLA/NTLM.' >&2; exit 1;
+}
+mkdir -p "$task_appdir/usr/lib/ossl-modules"
+cp "$task_modules/legacy.so" "$task_appdir/usr/lib/ossl-modules/"
+patchelf --set-rpath '$ORIGIN/..' "$task_appdir/usr/lib/ossl-modules/legacy.so"
+mv "$task_appdir/AppRun" "$task_appdir/AppRun.gtk"
+cp "$task_root/scripts/appimage/apprun.sh" "$task_appdir/AppRun"
+chmod +x "$task_appdir/AppRun"
 if command -v dpkg-query > /dev/null; then
   dpkg-query -W > "$task_appdir/usr/share/doc/lrdp/BUILD_PACKAGES.txt"
   mkdir -p "$task_appdir/usr/share/doc/lrdp/dependency-copyrights"

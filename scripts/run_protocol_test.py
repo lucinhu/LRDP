@@ -231,7 +231,23 @@ with tempfile.TemporaryDirectory(prefix='lrdp-test-') as temp, ExitStack() as cl
         result = subprocess.run(['flutter', 'test', 'test/workspace_auth_protocol_test.dart',
             '--reporter', 'expanded', '--no-pub'], cwd=root, env=env)
     elif '--nla' in sys.argv:
-        result = subprocess.run([sys.executable, str(root / 'scripts/nla_smoke.py'), str(library)], env=env)
+        import hashlib
+        import json
+        client_env = dict(env)
+        modules = library.parent / 'ossl-modules'
+        if (modules / 'legacy.so').is_file():
+            client_env['OPENSSL_MODULES'] = str(modules)
+        output = root / 'build/nla-runtime' / ('native-custom' if arguments else 'native')
+        output.mkdir(parents=True, exist_ok=True)
+        (output / 'VERDICT.json').unlink(missing_ok=True)
+        result = subprocess.run([sys.executable, str(root / 'scripts/nla_smoke.py'), str(library)], env=client_env)
+        if result.returncode == 0:
+            (output / 'VERDICT.json').write_text(json.dumps({
+                'passed': True, 'native_abi': 5, 'library_sha256': hashlib.sha256(library.read_bytes()).hexdigest(),
+                'valid_credentials_accepted': True, 'wrong_credentials_rejected': True,
+                'pinned_tls': True, 'client_provider_sha256': hashlib.sha256((modules / 'legacy.so').read_bytes()).hexdigest()
+                    if (modules / 'legacy.so').is_file() else None,
+            }, indent=2) + '\n')
     elif '--flutter' in sys.argv:
         env['LRDP_NATIVE_LIBRARY'] = str(library)
         result = subprocess.run(['flutter', 'test', 'test/rdp_session_test.dart', '--reporter', 'expanded'], cwd=root, env=env)
