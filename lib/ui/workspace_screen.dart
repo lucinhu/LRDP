@@ -25,6 +25,8 @@ import 'adaptive.dart';
 import 'certificate_dialog.dart';
 import 'login_dialog.dart';
 import 'session_fullscreen.dart';
+import 'update_card.dart';
+import '../app_version.dart';
 
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({
@@ -950,7 +952,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                 Padding(
                   padding: EdgeInsets.fromLTRB(14, 18, 0, 0),
                   child: Text(
-                    'LRDP  /  0.1.0 PREVIEW',
+                    'LRDP / ${appReleaseTag.substring(1)}',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 9,
@@ -1812,6 +1814,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   }
 
   Widget _settings() => ListView(
+    key: const Key('workspaceSettings'),
     padding: EdgeInsets.all(phoneLayout(context) ? 16 : 32),
     children: [
       Text(context.tr("设置"), style: Theme.of(context).textTheme.headlineSmall),
@@ -1986,7 +1989,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               ),
               SizedBox(height: 12),
               Text(
-                context.tr("LRDP 0.1.0 开发预览版"),
+                'LRDP ${appReleaseTag.substring(1)}',
                 style: TextStyle(fontSize: 13, height: 1.9),
               ),
               SizedBox(height: 16),
@@ -2001,11 +2004,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         ),
       ),
       const SizedBox(height: 20),
+      UpdateCard(store: store),
+      const SizedBox(height: 20),
       OutlinedButton.icon(
         onPressed: () => showLicensePage(
           context: context,
           applicationName: 'LRDP',
-          applicationVersion: '0.1.0',
+          applicationVersion: appReleaseTag.substring(1),
         ),
         icon: const Icon(Icons.description_outlined),
         label: Text(context.tr("开源许可")),

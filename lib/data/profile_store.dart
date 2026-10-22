@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/connection_profile.dart';
 import '../models/remote_input_mode.dart';
 import '../models/remote_image_scaling.dart';
+import '../app_version.dart';
 
 class ProfileStore extends ChangeNotifier {
   ProfileStore(this._preferences, {FlutterSecureStorage? vault})
@@ -40,6 +41,45 @@ class ProfileStore extends ChangeNotifier {
   }
 
   bool get useSystemColors => _preferences.getBool('systemColors') ?? true;
+  bool get includePreviewUpdates =>
+      _preferences.getBool('includePreviewUpdates') ??
+      appReleaseTag.contains('-');
+  bool get hasGithubUpdateToken =>
+      _preferences.getBool('githubUpdateTokenSaved') ?? false;
+  Future<void> setIncludePreviewUpdates(bool value) => _serialize(() async {
+    if (!await _preferences.setBool('includePreviewUpdates', value)) {
+      throw StateError('无法保存更新设置');
+    }
+    notifyListeners();
+  });
+
+  static const _updateTokenKey = 'lrdp.github.updates.token';
+  Future<String?> githubUpdateToken() async {
+    if (!hasGithubUpdateToken) return null;
+    final value = await _vault.read(key: _updateTokenKey);
+    if (value == null || value.isEmpty) throw StateError('更新令牌不可用');
+    return value;
+  }
+
+  Future<void> setGithubUpdateToken(String? value) => _serialize(() async {
+    final token = value?.trim();
+    if (token != null &&
+        (token.isEmpty || !RegExp(r'^[\x21-\x7e]{1,1024}$').hasMatch(token))) {
+      throw ArgumentError('无效的 GitHub 令牌');
+    }
+    if (token == null) {
+      await _vault.delete(key: _updateTokenKey);
+      if (!await _preferences.remove('githubUpdateTokenSaved')) {
+        throw StateError('无法保存更新设置');
+      }
+    } else {
+      await _vault.write(key: _updateTokenKey, value: token);
+      if (!await _preferences.setBool('githubUpdateTokenSaved', true)) {
+        throw StateError('无法保存更新设置');
+      }
+    }
+    notifyListeners();
+  });
   static const languages = ['system', 'zh-CN', 'zh-TW', 'en'];
   String get language {
     final saved = _preferences.getString('language');

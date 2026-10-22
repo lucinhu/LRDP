@@ -710,3 +710,27 @@ python3 scripts/run_android_release_test.py build/chinese-input-main-release/lrd
 后者在原有主入口 Release 验收中另外核对默认 Unicode 数据流、显式粘贴及模式重新打开后的保留，
 并通过系统按键栏验证保持 Ctrl + 输入法空格、Shift 连续输入、F1/F12 和收起时释放 Alt；
 只允许工作区自有 API36 x86_64 AVD（ADB 5038 / emulator-5556），不会操作个人设备。
+
+### 更新检查的版本标识
+
+`pubspec.yaml` 中的 `version` 决定平台包版本，`lrdp_release_tag` 对应 GitHub Release 标签。
+例如 `version: 0.1.0+4` 配合 `lrdp_release_tag: v0.1.0-preview.4`；正式版使用 `v0.1.0` 这样的标签。
+两者的主/次/修订版本必须一致。修改后运行：
+
+```sh
+python3 scripts/generate_version.py
+python3 scripts/generate_version.py --check
+flutter pub get
+flutter test test/github_updates_test.dart test/update_card_test.dart
+```
+
+生成的 `lib/app_version.dart` 同时供关于页面、开源许可和版本比较使用；提交生成结果。
+CI 会拒绝不同步的版本信息。发布构建使用配置中的版本，不另用 `--build-name`/`--build-number` 覆盖。
+`http`、`pub_semver` 和 `url_launcher` 使用 Pub 依赖锁定；不增加 GitHub 源码复制或修改 FreeRDP。
+`url_launcher` 使用系统浏览器打开 HTTPS，直接调用 `launchUrl`，不依赖 `canLaunchUrl` 的查询权限。
+
+更新接口只访问固定仓库的 `/releases`，每页最多 100 项、最多 5 页；总超时 20 秒，
+每页解码内容上限 2 MiB，说明截取前 20,000 个字符。达到分页上限、无效响应和网络错误
+不会报告“已是最新版”。版本比较忽略 `+build` 元数据，稳定版高于相同基础版本的预览版。
+下载仅选取既有 `lrdp-<version>-<platform>-<architecture>...` 格式的安装包；
+只接受本仓库的 HTTPS 发布页面和附件链接。API 不跟随重定向，访问令牌不进入 URL。
