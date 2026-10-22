@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lrdp/updates/github_updates.dart';
+import 'package:lrdp/app_version.dart';
 
 Map<String, dynamic> release(
   String tag, {
@@ -32,6 +33,45 @@ Matcher failure(UpdateFailure reason) =>
     isA<UpdateException>().having((e) => e.reason, 'reason', reason);
 
 void main() {
+  test(
+    'current release updates earlier previews and matches versioned installers',
+    () async {
+      final base = appPackageVersion.split('+').first;
+      final service = feed([
+        release(
+          appReleaseTag,
+          preview: true,
+          assets: [
+            asset(
+              appReleaseTag,
+              'lrdp-$base-android-arm64-release-preview.apk',
+            ),
+            asset(appReleaseTag, 'lrdp-$base-linux-x64.AppImage'),
+          ],
+        ),
+      ]);
+      for (final previous in ['v0.1.0-preview.3', 'v0.1.0-preview.4']) {
+        final result = await service.check(
+          includePrereleases: true,
+          currentTag: previous,
+        );
+        expect(result.hasUpdate, isTrue);
+        expect(result.latest!.tag, appReleaseTag);
+        expect(
+          result.latest!.assetFor(UpdateTarget.androidArm64)!.name,
+          contains(base),
+        );
+        expect(
+          result.latest!.assetFor(UpdateTarget.linuxX64)!.name,
+          contains(base),
+        );
+      }
+      expect(
+        (await service.check(includePrereleases: true)).hasUpdate,
+        isFalse,
+      );
+    },
+  );
   test(
     'numeric preview ordering, build metadata and stable precedence',
     () async {

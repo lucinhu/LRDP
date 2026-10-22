@@ -2,9 +2,9 @@
 
 LRDP 是基于 **Flutter + FreeRDP** 的开源远程桌面客户端，面向手机和桌面的日常 RDP 连接。Flutter 提供界面与交互，内嵌 FreeRDP 处理远程连接、画面、输入和虚拟通道。
 
-当前版本为 **0.1.0 开发预览**，目标平台为 Linux、Android、Windows、macOS 和 iOS。各平台的构建与验证进度见下表。
+当前版本为 **0.2.0 开发预览**，目标平台为 Linux、Android、Windows、macOS 和 iOS。各平台的构建与验证进度见下表。
 
-[下载预览版](https://github.com/lucinhu/LRDP/releases/tag/v0.1.0-preview.3) · [使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
+[下载预览版](https://github.com/lucinhu/LRDP/releases/tag/v0.2.0-preview.1) · [使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
 
 ![LRDP 桌面连接库，使用示例配置](docs/screenshots/workspace.png)
 
@@ -56,12 +56,12 @@ LRDP 是基于 **Flutter + FreeRDP** 的开源远程桌面客户端，面向手�
 Linux x86_64 可下载 Release 中的 `.AppImage`，赋予执行权限后直接运行：
 
 ```sh
-chmod +x lrdp-0.1.0-linux-x64.AppImage
-./lrdp-0.1.0-linux-x64.AppImage
+chmod +x lrdp-0.2.0-linux-x64.AppImage
+./lrdp-0.2.0-linux-x64.AppImage
 ```
 
 AppImage 已包含 GTK、OpenSSL 等应用运行库；需要 glibc ≥ 2.35 与可用的 OpenGL/EGL 环境。
-如果系统没有 FUSE，可用 `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.1.0-linux-x64.AppImage` 启动。
+如果系统没有 FUSE，可用 `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.2.0-linux-x64.AppImage` 启动。
 Android 下载 ARM64 预览 APK。各包与完整源码、构建信息及 SHA-256 校验文件一同发布。
 
 1. 点击“添加电脑”，填写地址、用户名、密码，以及需要的域信息。地址可直接包含端口，例如 `192.168.1.10:3390`；IPv6 使用 `[2001:db8::1]:3389`。

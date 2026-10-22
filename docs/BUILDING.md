@@ -113,13 +113,13 @@ python3 scripts/build_appimage.py --flutter-sdk /opt/flutter \
 
 ```sh
 python3 scripts/run_linux_mouse_test.py --window-manager /usr/bin/openbox \
-  --appimage build/distributions/appimage-preview/lrdp-0.1.0-linux-x64.AppImage
+  --appimage build/distributions/appimage-preview/lrdp-0.2.0-linux-x64.AppImage
 python3 scripts/run_linux_mouse_test.py --window-manager /usr/bin/openbox \
-  --appimage build/distributions/appimage-preview/lrdp-0.1.0-linux-x64.AppImage --extract-and-run
+  --appimage build/distributions/appimage-preview/lrdp-0.2.0-linux-x64.AppImage --extract-and-run
 ```
 
-运行时先 `chmod +x lrdp-0.1.0-linux-x64.AppImage`，再执行该文件。
-缺少 FUSE 时可执行 `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.1.0-linux-x64.AppImage`；
+运行时先 `chmod +x lrdp-0.2.0-linux-x64.AppImage`，再执行该文件。
+缺少 FUSE 时可执行 `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.2.0-linux-x64.AppImage`；
 也可用 `--appimage-extract` 后运行 `squashfs-root/AppRun`。提取后的库可替换并重新打包。
 只有实际验证过的发行版/显示后端才记入 `docs/VERIFICATION.md`。
 
@@ -714,7 +714,9 @@ python3 scripts/run_android_release_test.py build/chinese-input-main-release/lrd
 ### 更新检查的版本标识
 
 `pubspec.yaml` 中的 `version` 决定平台包版本，`lrdp_release_tag` 对应 GitHub Release 标签。
-例如 `version: 0.1.0+4` 配合 `lrdp_release_tag: v0.1.0-preview.4`；正式版使用 `v0.1.0` 这样的标签。
+例如 `version: 0.2.0+5` 配合 `lrdp_release_tag: v0.2.0-preview.1`；正式版使用 `v0.2.0` 这样的标签。
+`+5` 是安装升级所需的递增构建号，系统显示的版本由 `+` 之前的 `0.2.0` 决定；
+发布新的功能版本时应递增主/次/修订版本，不能只增加构建号或预览序号。
 两者的主/次/修订版本必须一致。修改后运行：
 
 ```sh
