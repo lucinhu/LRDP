@@ -11,7 +11,28 @@ GitHub 标签为 **v0.2.0-preview.1**；应用内版本由同一配置生成。
 README 下载链接与当前 AppImage 命令同步改用 0.2.0，历史验收记录保留原版本。
 
 新增版本跨越回归核对 0.1.0-preview.3/4 → 当前版本、对应新版本安装包匹配，
-以及同版本不提示更新。完整测试与发布包检查在构建后补记。
+以及同版本不提示更新。本次实际结果：
+
+- 格式检查 96 文件无差异，静态分析无问题；Flutter **227 项通过、11 项外部协议用例按常规入口跳过**。
+  原生 CTest **5/5**、Python 检查 **11/11**。
+- Android ARM64 主入口 Release AOT 检查确认 versionName **0.2.0**、versionCode **5**、
+  AOT 完整标签 **v0.2.0-preview.1**，以及更新入口与浏览器插件。单 ABI、16 KiB ELF/RELRO/ZIP
+  对齐、签名、主入口与 27 个原生导出通过；预览签名和原生核心字节与此前版本一致。
+- 最终 AppImage 基于 Ubuntu 22.04 构建，**185 个 ELF**、glibc ≤ **2.35**、相对运行路径、
+  ABI v5 和配套 OpenSSL provider 加载检查通过，AOT 中核对完整版本和更新入口。
+- Arch 的独立 X11/Openbox 环境中，FUSE 与无 FUSE 解压启动分别通过 **10 项**真实窗口、
+  拖放/释放、后续点击、控制释放、画面保持、键盘窗口快捷键及 OS 全屏切换操作，均执行 NLA 登录。
+  同一提取库的正常/实际 TCP 堵塞输入释放与固定 TLS 下错误凭据拒绝、正确凭据登录通过。
+- 运行时代码 `5ce65dd` 的 [GitHub CI](https://github.com/lucinhu/LRDP/actions/runs/39752837647) 通过。
+
+最终 APK/AppImage、源码与 FFmpeg 重建资料、校验值及验收归档保存到
+`build/releases/v0.2.0-preview.1/`，发布页面为
+[v0.2.0-preview.1](https://github.com/lucinhu/LRDP/releases/tag/v0.2.0-preview.1)。
+安装包来自运行时代码 `5ce65dd`；其后的发布记录提交只更新验收文档。FreeRDP 与原生实现未修改。
+本次仍未完成 Android ARM64 真机、厂商输入法、系统浏览器下载/安装及 Windows/macOS/iOS 验收；
+其他 Linux 发行版与原生 Wayland 待验收。全部 RDP 测试仅连接私有回环服务。
+报告与构建日志以 `build/ci-repair/v020-*`、`build/linux-appimage-runtime/{fuse,extract}/VERDICT.json`、
+`build/input-stop-runtime/native-custom/VERDICT.json` 和 `build/nla-runtime/native-custom/VERDICT.json` 为准。
 
 ## GitHub Release 更新检查（上一批次）
 
