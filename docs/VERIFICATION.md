@@ -32,7 +32,32 @@
 同次日志发现缺少与捆绑 OpenSSL 匹配的 legacy provider，NTLM 的 MD4/RC4 不可用。
 打包器现包含该模块和进程级启动路径，并增加算法加载检查、SAM-backed NLA 主应用验收及
 正确/错误凭据的独立 NLA 入口。启动器带空格路径、符号链接与参数转发回归通过；Python **11/11**。
-最终 AppImage 的 NLA 与系统操作结果在发布打包完成后另行记录。
+最终发布镜像在 Arch Linux 的私有 GTK/X11/Openbox 环境中完成以下验收：
+
+- 固定 Ubuntu 22.04 容器构建；**185 个 ELF** 的 glibc 要求不超过 **2.35**，相对运行路径、
+  主入口 Release AOT、ABI v5、捆绑 provider 的 MD4/RC4 加载检查通过。
+- FUSE 和 `APPIMAGE_EXTRACT_AND_RUN=1` 两种启动分别通过 **10 项 OS/RDP 操作**，
+  均对一次性 SAM 身份执行 NLA 登录，再检查真实窗口拖动/释放、后续左/右/中键、
+  多鼠标键中间释放、Esc 后点击、释放控制时持续画面、再次点击接管、输入窗口快捷键、
+  实际 OS 全屏切换与退出会话恢复原窗口。
+- 对同一镜像提取的核心库检查正常和实际 TCP 堵塞时的输入释放；固定 TLS 指纹下，
+  错误凭据拒绝、正确凭据通过 CredSSP，原生 ABI/核心库/provider 哈希与镜像对应。
+- 首次无 FUSE 的系统输入驱动遇到登录失败；独立 NLA 检查通过。驱动改为显式聚焦密码框、
+  放慢 XTest 键入并等候 GTK 处理后重跑，无 FUSE 的全部 10 项通过。未修改生产输入或认证代码，
+  未降低证书/NLA 检查；失败诊断保留在 `build/ci-repair/preview3-extract-nla-attempt1/`。
+- Android ARM64 APK 为 `lib/main.dart` Release AOT，版本 **0.1.0+3**；单 ABI、16 KiB
+  ELF/RELRO/ZIP 对齐、非 debuggable、预览签名、27 个原生导出及新增 UI 文案检查通过。
+  原生库和签名证书与之前预览包一致；本次未进行 Android 设备验收。
+- 运行时代码 [56e6733 的 CI](https://github.com/lucinhu/LRDP/actions/runs/39721166238) 和
+  AppImage 打包修复 [e439095 的 CI](https://github.com/lucinhu/LRDP/actions/runs/39724108076) 均通过。
+
+最终包、源码与可重建资料、逐项 SHA-256 和验收归档位于 `build/releases/v0.1.0-preview.3/`，
+发布至 [GitHub Release](https://github.com/lucinhu/LRDP/releases/tag/v0.1.0-preview.3)。
+Android/Dart 运行时代码来自 `56e6733`，Linux 镜像构建来自 `e439095`；其后只调整验收文档
+与私有 GTK 测试输入节奏，应用、原生、平台及依赖实现未变。失败和中间产物不作为发布包。
+最终系统与协议报告分别在 `build/linux-appimage-runtime/{fuse,extract}/VERDICT.json`、
+`build/input-stop-runtime/native-custom/VERDICT.json`、`build/nla-runtime/native-custom/VERDICT.json`；
+相应日志以 `build/ci-repair/preview3-*` 为准。
 
 FreeRDP 子模块、原生连接实现和 ABI v5 未改动。Android 真机与厂商输入法、系统文件选择器、
 TalkBack、其他 Linux 发行版、原生 Wayland 及 Apple/Windows 设备行为继续待验收。

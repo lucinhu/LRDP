@@ -222,9 +222,14 @@ with tempfile.TemporaryDirectory(prefix='lrdp-linux-mouse-') as temporary, ExitS
     print('Login action', action, flush=True)
     if args.nla:
         # LoginDialog focuses the password for a prefilled username. Keep the
-        # disposable test secret off command lines and out of logs.
-        subprocess.run(['xdotool', 'type', '--clearmodifiers', '--file', '-'],
+        # disposable test secret off command lines and out of logs. Explicitly
+        # focus the field and pace XTest input for the real GTK event loop.
+        click((action[0] + action[2]) // 2, action[1] - 114)
+        os_input('key', 'ctrl+a')
+        subprocess.run(['xdotool', 'type', '--clearmodifiers', '--delay', '70', '--file', '-'],
             input='LRDP-test-password-2026', text=True, env=client_env, check=True, timeout=10)
+        time.sleep(2)
+        capture('password-entered')
     click((action[0] + action[2]) // 2, action[1])
     wait_action(wide=True)
     time.sleep(.3)
