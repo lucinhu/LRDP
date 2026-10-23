@@ -1,0 +1,77 @@
+Categories:
+  - Remote Access
+License: Apache-2.0
+AuthorName: lucinhu
+SourceCode: https://github.com/lucinhu/LRDP
+IssueTracker: https://github.com/lucinhu/LRDP/issues
+Changelog: https://github.com/lucinhu/LRDP/releases
+
+AutoName: LRDP
+Summary: RDP client with touch gestures, keyboard, clipboard and file transfer
+Description: |-
+  LRDP is a Remote Desktop Protocol (RDP) client for Android. It connects to RDP servers and runs the remote desktop inside the app, with FreeRDP providing the protocol implementation and Flutter providing the interface.
+
+  Features:
+
+  - Connection management: create and edit saved connections, organize them into groups, mark favorites, and search the list. Connections can be imported from and exported to .rdp files.
+  - Session window: fullscreen remote desktop with a floating session toolbar on phones.
+  - Mouse input: touchpad mode and direct touch mode, two-finger scrolling, pinch zoom and drag, with a remote cursor.
+  - Keyboard input: Unicode text from the on-screen keyboard or an IME, paste support, and simulated key events including modifiers and extended keys.
+  - Display: automatic and dynamic remote resolution, and software H.264 decoding of the remote desktop contents.
+  - Clipboard: copy and paste text, and copy images from the remote desktop.
+  - File transfer: stage local files, review the selection, and upload them to the remote desktop. Up to 32 files per transfer, 256 MiB per file and 512 MiB in total.
+  - Reconnect: restore the previous session after a connection loss.
+  - Audio: optional playback of remote audio.
+  - Certificates: display the server certificate fingerprint.
+  - Themes: light, dark and system theme.
+  - Languages: English, Simplified Chinese and Traditional Chinese.
+
+  Connection profiles and preferences are stored locally. Passwords are kept in the Android secure storage; they are not written to configuration files, exported .rdp files, logs or the command line. The app does not create accounts, does not send data to a service, and contains no advertising or tracking.
+
+  LRDP uses FreeRDP as an unmodified upstream submodule, and links OpenSSL and FFmpeg statically. The application is licensed under the Apache License 2.0.
+
+RepoType: git
+Repo: https://github.com/lucinhu/LRDP
+
+Builds:
+  - versionName: 0.2.0
+    versionCode: 5
+    commit: 98b86ecfc7bb84b1a05d4185714b58bfdd3574d3
+    timeout: 14400
+    submodules: true
+    sudo:
+      - apt-get update
+      - apt-get install -y make nasm xz-utils perl pkg-config
+    output: build/app/outputs/flutter-apk/app-release.apk
+    srclibs:
+      - flutter@3.47.7
+      - OpenSSL@openssl-3.5.9
+    prebuild:
+      - export ANDROID_HOME=$$SDK$$
+      - export ANDROID_SDK_ROOT=$$SDK$$
+      - export PATH=$$flutter$$/bin:$PATH
+      - flutter config --no-analytics
+      - sdkmanager "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1"
+      - $$flutter$$/bin/flutter pub get
+    build:
+      - export ANDROID_HOME=$$SDK$$
+      - export ANDROID_SDK_ROOT=$$SDK$$
+      - export ANDROID_NDK_ROOT=$$NDK$$
+      - export LRDP_ANDROID_PREVIEW_SIGNING=1
+      - export LRDP_OPENSSL_SOURCE=$$OpenSSL$$
+      - export LRDP_OPENSSL_ROOT=$(pwd)/build/deps/android-openssl
+      - export LRDP_FFMPEG_ROOT=$(pwd)/build/deps/ffmpeg/android
+      - export LRDP_BUILD_JOBS=$(nproc)
+      - bash scripts/build_ffmpeg.sh android-arm64 android-x64
+      - bash scripts/build_android_openssl.sh arm64-v8a x86_64
+      - export PATH=$$flutter$$/bin:$PATH
+      - export "ORG_GRADLE_PROJECT_lrdp.ndkVersion=28.2.13676358"
+      - flutter build apk --release --target-platform android-arm64 --target-platform
+        android-x64
+    ndk: 28.2.13676358
+
+AutoUpdateMode: None
+UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+(-preview\.[0-9]+)?$
+UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
+CurrentVersion: 0.2.0
+CurrentVersionCode: 5
