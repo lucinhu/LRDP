@@ -1,0 +1,85 @@
+name: Publish AUR package
+
+# Publishes the AUR package files kept under packaging/aur/.
+#
+# AUR only accepts pushes over SSH to aur.archlinux.org:22. The maintainer's
+# network routes that port over a blocked link, so this workflow performs the
+# push from a GitHub-hosted runner instead. The private key is the dedicated
+# AUR deploy key stored in the AUR_SSH_KEY repository secret; the matching
+# public key must be registered at https://aur.archlinux.org/account/.
+#
+# Run manually after changing packaging/aur/<package>/. It never runs on push
+# so that an AUR update is always an explicit action.
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package directory under packaging/aur
+        required: true
+        default: lrdp-bin
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+      PACKAGE: ${{ inputs.package }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate package files
+        run: |
+          set -euo pipefail
+          test -f "packaging/aur/${PACKAGE}/PKGBUILD"
+          test -f "packaging/aur/${PACKAGE}/.SRCINFO"
+          grep -q "^pkgname = ${PACKAGE}$" "packaging/aur/${PACKAGE}/.SRCINFO"
+
+      - name: Configure SSH for aur.archlinux.org
+        run: |
+          set -euo pipefail
+          if [ -z "${AUR_SSH_KEY:-}" ]; then
+            echo "::error::Repository secret AUR_SSH_KEY is not set"
+            exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -t ed25519,rsa aur.archlinux.org >> ~/.ssh/known_hosts
+          git config --global core.sshCommand "ssh -i ~/.ssh/aur -o IdentitiesOnly=yes"
+
+      - name: Push to AUR
+        run: |
+          set -euo pipefail
+          rm -rf aur-repo
+          if ! git clone "ssh://aur@aur.archlinux.org/${PACKAGE}.git" aur-repo; then
+            echo "AUR package does not exist yet; creating it on first push"
+            mkdir aur-repo
+            git -C aur-repo init -b master
+            git -C aur-repo remote add origin "ssh://aur@aur.archlinux.org/${PACKAGE}.git"
+          fi
+          cp "packaging/aur/${PACKAGE}/PKGBUILD" aur-repo/PKGBUILD
+          cp "packaging/aur/${PACKAGE}/.SRCINFO" aur-repo/.SRCINFO
+          for extra in LICENSE .gitignore; do
+            if [ -f "packaging/aur/${PACKAGE}/${extra}" ]; then
+              cp "packaging/aur/${PACKAGE}/${extra}" "aur-repo/${extra}"
+            fi
+          done
+          pkgver="$(sed -n 's/^pkgver=//p' aur-repo/PKGBUILD)"
+          pkgrel="$(sed -n 's/^pkgrel=//p' aur-repo/PKGBUILD)"
+          git -C aur-repo config user.name "lucinhu"
+          git -C aur-repo config user.email "lucinhu@users.noreply.github.com"
+          git -C aur-repo add -A
+          if git -C aur-repo diff --cached --quiet; then
+            echo "AUR package is already up to date"
+            exit 0
+          fi
+          git -C aur-repo commit -m "Update ${PACKAGE} to ${pkgver}-${pkgrel}"
+          git -C aur-repo push origin master
+          echo "Pushed ${PACKAGE} ${pkgver}-${pkgrel} to AUR"
