@@ -1,0 +1,20 @@
+LRDP is a Remote Desktop Protocol (RDP) client for Android. It connects to RDP servers and runs the remote desktop inside the app, with FreeRDP providing the protocol implementation and Flutter providing the interface.
+
+Features:
+
+- Connection management: create and edit saved connections, organize them into groups, mark favorites, and search the list. Connections can be imported from and exported to .rdp files.
+- Session window: fullscreen remote desktop with a floating session toolbar on phones.
+- Mouse input: touchpad mode and direct touch mode, two-finger scrolling, pinch zoom and drag, with a remote cursor.
+- Keyboard input: Unicode text from the on-screen keyboard or an IME, paste support, and simulated key events including modifiers and extended keys.
+- Display: automatic and dynamic remote resolution, and software H.264 decoding of the remote desktop contents.
+- Clipboard: copy and paste text, and copy images from the remote desktop.
+- File transfer: stage local files, review the selection, and upload them to the remote desktop. Up to 32 files per transfer, 256 MiB per file and 512 MiB in total.
+- Reconnect: restore the previous session after a connection loss.
+- Audio: optional playback of remote audio.
+- Certificates: display the server certificate fingerprint.
+- Themes: light, dark and system theme.
+- Languages: English, Simplified Chinese and Traditional Chinese.
+
+Connection profiles and preferences are stored locally. Passwords are kept in the Android secure storage; they are not written to configuration files, exported .rdp files, logs or the command line. The app does not create accounts, does not send data to a service, and contains no advertising or tracking.
+
+LRDP uses FreeRDP as an unmodified upstream submodule, and links OpenSSL and FFmpeg statically. The application is licensed under the Apache License 2.0.

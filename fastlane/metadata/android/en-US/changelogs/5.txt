@@ -1,0 +1,6 @@
+0.2.0 preview 1
+
+- Update check: the app queries GitHub releases and reports the latest stable or preview version, including the APK matching the device architecture.
+- Settings show the current version, the available version and release notes.
+- Requires Android 7.0 or newer; ARM64 and x86_64 are supported.
+- First release published on F-Droid.
