@@ -234,7 +234,11 @@ version: 0.2.0+5
   1. `tools check scripts`：fdroiddata 的 `tools/make-summary-translatable.py` 会把 YAML `Summary:` 迁移为 `metadata/<appid>/<locale>/summary.txt`，并以迁移数量作为退出码；新 app（默认 `ArchivePolicy: 3`）因此失败。改为在 `metadata/dev.lrdp.lrdp/en-US/summary.txt` 提供 Summary，YAML 删除 `Summary:`。
   2. `fdroid build`：buildserver 镜像没有宿主 `gcc`，FFmpeg 9.0.2 configure 编译 host tools 时报 `Host compiler lacks C11 support`。`sudo:` 增加 `build-essential`。
 - 本地用 fdroidserver 2.4.5 与 fdroiddata CI 辅助脚本复验：`fdroid lint`、`fdroid rewritemeta`、`tools/make-summary-translatable.py`、`tools/check-metadata-summary-whitespace.py`、`tools/check-localized-metadata.py` 均 exit 0；修复后 pipeline `2981808248` 重新运行。
-- 后续等待 buildserver 完整构建结果与 F-Droid 维护者评审；若 universal 2-ABI 构建失败，按 §2.6 回退为 per-ABI Build + `VercodeOperation`。
+- 第二轮 CI（pipeline `2981876762`）又暴露两处，均已修复：
+  3. `fdroid rewritemeta` job：`fdroid rewritemeta` 按 80 列折行 build 命令，CI 用 `git diff --exit-code` 检查 canonical；修复方式是在 fdroiddata 克隆内运行 `fdroid rewritemeta dev.lrdp.lrdp`，把生成的 canonical 文件作为仓库内的 `metadata/dev.lrdp.lrdp.yml`。
+  4. `fdroid build` job：`export "ORG_GRADLE_PROJECT_lrdp.ndkVersion=28.2.13676358"` 报 `not a valid identifier`（export 不允许变量名含点）。改为在同一条命令上用 `env "ORG_GRADLE_PROJECT_lrdp.ndkVersion=28.2.13676358" flutter build apk …`（env(1) 允许点号），Gradle 仍能以环境变量形式读到项目属性。
+- 最终 CI（pipeline `2981918553`，commit `5be146ef`）9 个 job 全部成功：check apk、check source code、schema validation、tools check scripts、fdroid rewritemeta、fdroid lint、git redirect、checkupdates、fdroid build。buildserver 内完成 Flutter 3.47.7 + NDK 28.2.13676358 + 静态 OpenSSL/FFmpeg + universal 2-ABI 构建，并由 CI 测试 keystore 签名（artifact `tmp/signed/dev.lrdp.lrdp_5.signed.apk`）；MR mergeable。
+- 后续：等待 F-Droid 维护者评审与合并；合并后由 F-Droid 构建周期重签并发布。
 
 ---
 

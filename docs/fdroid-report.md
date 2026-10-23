@@ -4,7 +4,7 @@
 
 ## 状态
 
-本地材料已完成，`fdroid lint` 通过。fdroiddata MR 已提交：<https://gitlab.com/fdroid/fdroiddata/-/merge_requests/53893>（fork `lucinhu/fdroiddata`，分支 `dev.lrdp.lrdp`，CI 构建进行中）。
+本地材料已完成，`fdroid lint` 通过。fdroiddata MR 已提交：<https://gitlab.com/fdroid/fdroiddata/-/merge_requests/53893>（fork `lucinhu/fdroiddata`，分支 `dev.lrdp.lrdp`）。CI 已通过：pipeline `2981918553` 的 9 个 job 全部成功，包含 buildserver 内的 Flutter + NDK + OpenSSL/FFmpeg + universal 2-ABI 构建、APK 校验与签名（测试 keystore）；MR 状态 mergeable，等待 F-Droid 维护者评审。
 
 - 完整 metadata：`packaging/fdroiddata/dev.lrdp.lrdp.yml`（可直接作为 `fdroiddata/metadata/dev.lrdp.lrdp.yml`）
 - fastlane 素材（`main` commit `4158f54` 加入，描述文案在 `d98fffa` 更新为 lightweight 定位）：`fastlane/metadata/android/en-US/`（short/full description、icon、5 张 phoneScreenshots、changelogs/5.txt）
