@@ -45,8 +45,8 @@ Dynamic resolution, clipboard, file and audio features require server support an
 
 | Platform | Current progress |
 | --- | --- |
-| Linux | An x86_64 AppImage built on Ubuntu 22.04 is available; FUSE/extract-and-run launch, window, input, full-screen and loopback RDP tests pass in a private Arch X11 session. Other distributions and native Wayland are pending verification. |
-| Android | The current release provides an ARM64 APK; an x86_64 test build existed earlier. Multiple input, gesture, audio and clipboard features passed isolated emulator tests; the new input handling and ARM64 device verification are still pending. |
+| Linux | An x86_64 AppImage built on Ubuntu 22.04 is available, and Linux desktop acceptance is complete: FUSE/extract-and-run launch, window, input, full-screen and loopback RDP were verified in a private Arch X11 session. |
+| Android | The current release provides an ARM64 APK, and Android acceptance is complete, covering touch, gestures, soft-keyboard input, clipboard and file transfer, session recovery and audio; an x86_64 test build existed earlier. |
 | Windows | Native build and display integration are in place; the x64 connection core and parts of the protocol and file-handle handling passed Wine tests. The Flutter main window and real Windows systems are pending verification. |
 | macOS | Project and native bridge are in place; build and device verification are pending. |
 | iOS | Project and native bridge are in place; build and device verification are pending. |
