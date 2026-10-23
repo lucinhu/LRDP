@@ -61,12 +61,13 @@ Builds:
       - export LRDP_OPENSSL_ROOT=$(pwd)/build/deps/android-openssl
       - export LRDP_FFMPEG_ROOT=$(pwd)/build/deps/ffmpeg/android
       - export LRDP_BUILD_JOBS=$(nproc)
-      - bash scripts/build_ffmpeg.sh android-arm64 android-x64
-      - bash scripts/build_android_openssl.sh arm64-v8a x86_64
+      - mkdir -p build-ci-logs; df -h .; nproc; free -m || true
+      - bash scripts/build_ffmpeg.sh android-arm64 android-x64 > build-ci-logs/ffmpeg.log 2>&1 || { echo 'FFMPEG BUILD FAILED'; tail -n 300 build-ci-logs/ffmpeg.log; exit 1; }
+      - bash scripts/build_android_openssl.sh arm64-v8a x86_64 > build-ci-logs/openssl.log 2>&1 || { echo 'OPENSSL BUILD FAILED'; tail -n 300 build-ci-logs/openssl.log; exit 1; }
       - export PATH=$$flutter$$/bin:$PATH
       - export "ORG_GRADLE_PROJECT_lrdp.ndkVersion=28.2.13676358"
-      - flutter build apk --release --target-platform android-arm64 --target-platform
-        android-x64
+      - flutter build apk --release --target-platform android-arm64 --target-platform android-x64 > build-ci-logs/apk.log 2>&1 || { echo 'FLUTTER APK BUILD FAILED'; tail -n 500 build-ci-logs/apk.log; exit 1; }
+      - ls -l build/app/outputs/flutter-apk/; sha256sum build/app/outputs/flutter-apk/app-release.apk
     ndk: 28.2.13676358
 
 AutoUpdateMode: None
