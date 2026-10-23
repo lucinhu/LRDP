@@ -370,6 +370,7 @@
   "已有已保存的令牌；输入可替换。": "A token is saved. Enter a new one to replace it.",
   "移除令牌": "Remove token",
   "正在保存…": "Saving…",
+  "保存": "Save",
   "令牌未能保存，请检查系统安全存储后重试。": "Could not save the token. Check system secure storage and try again.",
   "无法读取更新令牌，请检查系统安全存储或重新配置令牌。": "Could not read the update token. Check system secure storage or configure the token again.",
   "无法检查更新，请检查网络后重试。": "Could not check for updates. Check your network and try again.",
