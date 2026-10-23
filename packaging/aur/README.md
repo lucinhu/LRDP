@@ -1,7 +1,9 @@
 # LRDP AUR 打包（`lrdp-bin`）
 
-本目录维护 AUR 包 `lrdp-bin` 的打包文件。`lrdp-bin` 直接分发上游 GitHub Release
-中预编译的 Linux x64 Flutter 应用（AppImage），不重新编译 Flutter / FreeRDP 代码。
+本目录维护 AUR 包 `lrdp-bin` 的打包文件。LRDP（**L**ightweight **R**emote
+**D**esktop **P**rotocol）是基于 Flutter + FreeRDP 的轻量 RDP 客户端；`lrdp-bin` 直接
+分发上游 GitHub Release 中预编译的 Linux x64 Flutter 应用（AppImage），不重新编译
+Flutter / FreeRDP 代码。
 
 上游版本：tag `v0.2.0-preview.1`（release commit `98b86ec…`），应用版本 `0.2.0+5`，
 `applicationId` 为 `dev.lrdp.lrdp`。`pkgver` 取上游应用版本 `0.2.0`；`pkgrel=2` 起
