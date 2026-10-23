@@ -49,6 +49,19 @@ PATH="$task_tools:$PATH" DEPLOY_GTK_VERSION=3 "$task_deploy" \
   "${task_libraries[@]}" --exclude-library 'libstdc++.so.6' --exclude-library 'libgcc_s.so.1' \
   --desktop-file "$task_staging/dev.lrdp.lrdp.desktop" \
   --icon-file "$task_staging/dev.lrdp.lrdp.png" --plugin gtk
+# linuxdeploy's GTK plugin hard-codes "export GDK_BACKEND=x11". On Wayland
+# desktops that forces XWayland, where GTK reports a scale factor of 1, so
+# Flutter (which only looks at GTK's integer scale factor) ignores HiDPI and
+# fractional display scaling and the compositor has to upscale the window.
+# Let GTK pick the backend instead: Wayland when the session offers it, X11
+# otherwise. Users can still force one through their own GDK_BACKEND.
+task_gtk_hook="$task_appdir/apprun-hooks/linuxdeploy-plugin-gtk.sh"
+[[ -f "$task_gtk_hook" ]] || { echo 'linuxdeploy GTK AppRun hook is missing' >&2; exit 1; }
+sed -i '/^export GDK_BACKEND=x11/d' "$task_gtk_hook"
+if grep -q '^export GDK_BACKEND=x11' "$task_gtk_hook"; then
+  echo 'Failed to remove the forced GDK_BACKEND from the GTK AppRun hook' >&2
+  exit 1
+fi
 task_modules="$(pkg-config --variable=modulesdir libcrypto)"
 if [[ -z "$task_modules" ]]; then
   task_modules="$(pkg-config --variable=libdir libcrypto)/ossl-modules"

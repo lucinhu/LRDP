@@ -4,7 +4,9 @@
 中预编译的 Linux x64 Flutter 应用（AppImage），不重新编译 Flutter / FreeRDP 代码。
 
 上游版本：tag `v0.2.0-preview.1`（release commit `98b86ec…`），应用版本 `0.2.0+5`，
-`applicationId` 为 `dev.lrdp.lrdp`。`pkgver` 取上游应用版本 `0.2.0`，`pkgrel=1`。
+`applicationId` 为 `dev.lrdp.lrdp`。`pkgver` 取上游应用版本 `0.2.0`；`pkgrel=2` 起
+在 `package()` 中移除 AppImage AppRun hook 强制设置的 `GDK_BACKEND=x11`（见下文
+“HiDPI 与 Wayland 缩放”）。
 
 ## 文件
 
@@ -81,14 +83,52 @@ SRCDEST=/path/to/source-cache PKGDEST=build/aur/pkg-v2 \
   `Gtk-WARNING: cannot open display: `（exit 1）。本机无 Xvfb/Xvnc，按项目约定不占用
   用户桌面，因此**未做真实图形界面启动测试**。
 
+### 本地验证记录（2026-10-24，pkgrel=2，HiDPI 修复）
+
+```bash
+SRCDEST=/home/lucinhu/workspace/flutter/LRDP/build/aur/src PKGDEST=/tmp/aurpkg3 \
+  makepkg -Ccf --nodeps
+```
+
+- 源 AppImage sha256 与 release `SHA256SUMS` 一致（`e616045b…`）。
+- 产物：`lrdp-bin-0.2.0-2-x86_64.pkg.tar.zst`，58,919,403 B，
+  `sha256 = f22298eab6fd0b47404b66b04f17c58393d26d7af0183a68eba1375a68e6e6a6`。
+- 解包检查：`/opt/lrdp/apprun-hooks/linuxdeploy-plugin-gtk.sh` 中已无 `GDK_BACKEND=x11`。
+- KDE Plasma 6 Wayland（eDP-1，150% 缩放）下启动安装树中的 `AppRun`：进程存活、窗口创建成功；
+  同一环境下 GTK 探针在 Wayland 后端报告 `monitor_scale=2`（逻辑 1707x1067），而强制
+  `GDK_BACKEND=x11` 时报告 `monitor_scale=1`（物理 2560x1600），与“界面不随系统 DPI 变化”
+  的现象一致。
+- `env -u WAYLAND_DISPLAY`（无 Wayland 时）重新启动：GTK 自动回退 X11，进程正常存活。
+
 ### 已知限制（继承上游 AppImage，不是打包引入）
 
 - AppImage 内 gdk-pixbuf 的 TIFF loader 与 GTK 的 IBus 输入模块没有把自带依赖库放进
   `RUNPATH`：运行时 `libtiff.so.5`、`libibus-1.0.so.5` 报 not found；GTK 会回退，
   可能影响 TIFF 图片加载与 IBus 输入法，不影响启动。
-- `AppRun.gtk` 固定 `GDK_BACKEND=x11` 并强制 Adwaita 主题（上游行为，Wayland 下走 XWayland）。
+- `AppRun.gtk` 强制 Adwaita 主题（上游行为）。
 - `/opt/lrdp` 保留 AppImage 内部 `usr/share/doc` 的依赖版权副本（约 12 MB），以保持与上游
   完全一致的布局。
+
+## HiDPI 与 Wayland 缩放
+
+上游 AppImage 由 linuxdeploy 的 GTK 插件生成，其 `apprun-hooks/linuxdeploy-plugin-gtk.sh`
+硬编码了 `export GDK_BACKEND=x11`。在 Wayland 桌面（KDE Plasma / GNOME）下，这会让应用
+强制走 XWayland；XWayland 中 GTK 报告的缩放因子是 1（而原生 Wayland 是 2）。Flutter
+Linux 只读取 GTK 的整数缩放因子，因此界面不会跟随桌面设置的 150% / 125% 等 DPI 缩放，
+窗口只是被合成器整体放大（发虚）。
+
+`pkgrel=2` 起 `package()` 删除该行，让 GTK 自行选择后端：
+
+```bash
+sed -i '/^export GDK_BACKEND=x11/d' \
+  "${pkgdir}/opt/lrdp/apprun-hooks/linuxdeploy-plugin-gtk.sh"
+```
+
+- Wayland 会话：GTK 使用 Wayland 后端，Flutter 拿到缩放因子 2，150% 下界面清晰且尺寸正确；
+- X11 会话：GTK 自动回退 X11，行为与之前一致；
+- 用户仍可用自己的 `GDK_BACKEND` 环境变量强制后端。
+- 上游 `scripts/package_appimage.sh` 已同步修复，下一版 AppImage 会自带该改动，本补丁届时
+  自动变成空操作。
 
 ## AUR 推送步骤
 
@@ -110,7 +150,7 @@ makepkg -Ccf
 
 # 5) 提交并推送
 git add PKGBUILD .SRCINFO LICENSE .gitignore
-git commit -m "upgpkg: lrdp-bin 0.2.0-1"
+git commit -m "upgpkg: lrdp-bin 0.2.0-2"
 git push
 ```
 
