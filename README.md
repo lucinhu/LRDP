@@ -1,6 +1,8 @@
 # LRDP
 
-LRDP 是基于 **Flutter + FreeRDP** 的开源远程桌面客户端，面向手机和桌面的日常 RDP 连接。Flutter 提供界面与交互，内嵌 FreeRDP 处理远程连接、画面、输入和虚拟通道。
+简体中文 · [English](README.en.md)
+
+LRDP（Lightweight RDP）是基于 **Flutter + FreeRDP** 的轻量级开源 RDP 客户端，面向手机和桌面的日常远程连接。Flutter 提供界面与交互，内嵌 FreeRDP 处理远程连接、画面、输入和虚拟通道，不依赖外部 RDP 客户端。
 
 当前版本为 **0.2.0 开发预览**，目标平台为 Linux、Android、Windows、macOS 和 iOS。各平台的构建与验证进度见下表。
 

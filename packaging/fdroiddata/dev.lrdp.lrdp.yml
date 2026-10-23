@@ -7,9 +7,8 @@ IssueTracker: https://github.com/lucinhu/LRDP/issues
 Changelog: https://github.com/lucinhu/LRDP/releases
 
 AutoName: LRDP
-Summary: RDP client with touch gestures, keyboard, clipboard and file transfer
 Description: |-
-  LRDP is a Remote Desktop Protocol (RDP) client for Android. It connects to RDP servers and runs the remote desktop inside the app, with FreeRDP providing the protocol implementation and Flutter providing the interface.
+  LRDP (Lightweight RDP) is a lightweight, local-first Remote Desktop Protocol (RDP) client for Android. It connects to RDP servers and runs the remote desktop inside the app, with FreeRDP providing the protocol implementation and Flutter providing the interface, so no external RDP client is involved.
 
   Features:
 
@@ -41,7 +40,7 @@ Builds:
     submodules: true
     sudo:
       - apt-get update
-      - apt-get install -y make nasm xz-utils perl pkg-config
+      - apt-get install -y build-essential nasm xz-utils perl pkg-config
     output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
       - flutter@3.47.7

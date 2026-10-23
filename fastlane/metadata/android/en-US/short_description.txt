@@ -1,1 +1,1 @@
-RDP client with touch gestures, keyboard, clipboard and file transfer
+Lightweight RDP client with touch gestures, keyboard and file transfer

@@ -1,4 +1,4 @@
-LRDP is a Remote Desktop Protocol (RDP) client for Android. It connects to RDP servers and runs the remote desktop inside the app, with FreeRDP providing the protocol implementation and Flutter providing the interface.
+LRDP (Lightweight RDP) is a lightweight, local-first Remote Desktop Protocol (RDP) client for Android. It connects to RDP servers and runs the remote desktop inside the app, with FreeRDP providing the protocol implementation and Flutter providing the interface, so no external RDP client is involved.
 
 Features:
 
