@@ -4,9 +4,22 @@
 
 ## 状态
 
-本地材料已完成，`fdroid lint` 通过。fdroiddata MR 已提交：<https://gitlab.com/fdroid/fdroiddata/-/merge_requests/53893>（fork `lucinhu/fdroiddata`，分支 `dev.lrdp.lrdp`）。CI 已通过：pipeline `2981918553` 的 9 个 job 全部成功，包含 buildserver 内的 Flutter + NDK + OpenSSL/FFmpeg + universal 2-ABI 构建、APK 校验与签名（测试 keystore）；MR 状态 mergeable，等待 F-Droid 维护者评审。
+本地材料已完成，`fdroid lint` 通过。fdroiddata MR 已提交：<https://gitlab.com/fdroid/fdroiddata/-/merge_requests/53893>（fork `lucinhu/fdroiddata`，分支 `dev.lrdp.lrdp`）。CI 已通过：pipeline `2981918553` 的 9 个 job 全部成功，包含 buildserver 内的 Flutter + NDK + OpenSSL/FFmpeg + universal 2-ABI 构建、APK 校验与签名（测试 keystore）；MR 状态 mergeable。
+
+**2026-10-24 更新：MR 已被维护者 linsui 关闭**（关闭时间 2026-10-23T16:28:09Z，即北京时间 2026-10-24 00:28），理由两条：
+
+1. **没有按 MR 模板填写描述**（"Merge Request template is not followed"）。
+2. **不满足“应用需活跃开发至少 3 个月”的收录政策**（"This app doesn't meet the policy that it needs to be maintained for more than 3 months"）。F-Droid Inclusion Policy 原文：*The application should have been actively developed for at least 3 months, unless: The application has been proven to have some users.* 本仓库 2026-10-19 才创建并首次提交（当前 32 个 commit、5 个 tag），公开历史只有约 5 天；GitHub stars/forks/issues 均为 0，release 下载量很小（AppImage 10 次、APK 1 次，且大部分来自发布流程自身的下载/校验），不足以主张“已有用户”。
+
+因此**当前无法通过 F-Droid 审核**，不是构建或 metadata 的问题（CI 已经全绿）。重新提交的路径：
+
+- 等到公开开发历史满 3 个月（**2027-01-19** 之后），期间保持仓库公开、持续提交与发版；
+- 按 `.gitlab/merge_request_templates/Default.md` 填写描述（草稿见 `packaging/fdroiddata/MR_DESCRIPTION.md`），勾选 Policy/Docs/MR Setup/Metadata/Pipeline 清单；
+- 重新 push 到 fork 分支（或新建分支）后开 MR，标题 `New app: LRDP`，标签 `~"New App"`；
+- 可选改进：ABI split（当前 universal 2-ABI APK 63 MB）、可复现构建（模板中已说明暂未启用及原因）。
 
 - 完整 metadata：`packaging/fdroiddata/dev.lrdp.lrdp.yml`（可直接作为 `fdroiddata/metadata/dev.lrdp.lrdp.yml`）
+- MR 描述草稿（模板合规版）：`packaging/fdroiddata/MR_DESCRIPTION.md`
 - fastlane 素材（`main` commit `4158f54` 加入，描述文案在 `d98fffa` 更新为 lightweight 定位）：`fastlane/metadata/android/en-US/`（short/full description、icon、5 张 phoneScreenshots、changelogs/5.txt）
 - Summary 素材：`packaging/fdroiddata/dev.lrdp.lrdp/en-US/summary.txt`（当前 fdroiddata 约定；YAML 不再写 `Summary:`）
 - 研究与提交步骤：`packaging/fdroiddata/RESEARCH.md`
