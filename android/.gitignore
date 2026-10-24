@@ -13,3 +13,6 @@ key.properties
 **/*.keystore
 **/*.jks
 .kotlin/
+
+# Gradle build output under the Android project
+build/
