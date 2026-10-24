@@ -71,6 +71,14 @@ android {
             }
         }
     }
+
+    packaging {
+        // Keep the release APK small enough for app stores by compressing the
+        // native libraries; Android extracts them once at install time.
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 tasks.matching { it.name in setOf("preReleaseBuild", "compileFlutterBuildRelease", "validateSigningRelease", "packageRelease") }
