@@ -85,7 +85,7 @@ struct _LrdpTexture {
   uint64_t generation, announced, uploads;
   EGLDisplay display;
   EGLContext cleanup;
-  gboolean visible, failed;
+  gboolean visible, failed, verify_gl;
 };
 G_DEFINE_TYPE(LrdpTexture, lrdp_texture, fl_texture_gl_get_type())
 static gint live_textures, live_contexts, live_gpu_names, cleanup_failures, upload_failures;
@@ -119,7 +119,11 @@ static gboolean prepare_cleanup(LrdpTexture* self) {
   return self->cleanup != EGL_NO_CONTEXT;
 }
 
-static int upload(const uint8_t* pixels, int32_t width, int32_t height, void* context) {
+// Upload the borrowed frame into the texture. The store reports the rectangle
+// that changed since the last successful upload, so steady-state frames refresh
+// only those texels instead of re-uploading the whole 1920x1080 BGRA surface.
+static int upload(const uint8_t* pixels, int32_t width, int32_t height,
+                  const lrdp_video_rect* damage, void* context) {
   auto* self = LRDP_TEXTURE(context);
 #ifndef NDEBUG
   if (g_getenv("LRDP_VIDEO_TEST_FAIL_UPLOAD")) return 0;
@@ -127,6 +131,36 @@ static int upload(const uint8_t* pixels, int32_t width, int32_t height, void* co
   // Upload BGRA directly into RGBA8 storage. Flutter/Skia owns sampling
   // swizzles, so texture parameters cannot be used for channel conversion.
   if (epoxy_gl_version() < (epoxy_is_desktop_gl() ? 33 : 30)) return 0;
+  if (width < 1 || height < 1) return 0;
+  // An empty rectangle means the pixels are unchanged in place: no GL work is
+  // needed, but succeeding still advances the generation so polling settles.
+  if (damage && (damage->width <= 0 || damage->height <= 0)) return 1;
+  // Only a frame that still matches the texture may be refreshed in place. A
+  // first frame or a frame size change rebuilds storage from this full frame,
+  // which is also the store's contract for a NULL rectangle.
+  const gboolean recreate = !self->name ||
+                            self->width != static_cast<uint32_t>(width) ||
+                            self->height != static_cast<uint32_t>(height);
+  lrdp_video_rect rect = {0, 0, width, height};
+  gboolean partial = FALSE;
+  if (damage && !recreate) {
+    rect = *damage;
+    if (rect.x < 0) { rect.width += rect.x; rect.x = 0; }
+    if (rect.y < 0) { rect.height += rect.y; rect.y = 0; }
+    if (rect.width > width - rect.x) rect.width = width - rect.x;
+    if (rect.height > height - rect.y) rect.height = height - rect.y;
+    if (rect.width <= 0 || rect.height <= 0) return 1;
+    partial = rect.x != 0 || rect.y != 0 || rect.width != width || rect.height != height;
+  }
+  // glGetError is a hot-path cost (it can flush driver work), so a
+  // steady-state frame is only verified when LRDP_VIDEO_GL_CHECK is set;
+  // texture creation/resize always is.
+  const gboolean verify = recreate || self->verify_gl;
+  if (verify) glGetError();
+  // The engine shares this context, so save the unpack state touched below and
+  // restore exactly what was changed. A slot is tightly packed BGRA at
+  // width * 4 bytes, so the sub-rectangle needs skip_pixels / skip_rows through
+  // the full frame buffer instead of a repacked copy.
   GLint binding, alignment, unpack_buffer, row_length, skip_rows, skip_pixels;
   glGetIntegerv(GL_TEXTURE_BINDING_2D, &binding);
   glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
@@ -134,33 +168,40 @@ static int upload(const uint8_t* pixels, int32_t width, int32_t height, void* co
   glGetIntegerv(GL_UNPACK_ROW_LENGTH, &row_length);
   glGetIntegerv(GL_UNPACK_SKIP_ROWS, &skip_rows);
   glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &skip_pixels);
-  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-  glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-  glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
-  glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
   if (!self->name) {
     glGenTextures(1, &self->name);
-    if (self->name) g_atomic_int_inc(&live_gpu_names);
+    if (!self->name) return 0;
+    g_atomic_int_inc(&live_gpu_names);
   }
+  const GLint want_row_length = partial ? width : 0;
+  const GLint want_skip_rows = partial ? rect.y : 0;
+  const GLint want_skip_pixels = partial ? rect.x : 0;
+  if (unpack_buffer) glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+  if (alignment != 4) glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+  if (row_length != want_row_length) glPixelStorei(GL_UNPACK_ROW_LENGTH, want_row_length);
+  if (skip_rows != want_skip_rows) glPixelStorei(GL_UNPACK_SKIP_ROWS, want_skip_rows);
+  if (skip_pixels != want_skip_pixels) glPixelStorei(GL_UNPACK_SKIP_PIXELS, want_skip_pixels);
   glBindTexture(GL_TEXTURE_2D, self->name);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  if (self->width != static_cast<uint32_t>(width) ||
-      self->height != static_cast<uint32_t>(height)) {
+  if (recreate) {
+    // Sampling state never changes for a texture: set it once, not every frame.
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, pixels);
+  } else if (partial) {
+    glTexSubImage2D(GL_TEXTURE_2D, 0, rect.x, rect.y, rect.width, rect.height, GL_BGRA,
+                    GL_UNSIGNED_BYTE, pixels);
   } else {
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, pixels);
   }
-  GLenum error = glGetError();
-  glBindTexture(GL_TEXTURE_2D, binding);
-  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, unpack_buffer);
-  glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
-  glPixelStorei(GL_UNPACK_ROW_LENGTH, row_length);
-  glPixelStorei(GL_UNPACK_SKIP_ROWS, skip_rows);
-  glPixelStorei(GL_UNPACK_SKIP_PIXELS, skip_pixels);
+  const GLenum error = verify ? glGetError() : GL_NO_ERROR;
+  if (binding != static_cast<GLint>(self->name)) glBindTexture(GL_TEXTURE_2D, binding);
+  if (unpack_buffer) glBindBuffer(GL_PIXEL_UNPACK_BUFFER, unpack_buffer);
+  if (alignment != 4) glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
+  if (row_length != want_row_length) glPixelStorei(GL_UNPACK_ROW_LENGTH, row_length);
+  if (skip_rows != want_skip_rows) glPixelStorei(GL_UNPACK_SKIP_ROWS, skip_rows);
+  if (skip_pixels != want_skip_pixels) glPixelStorei(GL_UNPACK_SKIP_PIXELS, skip_pixels);
   if (error != GL_NO_ERROR) {
     if (g_getenv("LRDP_VIDEO_TRACE"))
       g_printerr("LRDP video upload error=%u GL=%s\n", error, glGetString(GL_VERSION));
@@ -182,7 +223,7 @@ static gboolean populate(FlTextureGL* texture, uint32_t* target, uint32_t* name,
     g_atomic_int_inc(&upload_failures);
   }
   if (!self->failed) {
-    int result = lrdp_video_visit(self->video, upload, self, &self->generation);
+    int result = lrdp_video_visit_damage(self->video, upload, self, &self->generation);
     if (result == -1) {
       self->failed = TRUE;
       g_atomic_int_inc(&upload_failures);
@@ -258,6 +299,8 @@ static void lrdp_texture_init(LrdpTexture* self) {
   g_atomic_int_inc(&live_textures);
   g_mutex_init(&self->lock);
   self->visible = TRUE;
+  // Checking GL errors can flush driver work every frame; only opt in.
+  self->verify_gl = g_getenv("LRDP_VIDEO_GL_CHECK") != nullptr;
   self->frame_rate = 60;
   self->display = EGL_NO_DISPLAY;
   self->cleanup = EGL_NO_CONTEXT;

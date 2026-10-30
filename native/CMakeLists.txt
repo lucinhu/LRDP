@@ -240,6 +240,16 @@ if(LRDP_BUILD_TESTS)
   endif()
   target_link_libraries(lrdp_video_store_test PRIVATE ${LRDP_FREERDP_LIBRARIES})
   add_test(NAME video_store COMMAND lrdp_video_store_test)
+  # Micro-benchmark for the frame path; timings are machine specific, so it is a
+  # tool rather than a pass/fail test.
+  add_executable(lrdp_video_bench tests/video_bench.c src/video_store.c)
+  target_include_directories(lrdp_video_bench PRIVATE src include)
+  target_compile_definitions(lrdp_video_bench PRIVATE LRDP_BUILDING_LIBRARY)
+  if(NOT LRDP_USE_SYSTEM_FREERDP)
+    target_include_directories(lrdp_video_bench SYSTEM PRIVATE
+      "${FREERDP_ROOT}/winpr/include" "${CMAKE_CURRENT_BINARY_DIR}/freerdp/winpr/include")
+  endif()
+  target_link_libraries(lrdp_video_bench PRIVATE ${LRDP_FREERDP_LIBRARIES})
   set(LRDP_FLUTTER_TEXTURE_HEADERS "" CACHE PATH "Optional Flutter desktop public headers for Windows texture adapter tests")
   if(LRDP_FLUTTER_TEXTURE_HEADERS)
     add_executable(lrdp_windows_video_test tests/windows_video_texture_test.cc src/video_store.c

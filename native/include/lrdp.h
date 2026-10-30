@@ -70,10 +70,25 @@ LRDP_API int lrdp_frame(lrdp_session*, uint8_t* out, size_t capacity,
  * producer mutex. Three bounded slots permit at most two concurrent callbacks.
  * info() returns 1 when a frame is available, writing dimensions/generation. */
 typedef int (*lrdp_video_callback)(const uint8_t*, int32_t, int32_t, void*);
+/* Additive ABI v5 variant of visit() for renderers that can refresh a sub-rect.
+ * The rectangle is the bounding box, in frame pixels, of every pixel changed
+ * since the caller's last successful upload; pixels outside it are byte-identical
+ * to that upload. A NULL rectangle means the whole frame must be re-uploaded
+ * (first upload, frame size change, or the change history no longer covers the
+ * gap) and a zero-size rectangle means the frame is unchanged in place. The
+ * pointer is borrowed until the callback returns; renderers that cannot upload
+ * partially keep calling visit(). Return codes match visit(). */
+typedef struct lrdp_video_rect {
+  int32_t x, y, width, height;
+} lrdp_video_rect;
+typedef int (*lrdp_video_damage_callback)(const uint8_t*, int32_t, int32_t,
+                                          const lrdp_video_rect*, void*);
 LRDP_API uint64_t lrdp_video_ticket(lrdp_session*);
 LRDP_API lrdp_video* lrdp_video_open(uint64_t ticket);
 LRDP_API int lrdp_video_info(lrdp_video*, int32_t*, int32_t*, uint64_t*);
 LRDP_API int lrdp_video_visit(lrdp_video*, lrdp_video_callback, void*, uint64_t*);
+LRDP_API int lrdp_video_visit_damage(lrdp_video*, lrdp_video_damage_callback, void*,
+                                     uint64_t*);
 LRDP_API void lrdp_video_close(lrdp_video*);
 enum { LRDP_CURSOR_DEFAULT, LRDP_CURSOR_HIDDEN, LRDP_CURSOR_BITMAP };
 /* Cursor snapshot, max 384x384. info[9]: kind,width,height,hotX,hotY,

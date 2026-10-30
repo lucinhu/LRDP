@@ -264,9 +264,14 @@ static BOOL begin_paint(rdpContext* c) {
 static BOOL end_paint(rdpContext* c) {
   lrdp_session* s = owner(c);
   rdpGdi* g = c->gdi;
-  if (g->primary->hdc->hwnd->invalid->null) return TRUE;
+  const HGDI_RGN invalid = g->primary->hdc->hwnd->invalid;
+  if (!invalid || invalid->null) return TRUE;
   if (g->width < 1 || g->height < 1 || g->width > MAX_DIM || g->height > MAX_DIM) return FALSE;
-  return lrdp_video_store_publish(s->video, g->primary_buffer, g->width, g->height, g->stride);
+  /* update_begin_paint() resets this box, so it bounds exactly the pixels this
+   * frame changed. The store clips it again and copies only that region. */
+  const lrdp_video_rect damage = {invalid->x, invalid->y, invalid->w, invalid->h};
+  return lrdp_video_store_publish(s->video, g->primary_buffer, g->width, g->height,
+                                  g->stride, &damage);
 }
 static BOOL desktop_resize(rdpContext* c) {
   UINT32 w = freerdp_settings_get_uint32(c->settings, FreeRDP_DesktopWidth);

@@ -22,6 +22,9 @@ struct VideoStatus {
 
 // Plain retained frame memory only: no session pointer or FreeRDP operation.
 // Flutter uploads RGBA on its raster thread and releases each borrowed buffer.
+// Frame updates convert only the BGRA rectangle the video store reports, so a
+// small change never reprocesses the whole surface. Every borrowed buffer is a
+// complete frame because the engine copies all of it.
 class VideoTexture : public std::enable_shared_from_this<VideoTexture> {
  public:
   static std::shared_ptr<VideoTexture> Open(uint64_t ticket);
@@ -43,10 +46,13 @@ class VideoTexture : public std::enable_shared_from_this<VideoTexture> {
     std::vector<uint8_t> pixels;
     size_t references = 0;
     int32_t width = 0, height = 0;
+    bool valid = false;  // pixels hold the complete converted frame
   };
   struct Lease;
-  static int Convert(const uint8_t*, int32_t, int32_t, void*);
+  static int Convert(const uint8_t*, int32_t, int32_t, const lrdp_video_rect*,
+                     void*);
   static void Release(void*);
+  static bool Reallocate(Slot& slot, size_t bytes);
 
   std::mutex mutex_;
   lrdp_video* video_;
