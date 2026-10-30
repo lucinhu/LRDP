@@ -31,7 +31,12 @@ and device testing. These are not represented as supported features in the UI.
 The Windows renderer uses no session pointer. A native ticker observes retained
 frame generations and marks the registered texture; it sleeps when every view
 is hidden, failed or closed. The raster callback converts only new frames, with
-at most three allocated RGBA slots and two outstanding buffer leases. Flutter's
+at most three allocated RGBA slots and two outstanding buffer leases. A damage
+rectangle is patched in place when the previous slot is still unleased,
+otherwise the previous complete frame is copied into a free slot first; first
+frames, frame size changes and history gaps reallocate and convert the whole
+frame. Channel exchange uses SSE2 4-pixel or 64-bit-word 2-pixel iterations on
+little-endian targets, with a scalar fallback. Flutter's
 release callback keeps each returned buffer immutable until upload completes.
 Disposal retains the reader through asynchronous texture unregistration, and an
 outstanding buffer lease can outlive both the session and plugin registration.
@@ -159,6 +164,66 @@ creates a session using those options; saving configuration alone does not
 silently replace a live desktop.
 
 
+## Quality presets and key combinations
+
+A profile carries an additive `quality` preset: automatic, save bandwidth or
+sharp text. It is stored as an index in the profile JSON (missing or unknown
+values fall back to automatic), compared by live-session reuse, and sent to the
+native side with the other start-time settings. The setting is applied before
+`lrdp_start`: save bandwidth asks the server to drop wallpaper, themes, window
+dragging and menu animations and disables font smoothing; sharp text keeps those
+effects, enables font smoothing and forces the lossless GDI path by disabling
+GfxH264. Color depth stays 32 bpp, and an invalid value is rejected. FreeRDP
+turns the booleans into the performance flags sent in the Client Info PDU, so
+changing a preset requires a new session. Imported `.rdp` files do not carry the
+preset and load as automatic.
+
+Measured against a real 1920x1080 KDE/KRdp session (2026-10-31, release native
+library, idle desktop with animation): automatic and save bandwidth negotiated
+GFX H.264, used 1.8-2.4 Mbit/s downlink and about half a CPU core (51% / 46% of
+one core) for software decoding; sharp text switched to bitmap updates, used
+19.7-21.8 Mbit/s and 17% CPU. H.264 frames cover the whole surface, so the frame
+damage rectangle is the full frame on those two presets; sharp text produced
+real partial rectangles averaging 92,514 of 2,073,600 pixels (about 0.37 MB per
+frame instead of 8.29 MB). The preset labels therefore describe a bandwidth
+versus decode-CPU tradeoff, not a claim that the default is cheapest overall.
+
+The remote view more-sheet also exposes a sender-side "组合键" menu with task
+manager, window switch, close, show desktop, explorer, run, lock and PrintScreen.
+Each entry transmits one bounded chord while the session is connected; extended
+scan codes use the existing `0x100 | code` convention. The menu verifies that
+chords are sent, not that the remote desktop acted on them.
+
+
+## Session info, diagnostics and configuration backup
+
+The remote view more-sheet opens a read-only session info panel. The panel owns a
+one-second sampling timer and repaints only its own rows; it never subscribes to
+the session change notifier, so inspecting the session cannot make the remote
+view rebuild per frame. The measured rate is the delta of `session.frames` on the
+native texture path or `session.decodedFrames` on the CPU fallback divided by the
+wall time between samples. Alongside it the panel lists connection state, remote
+resolution, renderer, codec, the frame rate cap, uploaded/decoded counters, audio
+state and negotiated clipboard capabilities.
+
+The settings page offers a sanitized diagnostics report and a configuration
+backup. Diagnostics are built from the release tag, OS and version, language,
+profile count and display/update preferences only: the builder never receives
+profile data, so addresses, accounts, passwords, certificate fingerprints and
+update tokens cannot leak. The panel shows the text selectable and copies it to
+the system clipboard.
+
+Configuration backups use the `lrdp.profiles` v1 JSON envelope. Only
+`ConnectionProfile.toJson()` is written, which excludes passwords and trusted
+certificate fingerprints (both live in the platform vault keyed by profile id).
+Decoding validates the format marker, version, non-empty profile array and per
+entry parsing, and rejects a file that lists the same endpoint twice. Import
+merges into the local store by host + port + username (host and username
+case-insensitive), reports how many connections were imported and skipped, and
+gives an accepted profile with a colliding id a fresh `<id>-import-N` id before
+saving it through the store. Export and import use the platform file chooser;
+the dialog itself is injectable for tests.
+
 ## RDP cursor pipeline
 
 LRDP registers FreeRDP pointer New/Free/Set, system null/default and position
@@ -181,7 +246,13 @@ never cross the FFI/isolate boundary as borrowed pointers.
 painter on the same canvas as the desktop RawImage. Hotspots use the cursor's
 actual display scale, including small-screen enlargement and viewport zoom.
 A position serial applies server warps once; later shape-only updates preserve
-local trackpad motion. Native system mouse cursors are hidden inside remote
+local trackpad motion. Position-only updates also stay off the rebuild path: the
+session publishes each accepted position through a dedicated `cursorMoved`
+notifier, and only a new shape, kind or hotspot notifies the generic session
+listeners. `RemoteSurface` re-syncs its pointer from that notifier, so a server
+pointer move repaints only the cursor layer instead of rebuilding the workspace
+and the remote surface.
+Native system mouse cursors are hidden inside remote
 control mode; server null/default requests hide the virtual pointer or restore
 the local arrow. This is software composition; platform native cursor APIs and
 relative mouse capture remain separate work.
@@ -254,24 +325,39 @@ process freeze recovery or physical output latency is claimed.
 
 ## Native video readers and Linux textures
 
-Five additive exports retain base ABI v5 (24 exports total). The worker obtains
+Six additive exports retain base ABI v5 (28 exports total). The worker obtains
 an opaque integer with `lrdp_video_ticket`; the platform opens it with
 `lrdp_video_open`, reads metadata with `lrdp_video_info`, borrows immutable BGRA
-bytes during `lrdp_video_visit`, and releases its reader with `lrdp_video_close`.
+bytes during `lrdp_video_visit` or `lrdp_video_visit_damage`, and releases its
+reader with `lrdp_video_close`.
 Only these plain frame-memory APIs may run outside the session's owning worker.
 Retiring the session removes its ticket before dropping the owner reference;
 existing readers retain the final frame, while opening a retired ticket fails.
 The caller serializes closing its own reader against its reads/callbacks.
 
+`lrdp_video_visit_damage` reports the bounding box, in frame pixels, of every
+pixel changed since that reader's last successful upload; pixels outside it are
+byte-identical to that upload. A NULL rectangle asks for the whole frame (first
+upload, frame size change, or a gap the bounded history no longer covers) and a
+zero-size rectangle means nothing visible changed. Renderers that cannot upload
+a sub-rectangle keep using `lrdp_video_visit`, which always sees complete slots.
+
 A three-slot pool permits at most two outstanding borrowed callbacks. The
 producer always has a free slot and does not wait for GL work. Slots are reused
 and resized within the existing 4096-pixel dimension limit. A rejected or busy
-upload does not consume its generation. GDI still copies into the native pool;
-this removes frame transfer to Dart and Dart image decoding on Linux, rather
+upload does not consume its generation. The producer refreshes only the union of
+the rectangles changed since a slot last held a complete frame, keeping a
+32-generation damage ring to describe skipped frames or a reused slot; beyond
+that it copies the whole frame. This removes the per-frame GDI-to-native
+full-frame copy and the per-frame full GPU upload on the common path, rather
 than promising an end-to-end zero-copy or hardware-decoding pipeline.
 
 The hybrid FFI/Linux plugin uses `FlTextureGL`, uploads BGRA into RGBA8 storage,
-and preserves GL unpack/binding state. Its 16 ms native timer announces changed
+and preserves GL unpack/binding state. A damage rectangle becomes
+`glTexSubImage2D` with `GL_UNPACK_ROW_LENGTH`/`SKIP_ROWS`/`SKIP_PIXELS`, while
+per-frame immutable state (texture parameters, sampling) is set only when a
+texture is created and `glGetError` is limited to recreation or
+`LRDP_VIDEO_GL_CHECK=1`. Its 16 ms native timer announces changed
 visible frames; the Dart channel polls metadata at a lower rate. Hidden views
 freeze the texture and resume the latest snapshot. Cursor XOR remains the same
 Flutter foreground compositor as the CPU path. A dedicated thread deletes each
@@ -297,7 +383,7 @@ A two-copy subprocess regression verifies this loader boundary.
 The hybrid Android FFI/plugin registration uses the same `dev.lrdp/video`
 metadata channel as Linux. Texture ID zero is valid on Android. Java first
 probes the JNI metadata interface, so a mismatched or missing renderer keeps
-the CPU image path. The public C ABI remains v5 with 24 exports; seven private
+the CPU image path. The public C ABI remains v5 with 28 exports; seven private
 Android JNI entrypoints adapt the platform renderer to retained frame readers.
 Neither session pointers nor frame arrays cross Java or Dart.
 
@@ -306,8 +392,18 @@ objects. SurfaceProducer creation, dimensions, callbacks and release stay on the
 Android main thread. Each session has at most one pending status task and one
 draw; the pool supplies the latest immutable frame. Packed native BGRA bytes
 enter a GLES2 RGBA texture unchanged; a high precision shader swaps R/B, avoiding
-CPU color conversion. The offscreen Surface is consumed by Flutter's texture
+CPU color conversion. Damage rectangles use `glTexSubImage2D` with
+`GL_UNPACK_ROW_LENGTH`/`SKIP_PIXELS`/`SKIP_ROWS` and the unpack state is restored
+immediately, on an ES3 context when available and a whole-frame ES2 fallback
+otherwise. The offscreen Surface is consumed by Flutter's texture
 registry, rather than using a platform view that could intercept touch gestures.
+The renderer caches one `ANativeWindow` acquisition and one `EGLSurface` for the
+lifetime of the Java Surface object; rotation, background/foreground or producer
+replacement rebinds them, and `eglMakeCurrent` is skipped when the same context
+and draw surface are already current. A steady frame therefore costs one swap
+instead of a window acquire, surface bind and context switch. The optional
+`LRDP_ANDROID_GL_TRACE=1` logcat tag `lrdp-video` prints bounded frame,
+window-bind, surface-creation and make-current counters.
 
 Surface cleanup stops drawing, drops the old EGL surface, and keeps the reader.
 Surface availability or foreground resume redraws even an unchanged final frame.

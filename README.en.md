@@ -4,9 +4,9 @@
 
 LRDP (Lightweight RDP) is a lightweight, local-first RDP client built with **Flutter + FreeRDP**. FreeRDP runs embedded in the app, so no external RDP client is involved.
 
-The current version is a **0.2.0 development preview**, targeting Linux, Android, Windows, macOS and iOS. Build and verification progress for each platform is listed in the table below.
+The current version is a **0.3.0 development preview**, targeting Linux, Android, Windows, macOS and iOS. Build and verification progress for each platform is listed in the table below.
 
-[Download preview](https://github.com/lucinhu/LRDP/releases/tag/v0.2.0-preview.1) · [Usage guide](docs/USAGE.md) · [Building guide](docs/BUILDING.md) · [Clipboard and files](docs/CLIPBOARD.md) · [Verification record](docs/VERIFICATION.md)
+[Download preview](https://github.com/lucinhu/LRDP/releases/tag/v0.3.0-preview.1) · [Usage guide](docs/USAGE.md) · [Building guide](docs/BUILDING.md) · [Clipboard and files](docs/CLIPBOARD.md) · [Verification record](docs/VERIFICATION.md)
 
 ![LRDP desktop connection library with an example profile](docs/screenshots/workspace.png)
 
@@ -31,13 +31,15 @@ The screenshots above were taken on the Android emulator using a local loopback 
 
 - **Check for updates**: manually check stable or preview releases from GitHub Releases, read the notes and open the download for your platform and architecture; private repositories can use a read-only token stored in secure storage.
 - **Connection management**: quick connect, groups, favorites, search, recent connections, switching between multiple sessions, and `.rdp` profile import/export.
-- **Phone controls**: full-screen sessions, a draggable and collapsible floating toolbar, trackpad and direct touch, two-finger scrolling, right-click, zoom and drag. The remote desktop stays usable while the keyboard is expanded.
+- **Phone controls**: full-screen sessions, a draggable and collapsible floating toolbar, trackpad and direct touch, two-finger scrolling, right-click, zoom and drag; the “More” menu sends eight common shortcut combinations including Task Manager, switch window and show desktop. The remote desktop stays usable while the keyboard is expanded.
 - **Text and keyboard**: Chinese input, pasting whole passages and simulated soft-keyboard keys. Ctrl, Shift, Alt and Win support one-shot combinations and locked holding, and the extended row switches between digits/symbols and navigation/function keys.
-- **Display**: automatic resolution, dynamic resolution changes, zoom and pan, smooth/sharp scaling, remote mouse cursor, H.264 software decoding, and a display frame-rate cap that follows the screen refresh rate.
+- **Display**: automatic resolution, dynamic resolution changes, zoom and pan, smooth/sharp scaling, remote mouse cursor, H.264 software decoding, a display frame-rate cap that follows the screen refresh rate, and automatic/save-bandwidth/sharp-text quality presets negotiated at connect time (changing them requires reconnecting).
+- **Session info**: open “More” on the remote desktop to see connection state, remote resolution, encoding and rendering path, measured frame rate, uploaded/decoded frames, and audio and clipboard capabilities.
 - **Clipboard and files**: text and bidirectional picture clipboard, pasting local files to the remote, and copying files both ways through the file transfer station.
 - **Appearance and language**: system color scheme, light/dark themes that follow the system, and support for Simplified Chinese, Traditional Chinese and English.
 - **Session recovery and audio**: reconnect on connection loss with a retry limit that can be cancelled; optional remote audio playback that pauses when leaving the session and resumes when returning.
 - **Credentials and certificates**: passwords use the system secure storage, and exported profiles contain no passwords. Certificate fingerprints must be confirmed explicitly, and can be trusted for this session only or saved.
+- **Profiles and diagnostics**: back up and restore all connection profiles from Settings (passwords and certificate fingerprints are not included), and copy a diagnostics report that only contains the version, platform, language and display settings.
 
 Dynamic resolution, clipboard, file and audio features require server support and the corresponding redirection to be enabled. The display frame-rate cap can be set up to 240 fps; the actual frame rate depends on the remote output, screen, network and device performance.
 
@@ -45,8 +47,8 @@ Dynamic resolution, clipboard, file and audio features require server support an
 
 | Platform | Current progress |
 | --- | --- |
-| Linux | An x86_64 AppImage built on Ubuntu 22.04 is available, and Linux desktop acceptance is complete: FUSE/extract-and-run launch, window, input, full-screen and loopback RDP were verified in a private Arch X11 session. |
-| Android | The current release provides an ARM64 APK, and Android acceptance is complete, covering touch, gestures, soft-keyboard input, clipboard and file transfer, session recovery and audio; an x86_64 test build existed earlier. |
+| Linux | An x86_64 AppImage built on Ubuntu 22.04 is available; the 0.2.0 batch passed FUSE/extract-and-run launch, window, input, full-screen and loopback RDP checks in a private Arch X11 session. Real desktop acceptance of this round's binaries is still to be repeated; see [VERIFICATION.md](docs/VERIFICATION.md). |
+| Android | The current release provides an ARM64 APK; earlier API 36 / x86_64 / 16 KiB emulator acceptance covered touch, gestures, soft-keyboard input, clipboard and file transfer, session recovery and audio. ARM64 real devices and vendor input methods are still pending for this round. |
 | Windows | Native build and display integration are in place; the x64 connection core and parts of the protocol and file-handle handling passed Wine tests. The Flutter main window and real Windows systems are pending verification. |
 | macOS | Project and native bridge are in place; build and device verification are pending. |
 | iOS | Project and native bridge are in place; build and device verification are pending. |
@@ -58,12 +60,12 @@ Verification scope differs between features; exact versions, test methods and li
 On Linux x86_64, download the `.AppImage` from Releases and run it directly after making it executable:
 
 ```sh
-chmod +x lrdp-0.2.0-linux-x64.AppImage
-./lrdp-0.2.0-linux-x64.AppImage
+chmod +x lrdp-0.3.0-linux-x64.AppImage
+./lrdp-0.3.0-linux-x64.AppImage
 ```
 
 The AppImage bundles application runtime libraries such as GTK and OpenSSL; it requires glibc ≥ 2.35 and a working OpenGL/EGL environment.
-If the system has no FUSE, start it with `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.2.0-linux-x64.AppImage`.
+If the system has no FUSE, start it with `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.3.0-linux-x64.AppImage`.
 Android users download the ARM64 preview APK. Each package is released together with the full source, build information and SHA-256 checksum files.
 
 1. Tap “Add computer” and enter the address, username, password and domain information if needed. The address can include the port directly, for example `192.168.1.10:3390`; for IPv6 use `[2001:db8::1]:3389`.

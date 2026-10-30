@@ -478,8 +478,18 @@ git add third_party/FreeRDP
 `LRDP_WITH_H264=OFF` 可显式关闭解码，但只支持 H.264 的服务将无法显示桌面。
 Apple 构建步骤仅完成脚本接入，仍需在 Mac 实际验证；MSVC 也需匹配架构和工具链。
 
-桥接库保持 ABI v5，当前有 26 个导出；包含五个原生帧读取接口与两个新增图片剪贴板接口，旧接口签名保持兼容。
+桥接库保持 ABI v5，当前有 28 个导出；包含六个原生帧读取接口（新增
+`lrdp_video_visit_damage` 按损坏矩形局部读取）与两个新增图片剪贴板接口，旧接口签名保持兼容。
 Linux/Android 原生纹理需要匹配的平台插件与新库；没有可用纹理后端时继续使用兼容画面路径。
+纹理渲染器只在需要时整帧上传：首帧、画面尺寸变化或损坏历史缺口超过 32 代；
+`LRDP_VIDEO_GL_CHECK=1`（仅 Linux 插件）会把每帧的 `glGetError` 检查加回热路径，
+默认只在重建或尺寸变化时检查。
+`LRDP_ANDROID_GL_TRACE=1`（仅 Android 原生 Surface）每 120 帧向 logcat 标签
+`lrdp-video` 打印帧、window 绑定、EGLSurface 创建与 eglMakeCurrent 计数，
+用于在真机确认表面缓存和快速路径生效。
+画质档位（自动/省流量/清晰文字）是连接前的运行期选项，不改变构建配置：省流量
+关闭壁纸、主题、拖动与菜单动画并关闭字体平滑，清晰文字关闭 GfxH264、启用字体平滑；
+两者都不改 32 位色深，非法值会被拒绝。
 粘贴协议验收包含成功、提前请求数据、拒绝、无确认、无数据及取消六种情况：
 `run_paste_test.py` 的 `--flutter`、`--asan`、`--wine` 分别运行 Flutter、内存检查和 Windows PE 客户端。
 
@@ -490,6 +500,8 @@ Linux/Android 原生纹理需要匹配的平台插件与新库；没有可用纹
 ```sh
 cmake --build build/native --parallel 3
 ctest --test-dir build/native --output-on-failure
+# 帧存储微基准（耗时与机器相关，只用于前后对比，不注册为 CTest 门禁）：
+./build/native/lrdp_video_bench
 flutter test
 python3 scripts/run_image_clipboard_test.py
 python3 scripts/run_image_clipboard_test.py --flutter

@@ -2,6 +2,219 @@
 
 记录日期：2026-10-22。当前为开发预览。构建、真实协议和平台设备验收分别记录。
 
+## 0.3.0 版本标识与发布（2026-10-31 批次）
+
+0.3.0 为当前批次。`pubspec.yaml` 的 version 为 **0.3.0+6**，GitHub 标签为
+**v0.3.0-preview.1**；Android 由该版本号得到 versionCode **6**、versionName **0.3.0**。
+`lib/app_version.dart` 由 `scripts/generate_version.py` 生成，CI 运行
+`python3 scripts/generate_version.py --check` 校验生成文件与配置同步，发布前只改
+`pubspec.yaml` 后重新生成，不手工编辑生成文件。
+
+本轮内容（性能与功能）：
+
+- 帧损坏区域局部更新：`end_paint` 的 GDI 包围盒经 32 代历史合并后，store 只对并集矩形
+  做局部 memcpy；Linux/Android 纹理改用矩形 `glTexSubImage2D`，Windows 纹理按矩形做
+  SSE2 局部 BGRA→RGBA 转换。原生 ABI 仍为 **v5**，导出由 **27** 增为 **28**
+  （新增 `lrdp_video_visit_damage`），旧 `lrdp_video_visit` 语义不变。
+- 画质档位：连接配置新增 `ConnectionQuality { automatic, saveBandwidth, sharpText }`
+  三档，连接前通过 additive 选项 `quality`（`"0"/"1"/"2"`）下发，映射为 FreeRDP
+  性能标志 **0x86 / 0x0F / 0x80** 与 GfxH264 选择；修改后需重新连接。
+- 远端光标位置只重绘：位置变化走独立通知，只有形状或热点变化才重建会话视图。
+- 组合键菜单：手机远端画面“更多”提供任务管理器、切换窗口、关闭窗口、显示桌面、
+  资源管理器、运行、锁定和截屏共 **8 项**。
+- 会话信息面板：显示连接状态、分辨率、渲染方式、编码、实测帧率、帧率上限、
+  已上传/已解码帧数，以及音频与剪贴板能力。
+- 配置备份/恢复与可脱敏诊断：`lrdp.profiles` v1 备份不含密码与证书指纹，导入时去重；
+  诊断只含版本、平台、语言、配置数量与显示设置，可一键复制。
+- Android Surface 缓存：Surface 生命周期内复用 `ANativeWindow` 与 `EGLSurface`，
+  每帧 EGL/window 调用 **4→1**。
+- Dart 轮询自适应与逐帧通知消除：纹理已有帧后元数据轮询 33 ms→100 ms，只有首帧
+  或帧尺寸变化才通知视图重建。
+
+真实服务器实测（2026-10-31）：连接 KDE/KRdp 服务器（请求 1280x800，协商 1920x1080），
+`lrdp_features` 为 **31**（文本剪贴板、display control、AVC/GFX、Unicode 与 PNG/DIB
+图片剪贴板就绪，文件剪贴板缺失）。8 秒采样：H.264 档约 **1.8–2.4 Mbit/s**，1080p
+软件解码约占半个 CPU 核（release 原生库 **51%** CPU）；位图档约 **19.7–21.8 Mbit/s**、
+约 **17%** CPU。damage 契约经像素 diff 复核成立：位图档局部矩形由整帧
+**8.29 MB/帧** 降到平均约 **0.37 MB/帧**。方法与限制见下文“真实服务器实测
+（2026-10-31 开发批次）”一节。
+
+本轮发布验证范围（如实）：GitHub Actions 发布工作流
+（`.github/workflows/release.yml`）在 **ubuntu-22.04** 上构建 AppImage、Android
+ARM64 Release APK、源码包与 FFmpeg 重建资料。AppImage 由
+`scripts/appimage/check_appdir.py` 校验 glibc ≤ **2.35**、原生 ABI v5 与 OpenSSL
+legacy provider（MD4/RC4）加载；APK 由 `scripts/check_android_apk.py` 校验单 ABI、
+ELF/RELRO、ZIP 页对齐、签名与 `package:lrdp/main.dart` 主入口。CI 中运行
+`flutter analyze`、完整 `flutter test`、原生 CTest 与
+`python3 -m unittest discover -s scripts/tests`。构建日志、`BUILD_INFO.json`、
+`RELEASE_INFO.json`、`SHA256SUMS` 与 `lrdp-0.3.0-verification.zip` 随 Release 发布。
+
+尚待验收：
+
+- 本轮 AppImage 的真实桌面验收（FUSE 与 `APPIMAGE_EXTRACT_AND_RUN=1` 启动、窗口、
+  全屏、输入释放、NLA 回环）未在发布流程内重跑；历史 0.2.0 批次的 Arch X11 记录
+  只对应旧二进制。
+- Android ARM64 真机与厂商输入法未验收，本轮 APK 只到构建与静态校验。
+- Windows、macOS、iOS 本轮没有新的安装包，平台设备验收继续待做。
+- 其他 Linux 发行版与原生 Wayland 待验收。
+
+历史 0.2.0 批次的验收记录继续有效并保持原样；上述“待验收”只针对 0.3.0 二进制。
+
+## 真实服务器实测（2026-10-31 开发批次）
+
+用真实服务器 112.74.33.124:3390（KDE/KRdp 主机，请求 1280x800）以 ctypes 直连
+`liblrdp.so`（ABI v5）验证会话、帧路径与画质档位；另在运行的 debug 桌面上人工
+核对截图。未改动远端输入、剪贴板或分辨率。
+
+- 连接：NLA + TLS 通过，证书 pin 匹配，协商分辨率 1920x1080。连接后 0.5 秒
+  `lrdp_features` 稳定为 31：文本剪贴板、display control、AVC/GFX 解码、Unicode
+  输入与 PNG/DIB 图片剪贴板均就绪；文件剪贴板（bit5）缺失，与界面置灰提示一致。
+  音频在未激活播放权限时保持 paused，属预期。
+- 画质档位对比（release 原生库，真实会话，8 秒采样，空闲但存在界面动画）：
+
+  | 档位 | 帧率 | 单核 CPU | 下行流量 | damage 矩形 |
+  | --- | --- | --- | --- | --- |
+  | 自动（默认） | 35.5 fps | 51% | 1.8–2.4 Mbit/s | 每帧整帧（1920x1080） |
+  | 省流量 | 36 fps | 46% | 约 2 Mbit/s | 每帧整帧 |
+  | 清晰文字 | 30–32 fps | 17% | 19.7–21.8 Mbit/s | 平均 92,514 px（约 0.37 MB） |
+
+  结论：自动与省流量协商到 GFX H.264，服务器每帧送全表面视频，整幅 primary 都会
+  失效，因此帧损坏区域局部更新在这两档没有收益；清晰文字改用位图更新，局部矩形
+  平均只占 1080p 的 4.5%，store 拷贝从 8.29 MB 降到约 0.37 MB。H.264 档省带宽但
+  软件解码约占半个 CPU 核，位图档省 CPU 但流量约高 10 倍。
+  → 据此修订了编辑器中的画质帮助文案（自动/省流量/清晰文字分别说明带宽与 CPU
+  取舍），并明确“修改后需重新连接”。
+- 构建配置对照：同一会话下 debug 原生库 `visit` 采样 364% CPU，release 库 51%；
+  桌面上运行的 debug 应用（JIT + `-O0` 原生库）实测约 295%。日常使用应运行
+  release 构建。
+- 硬件 H.264 未启用：FreeRDP 需要 `WITH_FFMPEG_HWACCEL`（本项目为 OFF）且
+  `SoftwareGdi=FALSE` 才会设置 `hwAccel`；捆绑的 ffmpeg 静态库不含 VAAPI 符号，
+  本机 NVIDIA 环境 `vainfo` 也失败，故当前依赖下无法验证或受益。
+- 尚未在真实服务器验收：文件剪贴板（服务端不支持）、输入事件的实际远端效果、
+  多显示器与 RD Gateway；Android/Windows 真机仍未验收。
+
+## 第三轮可观测性与数据维护（2026-10-31 开发批次）
+
+在帧损坏区域局部更新与第二轮交互优化之后，补上了三处“可观测/可维护”能力，
+没有改动 ABI（仍为 v5、28 个导出），`third_party/FreeRDP` 未修改。
+
+- 会话信息面板：`lib/ui/session_info_sheet.dart` 由远端画面“更多”菜单打开，
+  展示连接状态、远程分辨率、渲染方式（原生纹理/CPU 图像）、编码（H.264/位图）、
+  实测帧率、帧率上限、已上传帧数、已解码帧数、音频状态与剪贴板能力。面板自管
+  1 秒 `Timer.periodic` 采样并只 `setState` 自身行，不订阅会话的
+  `ChangeNotifier`，因此打开面板不会让远端视图按帧重建；实测帧率用
+  `session.frames`（纹理路径）或 `session.decodedFrames`（CPU 回退）在采样区间
+  的差值除以实际经过时间。`test/session_info_test.dart` 4 项通过（空闲状态、
+  能力位与上限、注入时钟下的帧率差值、从回调打开弹层）。
+- 可脱敏诊断：`lib/data/diagnostics.dart` 的 `buildDiagnostics` 只接受版本、
+  平台、语言、配置数量与显示设置映射（键排序、值折成单行），
+  `collectDiagnostics` 读取这些偏好但不触碰连接配置内容或安全存储；
+  `lib/ui/diagnostics_sheet.dart` 打开底部弹层展示报告并复制到剪贴板。
+  设置页新增“复制诊断信息”入口。`test/diagnostics_test.dart` 8 项通过
+  （固定格式、插入顺序无关、敏感字段缺失、换行注入折叠、真实 store 的收集、
+  保存的配置主机/用户名/域/名称不出现、成功与失败复制路径）。
+- 配置备份：`lib/data/profile_backup.dart` 定义 `lrdp.profiles` v1 信封，
+  `encodeBackup` 只写 `ConnectionProfile.toJson()`（模型本身不含密码与证书
+  指纹），`decodeBackup` 校验格式/版本/非空/条目可解析并拒绝文件内重复，
+  `mergeBackup` 按地址+端口+用户名（忽略大小写）去重、为冲突 id 生成
+  `<id>-import-N`，`lib/ui/backup_dialog.dart` 通过 `file_selector` 导出/导入，
+  导入逐条 `ProfileStore.save`。设置页新增“配置备份”入口。
+  `test/profile_backup_test.dart` 14 项通过（信封往返与无敏感字段、格式/版本/
+  空/文件内重复拒绝、去重与 id 冲突、字段保留、临时文件导入的 4 项组件测试）。
+- 本地化：新增 44 个键（三语言 JSON 与生成的 `messages.dart` 同步），
+  `test/localization_test.dart` 2 项通过。
+- 本轮全量验证：原生 `ctest` 5/5；`flutter analyze` 无问题；完整
+  `flutter test` 260 项通过、11 项跳过；`flutter build linux --debug` 成功。
+- 待验收：移动端文件选择/分享备份的实际交互、Android/iOS 上写入备份文件、
+  Windows/macOS 的另存为对话框、真实服务器上的会话帧率读数与诊断复制到
+  系统剪贴板后的粘贴行为。
+
+## 第二轮交互与性能优化（2026-10-31 开发批次后续）
+
+在帧损坏区域局部更新之后，又完成了四项优化/功能：远端光标位置通知拆分、画质档位、
+组合键菜单与 Android Surface 每帧调用缓存。ABI 仍为 v5（28 个导出），
+`third_party/FreeRDP` 未修改。
+
+- 光标通知拆分：此前 `_decodeCursor` 对每个服务器光标事件（含仅位置变化）都
+  `notifyListeners()`，而 remote view 用 `ListenableBuilder` 包住整棵会话 UI，
+  于是每次远端指针移动都重建布局与画面组件。现在会话用独立
+  `cursorMoved`（ValueNotifier，携带 positionSerial）发布位置，只有形状、类型或
+  热点变化才通知泛型监听者；`RemoteSurface` 订阅该通知并重新同步指针。新增
+  `test/cursor_notify_test.dart`（伪 worker 驱动真实事件循环）：位置变化断言泛型
+  监听者计数为 0、通知值等于 positionSerial，形状变化仍计数增加。
+- 画质档位：连接配置新增 `ConnectionQuality { automatic, saveBandwidth, sharpText }`
+  （JSON 以索引保存，缺失/非法值回退 automatic，纳入同会话复用比较），编辑器新增
+  “画质”分区；连接前通过 additive 选项 `quality`（`"0"/"1"/"2"`）下发给原生。
+  原生在 `lrdp_set` 中于 start 前设置：省流量关闭壁纸、主题、拖动与菜单动画并关闭
+  字体平滑；清晰文字启用字体平滑并关闭 GfxH264；非法值或 start 后调用返回失败，
+  32 位色深不变。用真实 FreeRDP 设置对象核对最终 PerformanceFlags：
+  automatic `0x86`、省流量 `0x0F`、清晰文字 `0x80`；`native/tests/bridge_test.c`
+  覆盖接受、拒绝、重复设置与 start 后拒绝，`ctest` 5/5 通过；Dart 侧
+  `connection_profile_test`、`profile_editor_test`、`profile_store_test` 共 29 项通过。
+  真实服务器上的画质、带宽与耗电差异已按 2026-10-31 实测记录在上一节：
+  H.264 档省带宽但软件解码约占半个 CPU 核，位图档省 CPU 但流量约高 10 倍。
+- 组合键菜单：远端画面“更多”新增“组合键”入口，第二层底部弹层提供任务管理器
+  （Ctrl+Shift+Esc）、切换窗口（Alt+Tab）、关闭窗口（Alt+F4）、显示桌面（Win+D）、
+  资源管理器（Win+E）、运行（Win+R）、锁定（Win+L）与截屏（PrintScreen），未连接时
+  禁用；扩展键沿用 `0x100|code` 编码。`test/remote_view_test.dart` 新增 8 组按键
+  序列断言与未连接禁用断言；真实服务端是否响应未验收。
+- Android Surface 缓存：`native/src/android_video.c` 在 Java Surface 对象生命周期内
+  缓存一次 `ANativeWindow_fromSurface` 与一个 `EGLSurface`，旋转/前后台/producer
+  替换时重建并整帧刷新；`eglGetCurrentContext`/`getCurrentSurface` 匹配时跳过
+  `eglMakeCurrent`。稳态每帧原生 EGL/window 调用从 4 次（acquire+release、makeCurrent、
+  swap + 另一次）降为 1 次（swap），`LRDP_ANDROID_GL_TRACE=1` 可打印
+  frame/windowBind/surfaceCreate/makeCurrent 计数。NDK r28c 对 arm64-v8a、
+  armeabi-v7a、x86_64 的 `-Wall -Wextra -Werror` 编译零警告；完整 Android CMake
+  构建通过并产出 arm64 `liblrdp.so`。设备上的缓存与快速路径未运行，Android 待真机验收。
+- 全量验证：`build/native` CTest 5/5、`build/native-windows` CTest 7/7（含损坏矩形
+  与 Windows 纹理 damage 断言）；`flutter analyze` 无问题；完整 `flutter test`
+  **234 项通过、11 项外部协议用例按常规入口跳过**。
+- 尚待：真实 RDP 桌面下的光标交互与画质档位对比、Android 真机 GL 路径与旋转重建、
+  Windows 真机纹理渲染，以及各档位在不同服务器/带宽下的可测量数据。
+
+## 帧损坏区域局部更新（2026-10-31 开发批次）
+
+帧路径此前每帧把 FreeRDP 的 GDI 主缓冲整帧拷入原生帧槽，再由纹理渲染器整帧上传；
+Windows 纹理还要逐像素把 BGRA 转成 RGBA。现在只在损坏区域内做这些工作。
+
+- 设计：`end_paint` 把 `hwnd->invalid` 包围盒交给帧存储（`update_begin_paint()`
+  每帧先重置该包围盒，因此它恰好是本帧损坏区域）；存储保留 32 代损坏矩形，按槽位
+  上次完整帧合并后只拷贝并集矩形，首帧、画面尺寸变化或历史缺口回退整帧。新增
+  additive ABI v5 接口 `lrdp_video_visit_damage` 与 `lrdp_video_rect`；旧
+  `lrdp_video_visit` 语义不变（槽位内容始终是完整帧）。ABI 仍为 v5，导出从 27 增为
+  **28**；`third_party/FreeRDP` 未修改。
+- 原生测试：`build/native` CTest **5/5**；`build/native-windows`（加 Flutter 桌面纹理
+  头）CTest **7/7**，含 damage 探针（首帧整帧、精确矩形、回调失败不推进 generation、
+  零矩形、尺寸变化）与纹素级断言（矩形内变化、矩形外与上次逐字节一致、租约中复制路径）。
+- 微基准（`build/native/lrdp_video_bench`，1080p 整帧 8,294,400 B，400 次）：
+  整帧 publish 528–692 µs/帧；320×240 publish 5.8–6.1 µs；2×18 光标 0.1 µs；
+  模拟渲染器整帧读取 1935–3174 µs，与局部读取 12–14 µs 相比约 160 倍差距。
+- Linux：`flutter build linux --debug` 成功；插件 `U lrdp_video_visit_damage` 与
+  `liblrdp.so` 的 `T lrdp_video_visit_damage` 匹配，`readelf`/`ldd` 无缺失依赖。
+  1080p 每帧上传从 8,294,400 B 降到 320×240 时的 307,200 B（27.0×，−96.3%）；
+  GL 调用/帧从 24 次降到局部 15 次、同尺寸整帧 9 次、零尺寸 0 次。另在离屏 EGL
+  （NVIDIA GL 3.3 core）复刻相同调用序列：首帧整帧、320×240@(100,200) 局部上传后
+  整帧回读逐字节一致、矩形外不变、脏 unpack 状态精确恢复，全部通过。
+  真实 RDP 会话下的 Flutter 纹理显示未验收。
+- Windows：纹理局部转换加 SSE2（4 像素/迭代）或 64 位字（2 像素/迭代）通道交换。
+  1080p 整帧转换 2.96–3.02 ms → 0.71–0.86 ms（最好 3.5–4.2×，连续中位约 1.9×）；
+  320×240 局部 0.105 ms → 0.020 ms。MinGW x64/i686 `-Werror` 编译通过；
+  无 MSVC 构建与真实 Windows GPU 验收。
+- Android：`native/src/android_video.c` 请求 GLES3 上下文并提供 ES2 整帧回退，矩形
+  上传使用 `GL_UNPACK_ROW_LENGTH`/`SKIP_PIXELS`/`SKIP_ROWS` 后立即复位。NDK r28c
+  交叉编译 arm64-v8a/armeabi-v7a/x86_64 零 warning；完整 CMake 构建出 arm64
+  `liblrdp.so`。1080p 下 320×240 局部上传同样为 27.0× 减少、−96.3%。
+  GL 路径未在设备上运行，Android 待真机验收。
+- Dart：纹理已有帧后元数据轮询从 33 ms 改为 100 ms（首帧到达前仍 33 ms），只有首帧
+  或帧尺寸变化才 `notifyListeners()`，普通上传帧不再让 remote view 每帧重建。
+  `flutter analyze` 无问题；完整 Flutter 测试 **227 项通过、11 项外部协议用例按常规
+  入口跳过**。
+- 尚待：真实 RDP 桌面（文字/滚动/视频）下的纹理显示与 CPU 占用对比、Android 真机
+  像素级校验、Windows 真机 DLL/渲染验收，以及不同硬件上的基准复核。
+
+`LRDP_VIDEO_GL_CHECK=1`（仅 Linux 插件）可把每帧 `glGetError` 检查加回热路径用于
+排查；`lrdp_video_bench` 只用于前后对比，不注册为 CTest 门禁。
+
 ## 0.2.0 版本标识（当前批次）
 
 之前 `0.1.0+4` 只递增安装构建号；Android 的 versionName 与 Apple 的主应用版本
@@ -892,6 +1105,7 @@ Unicode/CLIPRDR 协议夹具不发送桌面图形，对应中文截图显示“�
 - Android ARM64 / Windows / macOS / iOS 实机音频、实际延迟、A/V 同步和声卡切换恢复；Android 模拟器已检查自身音轨，主机声音回录使用隔离虚拟声卡。
 - 长时间后台缓存进程冻结、系统终止后恢复、蓝牙路由与锁屏音频；当前实现不提供手机前台服务。
 - Apple 原生纹理、Windows 主应用/真实 GPU；Android 较低 API / 不同 GPU / ARM64 真机；硬件解码、远端文件剪贴板下载、文件夹粘贴、RD Gateway、RemoteApp 与多显示器。
+- 帧损坏区域局部更新的真实会话效果：Linux 真实 RDP 纹理显示与 CPU 占用对比、Android 真机像素比对、Windows 真机 DLL/GPU 渲染，以及不同硬件上的 `lrdp_video_bench` 复核。
 
 文件重定向使用标准 RDPDR，服务端需允许；中文粘贴需允许 CLIPRDR。
 动态分辨率取决于服务端 DISP 通道。移动端本地剪贴板读取由用户明确操作触发。

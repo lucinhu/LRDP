@@ -4,9 +4,9 @@
 
 LRDP（Lightweight RDP）是基于 **Flutter + FreeRDP** 的轻量级开源 RDP 客户端，面向手机和桌面的日常远程连接。Flutter 提供界面与交互，内嵌 FreeRDP 处理远程连接、画面、输入和虚拟通道，不依赖外部 RDP 客户端。
 
-当前版本为 **0.2.0 开发预览**，目标平台为 Linux、Android、Windows、macOS 和 iOS。各平台的构建与验证进度见下表。
+当前版本为 **0.3.0 开发预览**，目标平台为 Linux、Android、Windows、macOS 和 iOS。各平台的构建与验证进度见下表。
 
-[下载预览版](https://github.com/lucinhu/LRDP/releases/tag/v0.2.0-preview.1) · [使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
+[下载预览版](https://github.com/lucinhu/LRDP/releases/tag/v0.3.0-preview.1) · [使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
 
 ![LRDP 桌面连接库，使用示例配置](docs/screenshots/workspace.png)
 
@@ -31,13 +31,15 @@ LRDP（Lightweight RDP）是基于 **Flutter + FreeRDP** 的轻量级开源 RDP 
 
 - **检查更新**：从 GitHub Releases 手动检查正式版或预览版，查看说明并打开对应系统和架构的下载；私有仓库可使用安全存储的只读令牌。
 - **连接管理**：快速连接、分组、收藏、搜索、最近使用、多个会话切换，以及 `.rdp` 配置导入与导出。
-- **手机操作**：全屏会话、可拖动和收起的悬浮工具栏、触控板与直接触控、双指滚动、右键、缩放和拖拽。键盘展开时仍可操作远程画面。
+- **手机操作**：全屏会话、可拖动和收起的悬浮工具栏、触控板与直接触控、双指滚动、右键、缩放和拖拽；“更多”菜单中的组合键包含任务管理器、切换窗口、显示桌面等 8 项常用快捷键。键盘展开时仍可操作远程画面。
 - **文字与键盘**：中文输入、整段文字粘贴和软键盘按键模拟。Ctrl、Shift、Alt、Win 支持单次组合与锁定保持，扩展栏可切换数字／符号和导航／功能键。
-- **画面显示**：自动分辨率、动态调整分辨率、缩放与平移、平滑／锐利缩放、远端鼠标光标、H.264 软件解码，以及随屏幕刷新率调整的显示帧率上限。
+- **画面显示**：自动分辨率、动态调整分辨率、缩放与平移、平滑／锐利缩放、远端鼠标光标、H.264 软件解码、随屏幕刷新率调整的显示帧率上限，以及自动／省流量／清晰文字三档画质（连接时协商，修改后需重新连接）。
+- **会话信息**：在远端画面“更多”中查看连接状态、远程分辨率、编码与渲染方式、实测帧率、已上传／已解码帧数，以及音频与剪贴板能力。
 - **剪贴板与文件**：文字与双向图片剪贴板、选择本机文件粘贴到远端，以及通过文件中转站双向复制文件。
 - **外观与语言**：系统配色、跟随系统的深浅主题，支持简体中文、繁体中文和 English。
 - **会话恢复与声音**：有次数上限、可取消的掉线重连；可选远程声音播放，离开会话时暂停，回到会话后继续。
 - **凭据与证书**：密码使用系统安全存储；配置导出不含密码。证书指纹需明确确认，可选择仅本次信任或保存指纹。
+- **配置与诊断**：在设置中备份和恢复全部连接配置（不含密码与证书指纹），并复制只含版本、平台、语言与显示设置的诊断信息。
 
 动态分辨率、剪贴板、文件和声音需要服务端支持并允许相应重定向。显示帧率上限最高可设为 240 帧/秒，实际帧率取决于远端输出、屏幕、网络与设备性能。
 
@@ -45,8 +47,8 @@ LRDP（Lightweight RDP）是基于 **Flutter + FreeRDP** 的轻量级开源 RDP 
 
 | 平台 | 当前进度 |
 | --- | --- |
-| Linux | 已提供 x86_64 AppImage，基于 Ubuntu 22.04 构建；已完成 Arch 私有 X11 环境下的 FUSE/解压启动、窗口、输入、全屏和回环 RDP 验收。Linux 桌面版验收已完成。 |
-| Android | 当前 Release 提供 ARM64 APK，Android 版验收已完成，覆盖触控、手势、软键盘输入、剪贴板与文件、会话恢复和音频等功能；此前另有 x86_64 测试构建。 |
+| Linux | 已提供 x86_64 AppImage，基于 Ubuntu 22.04 构建；历史批次（0.2.0）曾在 Arch 私有 X11 环境完成 FUSE/解压启动、窗口、输入、全屏和回环 RDP 验收。本轮二进制的真实桌面验收待补做，见 [VERIFICATION.md](docs/VERIFICATION.md)。 |
+| Android | 当前 Release 提供 ARM64 APK；此前的 API 36 / x86_64 / 16 KiB 模拟器验收覆盖触控、手势、软键盘输入、剪贴板与文件、会话恢复和音频等功能。本轮 ARM64 真机与厂商输入法待验收。 |
 | Windows | 已接入原生构建与显示；x64 连接核心、部分协议和文件句柄处理通过 Wine 测试。Flutter 主窗口与真实 Windows 系统待验收。 |
 | macOS | 已接入工程与原生桥接，构建及设备验收待完成。 |
 | iOS | 已接入工程与原生桥接，构建及设备验收待完成。 |
@@ -58,12 +60,12 @@ LRDP（Lightweight RDP）是基于 **Flutter + FreeRDP** 的轻量级开源 RDP 
 Linux x86_64 可下载 Release 中的 `.AppImage`，赋予执行权限后直接运行：
 
 ```sh
-chmod +x lrdp-0.2.0-linux-x64.AppImage
-./lrdp-0.2.0-linux-x64.AppImage
+chmod +x lrdp-0.3.0-linux-x64.AppImage
+./lrdp-0.3.0-linux-x64.AppImage
 ```
 
 AppImage 已包含 GTK、OpenSSL 等应用运行库；需要 glibc ≥ 2.35 与可用的 OpenGL/EGL 环境。
-如果系统没有 FUSE，可用 `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.2.0-linux-x64.AppImage` 启动。
+如果系统没有 FUSE，可用 `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.3.0-linux-x64.AppImage` 启动。
 Android 下载 ARM64 预览 APK。各包与完整源码、构建信息及 SHA-256 校验文件一同发布。
 
 1. 点击“添加电脑”，填写地址、用户名、密码，以及需要的域信息。地址可直接包含端口，例如 `192.168.1.10:3390`；IPv6 使用 `[2001:db8::1]:3389`。
