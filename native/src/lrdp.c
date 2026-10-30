@@ -1062,6 +1062,38 @@ lrdp_session* lrdp_create(void) {
 int lrdp_set(lrdp_session* s, const char* key, const char* value) {
   if (!s || s->thread || !key || !value) return 0;
   rdpSettings* cfg = s->instance->context->settings;
+  if (strcmp(key, "quality") == 0) {
+    /* Additive preset. FreeRDP turns these booleans into the performance flags
+     * sent to the server, so they are only useful before lrdp_start. */
+    if (strcmp(value, "0") == 0) return 1; /* automatic: keep client defaults */
+    if (strcmp(value, "1") == 0) {
+      /* Save bandwidth: ask the server to drop desktop effects and font
+       * smoothing. The decoder choice stays what lrdp_create advertised. */
+      const BOOL ok =
+        freerdp_settings_set_bool(cfg, FreeRDP_DisableWallpaper, TRUE) &&
+        freerdp_settings_set_bool(cfg, FreeRDP_DisableThemes, TRUE) &&
+        freerdp_settings_set_bool(cfg, FreeRDP_DisableFullWindowDrag, TRUE) &&
+        freerdp_settings_set_bool(cfg, FreeRDP_DisableMenuAnims, TRUE) &&
+        freerdp_settings_set_bool(cfg, FreeRDP_AllowFontSmoothing, FALSE) &&
+#if defined(WITH_GFX_H264) && LRDP_ENABLE_H264
+        freerdp_settings_set_bool(cfg, FreeRDP_GfxH264, TRUE);
+#else
+        freerdp_settings_set_bool(cfg, FreeRDP_GfxH264, FALSE);
+#endif
+      return ok;
+    }
+    if (strcmp(value, "2") == 0) {
+      /* Sharp text: keep desktop effects and font smoothing, and prefer the
+       * lossless GDI path over H.264 so glyph edges stay crisp. */
+      return freerdp_settings_set_bool(cfg, FreeRDP_GfxH264, FALSE) &&
+        freerdp_settings_set_bool(cfg, FreeRDP_DisableWallpaper, FALSE) &&
+        freerdp_settings_set_bool(cfg, FreeRDP_DisableThemes, FALSE) &&
+        freerdp_settings_set_bool(cfg, FreeRDP_DisableFullWindowDrag, FALSE) &&
+        freerdp_settings_set_bool(cfg, FreeRDP_DisableMenuAnims, FALSE) &&
+        freerdp_settings_set_bool(cfg, FreeRDP_AllowFontSmoothing, TRUE);
+    }
+    return 0;
+  }
   if (strcmp(key, "drive_path") == 0) {
     if (s->drive_configured) return 0;
     if (!value[0]) return 1;

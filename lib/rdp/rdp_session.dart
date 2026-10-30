@@ -72,6 +72,7 @@ class RdpSession extends ChangeNotifier {
   ui.Image? image;
   NativeVideo? _video;
   int _lastUploads = 0;
+  int _lastVideoWidth = 0, _lastVideoHeight = 0;
   int decodedFrames = 0;
   int get textureFrames => _video?.uploads ?? 0;
   int? get textureId =>
@@ -83,6 +84,12 @@ class RdpSession extends ChangeNotifier {
       textureId != null ? _video!.height : image?.height ?? 0;
   bool get hasVideo => desktopWidth > 0 && desktopHeight > 0;
   RdpCursor cursor = const RdpCursor();
+
+  /// Bumped with [RdpCursor.positionSerial] when the server moves its pointer
+  /// without changing the shape. Remote views repaint the cursor layer from
+  /// this notifier instead of rebuilding their whole subtree through
+  /// [notifyListeners] for every pointer move.
+  final ValueNotifier<int> cursorMoved = ValueNotifier(0);
   DateTime? connectedAt;
   int frames = 0;
   int features = 0;
@@ -190,6 +197,7 @@ class RdpSession extends ChangeNotifier {
     final old = _video;
     _video = null;
     _lastUploads = 0;
+    _lastVideoWidth = _lastVideoHeight = 0;
     if (old != null) unawaited(old.dispose());
   }
 
@@ -210,7 +218,16 @@ class RdpSession extends ChangeNotifier {
           image?.dispose();
           image = null;
         }
-        notifyListeners();
+        /* The texture draws uploaded frames by itself, so waking every listener
+         * for each one only rebuilt the remote view at frame rate. What widgets
+         * actually show changes when the first frame arrives or the frame size
+         * changes. */
+        final width = desktopWidth, height = desktopHeight;
+        if (width != _lastVideoWidth || height != _lastVideoHeight) {
+          _lastVideoWidth = width;
+          _lastVideoHeight = height;
+          notifyListeners();
+        }
       },
       failed: (video) {
         if (_disposed || epoch != _epoch || !identical(_video, video)) return;
@@ -528,7 +545,16 @@ class RdpSession extends ChangeNotifier {
         positionSerial: info[7],
       );
       created = false;
-      notifyListeners();
+      // A new shape or hotspot needs the owning view to rebuild; a pure
+      // position change only repaints the cursor layer.
+      final shapeChanged =
+          kind != old.kind ||
+          !identical(old.image, normal) ||
+          !identical(old.inversion, inversion) ||
+          old.hotX != info[3] ||
+          old.hotY != info[4];
+      cursorMoved.value = info[7];
+      if (shapeChanged) notifyListeners();
       if (!identical(old.image, normal)) old.image?.dispose();
       if (!identical(old.inversion, inversion)) old.inversion?.dispose();
     } catch (e) {
@@ -717,6 +743,7 @@ class RdpSession extends ChangeNotifier {
     cursor.image?.dispose();
     cursor.inversion?.dispose();
     cursor = const RdpCursor();
+    cursorMoved.dispose();
     super.dispose();
   }
 }
@@ -855,6 +882,7 @@ void _sessionWorker(Map<String, dynamic> init) {
       'height': '${profile.height}',
       'clipboard': profile.clipboard ? '1' : '0',
       'audio': profile.audio ? '1' : '0',
+      'quality': '${profile.quality.index}',
       'nla': profile.nla ? '1' : '0',
       'fingerprint': init['fingerprint'] as String,
       'config_path': directory.path,

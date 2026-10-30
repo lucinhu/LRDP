@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 class NativeVideo {
   NativeVideo._(this.id, this.changed, this.failed, this.frameRate);
   static const channel = MethodChannel('dev.lrdp/video');
+  static const _firstFramePollInterval = Duration(milliseconds: 33);
+  static const _streamingPollInterval = Duration(milliseconds: 100);
   final int id;
   final void Function(NativeVideo) changed, failed;
   int width = 0, height = 0, uploads = 0, generation = 0;
@@ -40,9 +42,15 @@ class NativeVideo {
 
   void _startPolling() {
     if (_closed || !_visible || _timer != null) return;
-    _timer = Timer.periodic(const Duration(milliseconds: 33), (_) {
-      if (DateTime.now().isAfter(_nextPoll)) unawaited(poll());
-    });
+    // The first frame needs a quick trace so the surface replaces the placeholder
+    // immediately. Once a frame exists only metadata is polled, so the timer can
+    // stop waking the UI isolate at the first-frame cadence.
+    _timer = Timer.periodic(
+      width > 0 ? _streamingPollInterval : _firstFramePollInterval,
+      (_) {
+        if (DateTime.now().isAfter(_nextPoll)) unawaited(poll());
+      },
+    );
   }
 
   void _update(Map<String, dynamic> value) {
@@ -56,6 +64,7 @@ class NativeVideo {
       failed(this);
       return;
     }
+    final hadFrame = width > 0;
     final count = value['uploads'] as int? ?? 0;
     final serial = value['generation'] as int? ?? 0;
     final update =
@@ -64,6 +73,11 @@ class NativeVideo {
     height = h;
     uploads = count;
     generation = serial;
+    if (hadFrame != (w > 0)) {
+      _timer?.cancel();
+      _timer = null;
+      _startPolling();
+    }
     if (update) changed(this);
   }
 

@@ -18,6 +18,7 @@ import 'adaptive.dart';
 import 'remote_surface.dart';
 import 'remote_view_memory.dart';
 import 'mobile_keyboard.dart';
+import 'session_info_sheet.dart';
 import 'floating_controls.dart';
 import 'image_clipboard.dart';
 
@@ -950,6 +951,8 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                     connected,
                   ),
                   'win': (Icons.window, 'Windows 键', connected),
+                  'combo': (Icons.keyboard, '组合键', connected),
+                  'info': (Icons.monitor_heart_outlined, '会话信息', true),
                   'help': (Icons.gesture_outlined, '触控手势说明', true),
                   'disconnect': (Icons.power_settings_new, '断开连接', true),
                 }.entries)
@@ -997,6 +1000,10 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
         session.chord([0x1d, 0x38, 0x153]);
       case 'win':
         session.chord([0x15b]);
+      case 'combo':
+        await _showKeyCombos();
+      case 'info':
+        await showSessionInfoSheet(context, session);
       case 'disconnect':
         widget.disconnect();
       case 'help':
@@ -1018,6 +1025,56 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
           ),
         );
     }
+  }
+
+  Future<void> _showKeyCombos() async {
+    const combos = <(IconData, String, List<int>)>[
+      (Icons.task_alt, '任务管理器（Ctrl+Shift+Esc）', [0x1d, 0x2a, 0x01]),
+      (Icons.swap_horiz, '切换窗口（Alt+Tab）', [0x38, 0x0f]),
+      (Icons.close, '关闭窗口（Alt+F4）', [0x38, 0x3e]),
+      (Icons.desktop_windows, '显示桌面（Win+D）', [0x15b, 0x20]),
+      (Icons.folder_open, '打开资源管理器（Win+E）', [0x15b, 0x12]),
+      (Icons.terminal, '运行对话框（Win+R）', [0x15b, 0x13]),
+      (Icons.lock, '锁定远程电脑（Win+L）', [0x15b, 0x26]),
+      (Icons.screenshot, '截取远程屏幕（PrintScreen）', [0x137]),
+    ];
+    final chord = await showModalBottomSheet<List<int>>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (context) => ListenableBuilder(
+        listenable: session,
+        builder: (context, _) {
+          final connected = session.state == SessionState.connected;
+          return SafeArea(
+            top: false,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                  child: Text(
+                    context.tr('组合键'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                for (final (icon, label, keys) in combos)
+                  ListTile(
+                    minTileHeight: 56,
+                    leading: Icon(icon),
+                    title: Text(context.tr(label)),
+                    enabled: connected,
+                    onTap: () => Navigator.pop(context, keys),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    if (!mounted || chord == null) return;
+    if (session.state == SessionState.connected) session.chord(chord);
   }
 
   Widget _status(BuildContext context) {

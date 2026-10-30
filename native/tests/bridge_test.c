@@ -45,11 +45,26 @@ static int lifecycle(const char* transfer_directory) {
     CHECK(!lrdp_set(s, "port", "0")); CHECK(!lrdp_set(s, "port", "65536"));
     CHECK(!lrdp_set(s, "width", "99999999")); CHECK(!lrdp_set(s, "height", "-1"));
     CHECK(!lrdp_set(s, "width", "200garbage"));
+    /* Quality preset: only the documented values are accepted, and configuring
+     * the rest of the session keeps working afterwards. */
+    CHECK(lrdp_set(s, "quality", "0"));
+    CHECK(lrdp_set(s, "quality", "1"));
+    CHECK(lrdp_set(s, "quality", "1"));
+    CHECK(lrdp_set(s, "quality", "2"));
+    CHECK(!lrdp_set(s, "quality", "3"));
+    CHECK(!lrdp_set(s, "quality", "-1"));
+    CHECK(!lrdp_set(s, "quality", ""));
+    CHECK(!lrdp_set(s, "quality", "x"));
+    CHECK(lrdp_set(s, "quality", "1"));
     CHECK(lrdp_set(s, "host", "127.0.0.1")); CHECK(lrdp_set(s, "port", "1"));
     CHECK(lrdp_set(s, "username", "test")); CHECK(lrdp_set(s, "password", "secret"));
     CHECK(lrdp_set(s, "width", "1280")); CHECK(lrdp_set(s, "height", "800"));
     CHECK(!lrdp_input(s, 0, 0, 0, 0));
-    if (i % 2) { CHECK(lrdp_start(s)); CHECK(!lrdp_start(s)); CHECK(!lrdp_set(s, "port", "3389")); }
+    if (i % 2) {
+      CHECK(lrdp_start(s)); CHECK(!lrdp_start(s));
+      CHECK(!lrdp_set(s, "port", "3389"));
+      CHECK(!lrdp_set(s, "quality", "2"));  /* presets are pre-start only */
+    }
     lrdp_stop(s); CHECK(!lrdp_audio_active(s, 1)); lrdp_destroy(s);
   }
   puts("bridge lifecycle, validation and cancellation passed"); return 0;

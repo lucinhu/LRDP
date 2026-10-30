@@ -16,6 +16,8 @@ import '../rdp/rdp_session.dart';
 import '../rdp/session_audio_focus.dart';
 import '../rdp/session_issue.dart';
 import '../rdp/session_recovery.dart';
+import 'backup_dialog.dart';
+import 'diagnostics_sheet.dart';
 import 'profile_editor.dart';
 import 'remote_view.dart';
 import 'remote_view_memory.dart';
@@ -1972,6 +1974,20 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               subtitle: Text(
                 context.tr("密码和已确认的证书指纹存储在系统安全存储中。导出的 .rdp 文件不包含密码。"),
               ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: Text(context.tr("配置备份")),
+              subtitle: Text(context.tr("备份包含所有连接配置，不含密码和证书指纹。")),
+              onTap: () => showBackupDialog(context, store),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.bug_report_outlined),
+              title: Text(context.tr("复制诊断信息")),
+              subtitle: Text(context.tr("仅包含版本、平台与显示设置，不含连接地址和凭据。")),
+              onTap: () => showDiagnosticsSheet(context, store),
             ),
           ],
         ),

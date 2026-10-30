@@ -67,11 +67,26 @@ class _ProfileEditorState extends State<ProfileEditor> {
   late bool _autoReconnect = widget.profile?.autoReconnect ?? true;
   late bool _clipboard = widget.profile?.clipboard ?? true;
   late bool _audio = widget.profile?.audio ?? false;
+  late ConnectionQuality _quality =
+      widget.profile?.quality ?? ConnectionQuality.automatic;
   late bool _fileTransfer = widget.profile?.fileTransfer ?? false;
   late String _sharedDirectory = widget.profile?.sharedDirectory ?? '';
   late bool _nla = widget.profile?.nla ?? true;
   bool _visible = false;
   static const _automatic = '自动（适应画面区域）';
+  static String _qualityLabel(ConnectionQuality quality) => switch (quality) {
+    ConnectionQuality.automatic => "自动",
+    ConnectionQuality.saveBandwidth => "省流量",
+    ConnectionQuality.sharpText => "清晰文字",
+  };
+  String get _qualityHelp => switch (_quality) {
+    ConnectionQuality.automatic =>
+      "由服务器选择编码（常见为 H.264 视频）：省带宽，但解码会更耗 CPU。修改后需重新连接才会生效。",
+    ConnectionQuality.saveBandwidth =>
+      "强制 H.264 视频编码并关闭远端壁纸、主题与动画：流量最低，1080p 解码约占半个 CPU 核。修改后需重新连接才会生效。",
+    ConnectionQuality.sharpText =>
+      "关闭视频编码，改用位图更新：文字更锐利、解码几乎不耗 CPU，但 1080p 下流量约 20 Mbps。修改后需重新连接才会生效。",
+  };
   late String _resolution = widget.profile?.automaticResolution ?? true
       ? _automatic
       : '${widget.profile!.width}×${widget.profile!.height}';
@@ -103,6 +118,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
       automaticResolution: automatic,
       clipboard: _clipboard,
       audio: _audio,
+      quality: _quality,
       autoReconnect: _autoReconnect,
       fileTransfer: _fileTransfer,
       sharedDirectory: _sharedDirectory,
@@ -356,6 +372,44 @@ class _ProfileEditorState extends State<ProfileEditor> {
                   onChanged: (v) => setState(() => _nla = v),
                   title: Text(context.tr("网络级身份验证（NLA）")),
                   subtitle: Text(context.tr("推荐开启。关闭后仍使用 TLS 加密。")),
+                ),
+              ],
+            ),
+            const Divider(),
+            ExpansionTile(
+              key: const Key('qualitySection'),
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+              title: Text(context.tr("画质")),
+              subtitle: Text(context.tr(_qualityLabel(_quality))),
+              children: [
+                // Large text can make the three presets wider than the dialog;
+                // scrolling keeps every preset reachable instead of clipping.
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SegmentedButton<ConnectionQuality>(
+                    key: const Key('qualityPreset'),
+                    showSelectedIcon: false,
+                    segments: [
+                      for (final quality in ConnectionQuality.values)
+                        ButtonSegment(
+                          value: quality,
+                          label: Text(context.tr(_qualityLabel(quality))),
+                        ),
+                    ],
+                    selected: {_quality},
+                    onSelectionChanged: (selection) =>
+                        setState(() => _quality = selection.single),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  context.tr(_qualityHelp),
+                  key: const Key('qualityHelp'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),

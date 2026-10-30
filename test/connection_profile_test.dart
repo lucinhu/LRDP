@@ -58,6 +58,43 @@ void main() {
       isFalse,
     );
   });
+  test('quality preset defaults to automatic and requires a new session', () {
+    const p = ConnectionProfile(id: 'quality', name: 'Quality', host: 'host');
+    expect(p.quality, ConnectionQuality.automatic);
+    expect(p.toJson()['quality'], 0);
+    expect(
+      ConnectionProfile.fromJson(p.toJson()).quality,
+      ConnectionQuality.automatic,
+    );
+    for (final quality in ConnectionQuality.values) {
+      final saved = p.copyWith(quality: quality);
+      expect(saved.toJson()['quality'], quality.index);
+      expect(ConnectionProfile.fromJson(saved.toJson()).quality, quality);
+      expect(p.hasSameSessionSettings(saved), quality == p.quality);
+    }
+    final sharp = p.copyWith(quality: ConnectionQuality.sharpText);
+    expect(
+      sharp.copyWith(name: 'Renamed').quality,
+      ConnectionQuality.sharpText,
+    );
+    expect(
+      sharp.hasSameSessionSettings(sharp.copyWith(name: 'Renamed')),
+      isTrue,
+    );
+    final legacy = sharp.toJson()..remove('quality');
+    expect(
+      ConnectionProfile.fromJson(legacy).quality,
+      ConnectionQuality.automatic,
+    );
+    for (final unknown in [99, -1, 'sharp', null]) {
+      final malformed = sharp.toJson()..['quality'] = unknown;
+      expect(
+        ConnectionProfile.fromJson(malformed).quality,
+        ConnectionQuality.automatic,
+        reason: '$unknown',
+      );
+    }
+  });
   test(
     'recovery preference preserves opt out and defaults older profiles on',
     () {

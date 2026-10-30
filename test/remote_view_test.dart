@@ -724,6 +724,10 @@ void main() {
     );
     await tester.tap(find.text('更多'));
     await tester.pumpAndSettle();
+    // The sheet now carries more entries than fit on the narrowest supported
+    // phones, so it scrolls by design; bring the last entry into view first.
+    await tester.ensureVisible(find.text('断开连接', skipOffstage: false));
+    await tester.pumpAndSettle();
     expect(find.text('断开连接').hitTestable(), findsOneWidget);
     expect(
       tester.getRect(find.text('断开连接')).bottom,
@@ -735,6 +739,110 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
+
+  List<(int, int, int, int)> chordInputs(List<int> keys) => [
+    for (final key in keys) (1, key > 0xff ? 0x0100 : 0, key & 0xff, 0),
+    for (final key in keys.reversed)
+      (1, 0x8000 | (key > 0xff ? 0x0100 : 0), key & 0xff, 0),
+  ];
+
+  Future<void> openComboSheet(WidgetTester tester) async {
+    await tester.tap(find.text('更多'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('组合键'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('key combo sheet sends the expected remote chords', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(720, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final session = RecordingSession();
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme(
+          Brightness.light,
+        ).copyWith(platform: TargetPlatform.android),
+        home: Scaffold(
+          body: SafeArea(
+            child: RemoteView(
+              session: session,
+              active: true,
+              reconnect: () {},
+              disconnect: () {},
+              toggleFullscreen: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    const combos = <String, List<int>>{
+      '任务管理器（Ctrl+Shift+Esc）': [0x1d, 0x2a, 0x01],
+      '切换窗口（Alt+Tab）': [0x38, 0x0f],
+      '关闭窗口（Alt+F4）': [0x38, 0x3e],
+      '显示桌面（Win+D）': [0x15b, 0x20],
+      '打开资源管理器（Win+E）': [0x15b, 0x12],
+      '运行对话框（Win+R）': [0x15b, 0x13],
+      '锁定远程电脑（Win+L）': [0x15b, 0x26],
+      '截取远程屏幕（PrintScreen）': [0x137],
+    };
+    for (final entry in combos.entries) {
+      await openComboSheet(tester);
+      session.inputs.clear();
+      await tester.tap(find.text(entry.key));
+      await tester.pumpAndSettle();
+      expect(session.inputs, chordInputs(entry.value), reason: entry.key);
+    }
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'key combo entry is disabled while the session is not connected',
+    (tester) async {
+      tester.view.physicalSize = const Size(720, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final session = RecordingSession();
+      // A not-connected session without a pending connect attempt: the
+      // connecting state keeps a progress spinner running, so the widget
+      // tree would never settle here.
+      session.state = SessionState.closed;
+      addTearDown(session.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: appTheme(
+            Brightness.light,
+          ).copyWith(platform: TargetPlatform.android),
+          home: Scaffold(
+            body: SafeArea(
+              child: RemoteView(
+                session: session,
+                active: true,
+                reconnect: () {},
+                disconnect: () {},
+                toggleFullscreen: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('更多'));
+      await tester.pumpAndSettle();
+      final tile = tester.widget<ListTile>(
+        find.ancestor(of: find.text('组合键'), matching: find.byType(ListTile)),
+      );
+      expect(tile.enabled, isFalse);
+      await tester.tap(find.text('组合键'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.text('切换窗口（Alt+Tab）'), findsNothing);
+      expect(session.inputs, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   Future<(RecordingSession, TransformationController, FocusNode)> surface(
     WidgetTester tester, {

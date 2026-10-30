@@ -74,6 +74,18 @@ class _RemoteSurfaceState extends State<RemoteSurface>
     _memory = widget.memory ?? RemoteSurfaceMemory();
     WidgetsBinding.instance.addObserver(this);
     widget.focus.addListener(_focusChanged);
+    widget.session.cursorMoved.addListener(_serverCursorMoved);
+  }
+
+  /// Server pointer moves repaint only this surface: the session deliberately
+  /// skips notifying its generic listeners for position-only updates.
+  void _serverCursorMoved() {
+    final cursor = widget.session.cursor;
+    if (_serverPositionSerial == cursor.positionSerial) return;
+    _serverPositionSerial = cursor.positionSerial;
+    if (cursor.x < 0 || cursor.y < 0) return;
+    _pointer = Offset(cursor.x.toDouble(), cursor.y.toDouble());
+    if (mounted) setState(() {});
   }
 
   bool get _interactive => widget.active && widget.inputEnabled;
@@ -108,6 +120,8 @@ class _RemoteSurfaceState extends State<RemoteSurface>
       _cancel();
     }
     if (oldWidget.session != widget.session) {
+      oldWidget.session.cursorMoved.removeListener(_serverCursorMoved);
+      widget.session.cursorMoved.addListener(_serverCursorMoved);
       _pointer = null;
       _serverPositionSerial = 0;
     }
@@ -130,6 +144,7 @@ class _RemoteSurfaceState extends State<RemoteSurface>
     _rememberViewport();
     WidgetsBinding.instance.removeObserver(this);
     widget.focus.removeListener(_focusChanged);
+    widget.session.cursorMoved.removeListener(_serverCursorMoved);
     _cancel();
     _doubleTapTimer?.cancel();
     super.dispose();

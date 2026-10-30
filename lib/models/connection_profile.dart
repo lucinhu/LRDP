@@ -38,6 +38,9 @@ class Endpoint {
   String get address => '${host.contains(':') ? '[$host]' : host}:$port';
 }
 
+/// Remote session quality presets, negotiated when the connection is set up.
+enum ConnectionQuality { automatic, saveBandwidth, sharpText }
+
 class ConnectionProfile {
   const ConnectionProfile({
     required this.id,
@@ -53,6 +56,7 @@ class ConnectionProfile {
     this.automaticResolution = true,
     this.clipboard = true,
     this.audio = false,
+    this.quality = ConnectionQuality.automatic,
     this.autoReconnect = true,
     this.fileTransfer = false,
     this.sharedDirectory = '',
@@ -66,6 +70,7 @@ class ConnectionProfile {
   final int port, width, height;
   final bool favorite, clipboard, audio, nla, rememberPassword;
   final bool fileTransfer, autoReconnect, automaticResolution;
+  final ConnectionQuality quality;
   final DateTime? lastConnectedAt;
   String get address => Endpoint(host, port).address;
 
@@ -82,6 +87,7 @@ class ConnectionProfile {
         automaticResolution,
         clipboard,
         audio,
+        quality,
         autoReconnect,
         fileTransfer,
         sharedDirectory,
@@ -97,6 +103,7 @@ class ConnectionProfile {
         other.automaticResolution,
         other.clipboard,
         other.audio,
+        other.quality,
         other.autoReconnect,
         other.fileTransfer,
         other.sharedDirectory,
@@ -111,6 +118,11 @@ class ConnectionProfile {
     ).join();
   }
 
+  static ConnectionQuality _qualityFromJson(Object? value) =>
+      value is int && value >= 0 && value < ConnectionQuality.values.length
+      ? ConnectionQuality.values[value]
+      : ConnectionQuality.automatic;
+
   ConnectionProfile copyWith({
     String? name,
     String? host,
@@ -124,6 +136,7 @@ class ConnectionProfile {
     bool? automaticResolution,
     bool? clipboard,
     bool? audio,
+    ConnectionQuality? quality,
     bool? autoReconnect,
     bool? fileTransfer,
     String? sharedDirectory,
@@ -144,6 +157,7 @@ class ConnectionProfile {
     automaticResolution: automaticResolution ?? this.automaticResolution,
     clipboard: clipboard ?? this.clipboard,
     audio: audio ?? this.audio,
+    quality: quality ?? this.quality,
     autoReconnect: autoReconnect ?? this.autoReconnect,
     fileTransfer: fileTransfer ?? this.fileTransfer,
     sharedDirectory: sharedDirectory ?? this.sharedDirectory,
@@ -166,6 +180,7 @@ class ConnectionProfile {
     'automaticResolution': automaticResolution,
     'clipboard': clipboard,
     'audio': audio,
+    'quality': quality.index,
     'autoReconnect': autoReconnect,
     'fileTransfer': fileTransfer,
     'sharedDirectory': sharedDirectory,
@@ -200,6 +215,9 @@ class ConnectionProfile {
           !(json.containsKey('width') || json.containsKey('height')),
       clipboard: json['clipboard'] as bool? ?? true,
       audio: json['audio'] as bool? ?? false,
+      // Presets are stored by index; profiles saved before the option existed
+      // (or with an index this build does not know) fall back to automatic.
+      quality: _qualityFromJson(json['quality']),
       autoReconnect: json['autoReconnect'] as bool? ?? true,
       fileTransfer: json['fileTransfer'] as bool? ?? false,
       sharedDirectory: json['sharedDirectory'] as String? ?? '',

@@ -1,0 +1,106 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:lrdp/l10n/app_strings.dart';
+import 'package:lrdp/models/connection_profile.dart';
+import 'package:lrdp/rdp/rdp_session.dart';
+import 'package:lrdp/ui/session_info_sheet.dart';
+
+const _profile = ConnectionProfile(id: 'info', name: 'Info', host: '192.0.2.1');
+
+Widget _harness(Widget child) => MaterialApp(
+  locale: AppStrings.localeFor('zh-CN'),
+  supportedLocales: AppStrings.supportedLocales,
+  localizationsDelegates: const [
+    AppStrings.delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+  ],
+  home: Scaffold(body: SingleChildScrollView(child: child)),
+);
+
+void main() {
+  testWidgets('session info lists the idle frame pipeline state', (
+    tester,
+  ) async {
+    final session = RdpSession(_profile);
+    addTearDown(session.dispose);
+    await tester.pumpWidget(_harness(SessionInfoSheet(session: session)));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(find.text('会话信息'), findsOneWidget);
+    expect(find.text('连接状态'), findsOneWidget);
+    // Idle state and the unknown resolution share the fallback label.
+    expect(find.text('未知'), findsNWidgets(2));
+    expect(find.text('CPU 图像'), findsOneWidget);
+    expect(find.text('位图（GDI）'), findsOneWidget);
+    expect(find.text('已关闭'), findsOneWidget);
+    expect(find.text('无'), findsOneWidget);
+    expect(find.text('0 帧/秒'), findsOneWidget);
+  });
+
+  testWidgets('session info reports capability bits and rate limit', (
+    tester,
+  ) async {
+    final session = RdpSession(_profile)
+      ..state = SessionState.connected
+      ..features = 1 | 16 | 33
+      ..setFrameRate(90);
+    addTearDown(session.dispose);
+    await tester.pumpWidget(_harness(SessionInfoSheet(session: session)));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(find.text('已连接'), findsOneWidget);
+    expect(find.text('文本, 图片, 文件'), findsOneWidget);
+    expect(find.text('90 帧/秒'), findsOneWidget);
+  });
+
+  testWidgets('measured frame rate follows decoded frames', (tester) async {
+    var now = DateTime(2026, 10, 31, 12);
+    final session = RdpSession(_profile);
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      _harness(SessionInfoSheet(session: session, clock: () => now)),
+    );
+
+    session.decodedFrames = 30;
+    now = now.add(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('30 帧/秒'), findsOneWidget);
+
+    session.decodedFrames = 75;
+    now = now.add(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('45 帧/秒'), findsOneWidget);
+  });
+
+  testWidgets('the more-sheet entry opens the panel', (tester) async {
+    final session = RdpSession(_profile);
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: AppStrings.localeFor('zh-CN'),
+        supportedLocales: AppStrings.supportedLocales,
+        localizationsDelegates: const [
+          AppStrings.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showSessionInfoSheet(context, session),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('会话信息'), findsOneWidget);
+  });
+}

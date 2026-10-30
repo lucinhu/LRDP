@@ -230,6 +230,10 @@ void main() {
     }
     await tester.tap(find.text('更多'));
     await tester.pumpAndSettle();
+    // The sheet carries more entries than fit on phone screens, so the last
+    // entry scrolls into view before it can be tapped.
+    await tester.ensureVisible(find.text('断开连接', skipOffstage: false));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('断开连接'));
     await tester.pumpAndSettle();
     await library(tester);

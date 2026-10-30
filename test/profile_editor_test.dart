@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:lrdp/l10n/app_strings.dart';
 import 'package:lrdp/l10n/messages.dart';
+import 'package:lrdp/models/connection_profile.dart';
 import 'package:lrdp/ui/profile_editor.dart';
 import 'package:lrdp/ui/theme.dart';
 
@@ -231,5 +232,168 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('请输入主机名或 IP'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  Future<ProfileEditResult? Function()> openEditor(
+    WidgetTester tester, {
+    String locale = 'zh-CN',
+    ConnectionProfile? profile,
+    double textScale = 1,
+  }) async {
+    ProfileEditResult? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: AppStrings.localeFor(locale),
+        supportedLocales: AppStrings.supportedLocales,
+        localizationsDelegates: const [
+          AppStrings.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        theme: appTheme(Brightness.light),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async {
+                result = await editProfile(context, profile: profile);
+              },
+              child: const Text('打开表单'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('打开表单'));
+    await tester.pumpAndSettle();
+    return () => result;
+  }
+
+  SegmentedButton<ConnectionQuality> qualityPresets(WidgetTester tester) =>
+      tester.widget<SegmentedButton<ConnectionQuality>>(
+        find.byKey(const Key('qualityPreset')),
+      );
+
+  testWidgets('quality defaults to automatic and the chosen preset is saved', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final messages = localizedMessages['zh-CN']!;
+    final result = await openEditor(tester);
+    await tester.enterText(
+      find.byKey(const Key('profileAddress')),
+      '192.0.2.30',
+    );
+    final title = find.text(messages['画质']!);
+    await tester.ensureVisible(title);
+    await tester.tap(title);
+    await tester.pumpAndSettle();
+    expect(qualityPresets(tester).selected, {ConnectionQuality.automatic});
+    expect(
+      find.text(
+        messages['由服务器选择编码（常见为 H.264 视频）：省带宽，但解码会更耗 CPU。修改后需重新连接才会生效。']!,
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text(messages['省流量']!));
+    await tester.pumpAndSettle();
+    expect(qualityPresets(tester).selected, {ConnectionQuality.saveBandwidth});
+    expect(
+      find.text(
+        messages['强制 H.264 视频编码并关闭远端壁纸、主题与动画：流量最低，1080p 解码约占半个 CPU 核。修改后需重新连接才会生效。']!,
+      ),
+      findsOneWidget,
+    );
+    final save = find.widgetWithText(OutlinedButton, messages['保存连接']!);
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(result()!.profile.quality, ConnectionQuality.saveBandwidth);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('an existing sharp-text profile reopens selected and is kept', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final messages = localizedMessages['zh-CN']!;
+    final result = await openEditor(
+      tester,
+      profile: const ConnectionProfile(
+        id: 'quality',
+        name: 'Quality',
+        host: '192.0.2.40',
+        quality: ConnectionQuality.sharpText,
+      ),
+    );
+    // The collapsed section names the saved preset.
+    expect(find.text(messages['清晰文字']!), findsOneWidget);
+    final title = find.text(messages['画质']!);
+    await tester.ensureVisible(title);
+    await tester.tap(title);
+    await tester.pumpAndSettle();
+    expect(qualityPresets(tester).selected, {ConnectionQuality.sharpText});
+    expect(
+      find.text(
+        messages['关闭视频编码，改用位图更新：文字更锐利、解码几乎不耗 CPU，但 1080p 下流量约 20 Mbps。修改后需重新连接才会生效。']!,
+      ),
+      findsOneWidget,
+    );
+    final save = find.widgetWithText(OutlinedButton, messages['保存连接']!);
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(result()!.profile.quality, ConnectionQuality.sharpText);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('quality presets stay reachable on a narrow phone', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final messages = localizedMessages['zh-CN']!;
+    final result = await openEditor(tester, textScale: 1.4);
+    await tester.enterText(
+      find.byKey(const Key('profileAddress')),
+      '192.0.2.50',
+    );
+    final title = find.text(messages['画质']!);
+    await tester.ensureVisible(title);
+    await tester.tap(title);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final sharp = find.text(messages['清晰文字']!);
+    await tester.ensureVisible(sharp);
+    await tester.pumpAndSettle();
+    await tester.tap(sharp);
+    await tester.pumpAndSettle();
+    expect(qualityPresets(tester).selected, {ConnectionQuality.sharpText});
+    expect(
+      find.text(
+        messages['关闭视频编码，改用位图更新：文字更锐利、解码几乎不耗 CPU，但 1080p 下流量约 20 Mbps。修改后需重新连接才会生效。']!,
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.widgetWithText(OutlinedButton, messages['保存连接']!));
+    await tester.pumpAndSettle();
+    expect(result()!.profile.quality, ConnectionQuality.sharpText);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
   });
 }
