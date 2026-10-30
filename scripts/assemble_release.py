@@ -266,6 +266,9 @@ def main():
     # SHA256SUMS or among the uploaded files.
     checksummed = [appimage, apk, source, build_path, release_path, source_digest_path]
     lines = [f'{sha256_file(path)}  {path.name}' for path in sorted(checksummed)]
+    # The verification archive embeds a copy of SHA256SUMS, so write the file
+    # before zipping it; the archive's own digest is appended afterwards.
+    checksums.write_text('\n'.join(sorted(lines)) + '\n')
     build_verification_zip(verification, args.logs.resolve(), dist,
                            [build_path, release_path, source_digest_path], checksums)
     lines.append(f'{sha256_file(verification)}  {verification.name}')
