@@ -9,21 +9,26 @@ import urllib.request
 root = Path(__file__).resolve().parent.parent
 output = root / 'build/deps/appimage'
 output.mkdir(parents=True, exist_ok=True)
+# Pinned to immutable versioned releases rather than the mutable
+# "continuous" tags: the continuous assets are rebuilt in place, so a hash
+# pinned once starts failing on the next upstream rebuild (that is exactly
+# what broke the first 0.3.0 release run). Versioned assets cannot move, so
+# the pins stay auditable: url + tag commit + sha256 all identify one file.
 tools = {
     'appimagetool-x86_64.AppImage': {
-        'url': 'https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage',
-        'sha256': '95cbe7cce9717fce90c484e34052ee7c7f1d7635b33c12525b4776826a7d29b6',
-        'commit': '854e19e951900cf141245b384d45735942521abe',
+        'url': 'https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage',
+        'sha256': 'ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0',
+        'commit': '8c8c91f762b412a19f4e8d2c4b35afb98f2d7c81',
     },
     'linuxdeploy-x86_64.AppImage': {
-        'url': 'https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage',
-        'sha256': '8aea8da0f7f7039d2a2cecb14657d752a222a5e1d3825caeef186c82f751cdd1',
-        'commit': '07333c6e942c7d71782b66be924c5d867f9dfdfc',
+        'url': 'https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage',
+        'sha256': 'c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d',
+        'commit': 'cc7b86472c3caa3fd729b9dc502fd2aa78394257',
     },
     'runtime-x86_64': {
-        'url': 'https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64',
-        'sha256': '617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a46',
-        'commit': 'fedfad51acc2860b2916a1eef32ba4a500ff31ef',
+        'url': 'https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64',
+        'sha256': '2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d',
+        'commit': 'dd6cebedcbddde9c82f89b011e8e1d40b6e43868',
     },
     'linuxdeploy-plugin-gtk.sh': {
         'url': 'https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/7a3fbc31a9e5075073ff8790f26effbac5f84453/linuxdeploy-plugin-gtk.sh',
