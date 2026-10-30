@@ -35,7 +35,7 @@ Repo: https://github.com/lucinhu/LRDP
 Builds:
   - versionName: 0.3.0
     versionCode: 6
-    commit: 390eea1541a6430d40008268d859c196d451b69d
+    commit: 515f20769d6d2c935a80dfc3efe893dd809ec9e0
     timeout: 14400
     submodules: true
     sudo:

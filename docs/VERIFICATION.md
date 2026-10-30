@@ -60,6 +60,19 @@ ELF/RELRO、ZIP 页对齐、签名与 `package:lrdp/main.dart` 主入口。CI �
 
 历史 0.2.0 批次的验收记录继续有效并保持原样；上述“待验收”只针对 0.3.0 二进制。
 
+发布结果（2026-10-31）：GitHub Release
+[`v0.3.0-preview.1`](https://github.com/lucinhu/LRDP/releases/tag/v0.3.0-preview.1)
+（prerelease）已发布，标签提交 `515f207`，工作流 run 41139260051 全部 job 成功。
+资产与 sha256：`lrdp-0.3.0-linux-x64.AppImage`
+`f7351fa861d05131aef5303587ed6946abf02551070226a465fa5cfe3227c099`（55,433,720 B，
+glibc 2.35、187 个 ELF、28 个原生导出）、`lrdp-0.3.0-android-arm64-release.apk`
+`3ca9528b59073373fd0874b632c704738f18ef2464106a43cfcd97539510ce8d`（14,989,435 B，
+versionCode 6/versionName 0.3.0，证书后缀 `…:0A:09:ED`）、`lrdp-0.3.0-source.tar.gz`
+`27d59b63d940becfa324889f475c431cdeb945d14e4e8b831dcb53e97ff73f0b`、
+`lrdp-0.3.0-verification.zip` 与 `BUILD_INFO.json`/`RELEASE_INFO.json`/`SHA256SUMS`/
+`SOURCE_SHA256`；本地 `sha256sum -c` 通过。AUR `lrdp-bin` 已推送 **0.3.0-1**（AUR 仓库
+commit `d5a17b9`），F-Droid 元数据提交位点与 IzzyOnDroid 申请草稿同步到该版本。
+
 ## 真实服务器实测（2026-10-31 开发批次）
 
 用真实服务器 112.74.33.124:3390（KDE/KRdp 主机，请求 1280x800）以 ctypes 直连
