@@ -97,6 +97,10 @@ with tarfile.open(destination, 'w:gz', compresslevel=6) as archive:
         entry.size = len(data)
         entry.mode = 0o644
         archive.addfile(entry, io.BytesIO(data))
-checksum = hashlib.file_digest(destination.open('rb'), 'sha256').hexdigest()
+digest = hashlib.sha256()
+with destination.open('rb') as stream:
+    for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+        digest.update(chunk)
+checksum = digest.hexdigest()
 (output / (destination.name + '.sha256')).write_text(f'{checksum}  {destination.name}\n')
 print(destination)
