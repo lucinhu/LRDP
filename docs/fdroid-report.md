@@ -2,6 +2,8 @@
 
 日期：2026-10-23 · 版本：LRDP 0.2.0（versionCode 5，tag `v0.2.0-preview.1`，commit `98b86ecfc7bb84b1a05d4185714b58bfdd3574d3`）
 
+> 2026-10-31 更新：元数据已指向 0.3.0（versionCode 6，commit `390eea1541a6430d40008268d859c196d451b69d`，tag `v0.3.0-preview.1`）；本报告其余内容为 0.2.0 提交时的核对记录，构建配方未变。
+
 ## 状态
 
 本地材料已完成，`fdroid lint` 通过。fdroiddata MR 已提交：<https://gitlab.com/fdroid/fdroiddata/-/merge_requests/53893>（fork `lucinhu/fdroiddata`，分支 `dev.lrdp.lrdp`）。CI 已通过：pipeline `2981918553` 的 9 个 job 全部成功，包含 buildserver 内的 Flutter + NDK + OpenSSL/FFmpeg + universal 2-ABI 构建、APK 校验与签名（测试 keystore）；MR 状态 mergeable。

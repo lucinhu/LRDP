@@ -1,5 +1,10 @@
 # F-Droid 提交可行性研究报告（LRDP）
 
+> 状态更新（2026-10-31）：元数据已指向 LRDP 0.3.0（`dev.lrdp.lrdp.yml` 的 Builds 条目为
+> versionName 0.3.0 / versionCode 6 / commit `390eea1541a6430d40008268d859c196d451b69d`，tag
+> `v0.3.0-preview.1`）。下文关于 0.2.0（versionCode 5）的数字与核对结论保留为当时的研究记录，
+> 构建配方（srclibs、prebuild/build 命令、output、ndk）未变。
+
 - 目标应用：`dev.lrdp.lrdp`，LRDP 0.2.0（versionCode 5），提交 commit `98b86ecfc7bb84b1a05d4185714b58bfdd3574d3`（tag `v0.2.0-preview.1`）
 - 上游仓库：<https://github.com/lucinhu/LRDP>（已公开，Anonymous HTTPS clone 已验证）
 - 报告日期：2026-10-23
