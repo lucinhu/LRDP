@@ -277,7 +277,7 @@ jobs:
           ## 性能
 
           - 帧路径从整帧搬运改为损坏区域局部更新：帧存储按矩形 memcpy，Linux/Android 用 `glTexSubImage2D` 矩形上传，Windows 用 SSE2 矩形转换。1080p 位图档实测从 8.29 MB/帧降到约 0.37 MB/帧；整帧存储拷贝 471–692 µs/帧 → 320×240 约 6 µs。
-          - 远端光标位置变化只重绘光标层，不再逐帧重建工作区；Dart 轮询在首帧后降到 10 Hz请求。
+          - 远端光标位置变化只重绘光标层，不再逐帧重建工作区；Dart 轮询在首帧后降到 10 Hz。
           - Android 缓存 ANativeWindow/EGLSurface，稳态每帧 EGL/window 调用 4 → 1。
 
           ## 功能
@@ -308,6 +308,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          rm -f build/release-dist/apk-meta.json
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" build/release-dist/* --clobber
           else

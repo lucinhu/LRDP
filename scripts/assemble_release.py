@@ -261,10 +261,10 @@ def main():
     print(f'wrote {source_digest_path}')
     checksums = dist / 'SHA256SUMS'
     verification = dist / f'lrdp-{args.version.split("+")[0]}-verification.zip'
+    # apk-meta.json is a build-tool handoff from the Android job, not a release
+    # asset: it is merged into BUILD_INFO.json above and must not appear in
+    # SHA256SUMS or among the uploaded files.
     checksummed = [appimage, apk, source, build_path, release_path, source_digest_path]
-    apk_meta = dist / 'apk-meta.json'
-    if apk_meta.is_file():
-        checksummed.append(apk_meta)
     lines = [f'{sha256_file(path)}  {path.name}' for path in sorted(checksummed)]
     build_verification_zip(verification, args.logs.resolve(), dist,
                            [build_path, release_path, source_digest_path], checksums)
