@@ -5,8 +5,8 @@
 分发上游 GitHub Release 中预编译的 Linux x64 Flutter 应用（AppImage），不重新编译
 Flutter / FreeRDP 代码。
 
-上游版本：tag `v0.3.0-preview.1`（release commit `515f207…`），应用版本 `0.3.0+6`，
-`applicationId` 为 `dev.lrdp.lrdp`。`pkgver` 取上游应用版本 `0.3.0`；`pkgrel=1`。
+上游版本：tag `v0.4.0-preview.1`（release commit `8d03705…`），应用版本 `0.4.0+7`，
+`applicationId` 为 `dev.lrdp.lrdp`。`pkgver` 取上游应用版本 `0.4.0`；`pkgrel=1`。
 `package()` 继续移除 AppImage AppRun hook 里的 `GDK_BACKEND=x11`（见下文
 “HiDPI 与 Wayland 缩放”）；从 0.3.0 起上游 AppImage 自身已不带该行，补丁是幂等的空操作。
 
@@ -14,7 +14,7 @@ Flutter / FreeRDP 代码。
 
 | 文件 | 说明 |
 | --- | --- |
-| `lrdp-bin/PKGBUILD` | 打包脚本：`source` 指向 release 的 `lrdp-0.3.0-linux-x64.AppImage` + 品牌图标；`build()` 用 `--appimage-extract` 解包（无需 FUSE），`package()` 安装到 `/opt/lrdp`。 |
+| `lrdp-bin/PKGBUILD` | 打包脚本：`source` 指向 release 的 `lrdp-0.4.0-linux-x64.AppImage` + 品牌图标；`build()` 用 `--appimage-extract` 解包（无需 FUSE），`package()` 安装到 `/opt/lrdp`。 |
 | `lrdp-bin/.SRCINFO` | 由 `makepkg --printsrcinfo` 生成，提交 AUR 时必须与 PKGBUILD 一致。 |
 | `lrdp-bin/LICENSE` | 0BSD，仅覆盖本目录的 AUR 打包文件；LRDP 应用本身为 Apache-2.0（安装后的 `/usr/share/licenses/lrdp-bin/LICENSE`）。 |
 | `lrdp-bin/.gitignore` | 忽略 `makepkg` 的 `src/`、`pkg/` 与 `*.pkg.tar.zst`。 |
@@ -36,7 +36,7 @@ Flutter / FreeRDP 代码。
 路径用 `pacman -Qo` 映射为 Arch 包名：
 
 ```
-./lrdp-0.3.0-linux-x64.AppImage --appimage-extract
+./lrdp-0.4.0-linux-x64.AppImage --appimage-extract
 ldd squashfs-root/usr/bin/lrdp | grep -E '=> /usr/lib/'
 pacman -Qoq /usr/lib/libharfbuzz.so.0      # => harfbuzz
 ```
@@ -56,12 +56,12 @@ libgpg-error libx11 libxau libxcb libxdmcp wayland zlib`。
 
 ## 来源校验
 
-1. **主产物 AppImage**：`https://github.com/lucinhu/LRDP/releases/download/v0.3.0-preview.1/lrdp-0.3.0-linux-x64.AppImage`
-   - `sha256 = f7351fa861d05131aef5303587ed6946abf02551070226a465fa5cfe3227c099`
+1. **主产物 AppImage**：`https://github.com/lucinhu/LRDP/releases/download/v0.4.0-preview.1/lrdp-0.4.0-linux-x64.AppImage`
+   - `sha256 = 6112d6e956093ab5455739cd1159ffbbc0c2884b95e63c79dcac4ea6a30a7abc`
    - 与 release 资产 `SHA256SUMS` 中的同名条目一致（本地实测 `sha256sum -c` 通过）；
    - release 另有 `SOURCE_SHA256`（`fe9b219…`，源码包 sha256）和 `RELEASE_INFO.json`
      （`release_commit`、`application_runtime_commit`、`native_abi=5`）可供核对。
-2. **品牌图标**：取自 tag `v0.3.0-preview.1` 的 `assets/branding/`，sha256 写在 `sha256sums` 中；
+2. **品牌图标**：取自 tag `v0.4.0-preview.1` 的 `assets/branding/`，sha256 写在 `sha256sums` 中；
    其中 256x256 直接使用 AppImage 内 `usr/share/icons/hicolor/256x256/apps/dev.lrdp.lrdp.png`，
    并与 `assets/branding/lrdp-256.png` 完全一致（`638641bb…`），用作交叉校验。
 3. **完整性**：`build()` 里校验解包结果必须有 `AppRun` 与 `usr/bin/lrdp`，否则构建失败。
@@ -121,6 +121,24 @@ SRCDEST=/home/lucinhu/workspace/flutter/LRDP/build/aur/src PKGDEST=/tmp/aurpkg4 
   即无该行，`sed` 为幂等操作）。
 - 未做真实图形界面启动测试（按项目约定不占用用户桌面；Wayland/xdotool 自动化也不可用）。
 
+### 本地验证记录（2026-11-01，0.4.0 版本，pkgrel=1）
+
+```bash
+SRCDEST=/home/lucinhu/workspace/flutter/LRDP/build/aur/src PKGDEST=/tmp/aurpkg040 \
+  makepkg -Ccf --nodeps
+```
+
+- 源 AppImage sha256 与 release `SHA256SUMS` 一致（`6112d6e9…`），6 个 source 全部校验通过。
+- 产物：`lrdp-bin-0.4.0-1-x86_64.pkg.tar.zst`，65,803,041 B，2,159 个文件。
+- 对解包后的 `opt/lrdp/usr/bin/lrdp` 复跑 `ldd`：0 个 `not found`，系统库集合与 `depends`
+  一致（brotli、expat、fontconfig、freetype2、fribidi、graphite、harfbuzz、libgpg-error、
+  libx11、libxau、libxcb、libxdmcp、wayland、zlib；`libglvnd` 仍按 dlopen 显式声明），
+  0.4.0 未新增系统依赖，`depends` 无需变更。
+- 清点安装树：`/opt/lrdp/AppRun`、`/usr/bin/lrdp`、desktop、hicolor 36/64/128/256/512 与
+  SVG 图标、`LICENSE`/`NOTICE`、`usr/share/doc/lrdp-bin/` 下 9 份文档均就位；
+  `apprun-hooks/linuxdeploy-plugin-gtk.sh` 中无 `GDK_BACKEND=x11`（`sed` 为幂等操作）。
+- 未做真实图形界面启动测试（按项目约定不占用用户桌面；Wayland/xdotool 自动化也不可用）。
+
 ### 已知限制（继承上游 AppImage，不是打包引入）
 
 - AppImage 内 gdk-pixbuf 的 TIFF loader 与 GTK 的 IBus 输入模块没有把自带依赖库放进
@@ -153,7 +171,7 @@ sed -i '/^export GDK_BACKEND=x11/d' \
 
 ## AUR 推送步骤
 
-前置：release `v0.3.0-preview.1` 已公开，asset 可匿名下载且与 `SHA256SUMS` 一致。
+前置：release `v0.4.0-preview.1` 已公开，asset 可匿名下载且与 `SHA256SUMS` 一致。
 
 ```bash
 # 1) 首次 clone AUR 仓库
@@ -171,7 +189,7 @@ makepkg -Ccf
 
 # 5) 提交并推送
 git add PKGBUILD .SRCINFO LICENSE .gitignore
-git commit -m "upgpkg: lrdp-bin 0.3.0-1"
+git commit -m "upgpkg: lrdp-bin 0.4.0-1"
 git push
 ```
 

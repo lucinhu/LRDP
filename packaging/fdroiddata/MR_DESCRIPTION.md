@@ -31,7 +31,7 @@ clipboard actions. Passwords are stored in the Android secure storage; exported
 profiles never contain passwords.
 
 Screenshots (upstream fastlane metadata):
-<https://github.com/lucinhu/LRDP/tree/v0.3.0-preview.1/fastlane/metadata/android/en-US/images>
+<https://github.com/lucinhu/LRDP/tree/v0.4.0-preview.1/fastlane/metadata/android/en-US/images>
 
 ### Please elaborate why you wrote this app. Please highlight the unique functions it provides over other similar apps in F-Droid.
 
@@ -72,7 +72,7 @@ ads and no tracking, and all configuration stays on the device.
 * [x] Metadata must be a valid YAML file.
 * [x] Metadata must use LF as line ending.
 * [x] Don't add summary/description/changelog/images or anything that should be provided in upstream repo. Please check the Changes tab to make sure there is no other unrelated files added in the MR. — The MR only adds `metadata/dev.lrdp.lrdp.yml` and `metadata/dev.lrdp.lrdp/en-US/summary.txt`.
-* [x] Releases are tagged and auto update is enabled unless there is a special reason. — Releases are tagged (`v0.3.0-preview.1`). `UpdateCheckMode: Tags` with `UpdateCheckData` from `pubspec.yaml` reports new versions; `AutoUpdateMode: None` because the custom native build steps (per-ABI OpenSSL/FFmpeg builds) cannot be safely automated by the `Version` mode. Version bumps are handled in metadata MRs.
+* [x] Releases are tagged and auto update is enabled unless there is a special reason. — Releases are tagged (`v0.4.0-preview.1`). `UpdateCheckMode: Tags` with `UpdateCheckData` from `pubspec.yaml` reports new versions; `AutoUpdateMode: None` because the custom native build steps (per-ABI OpenSSL/FFmpeg builds) cannot be safely automated by the `Version` mode. Version bumps are handled in metadata MRs.
 * [x] There is an issue tracker and contact info of the author so that we can report bugs and contact the author. — GitHub Issues and author email are in the metadata (`IssueTracker`, `AuthorEmail`).
 * [x] An AuthorName must be added. It doesn't need to be the real name. — `lucinhu`.
 * [x] External repos are added as git submodules instead of srclibs. You can update git submodules without opening an MR in this repo and the submodule is covered by our scanner. — FreeRDP is a git submodule (pinned commit). Flutter is a prebuilt SDK and OpenSSL is a build-time dependency; both are pinned through fdroiddata's `srclibs` (`flutter@3.47.7`, `OpenSSL@openssl-3.5.9`) because they are not app source and are not vendored in the repository.

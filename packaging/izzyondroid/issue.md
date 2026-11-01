@@ -60,11 +60,11 @@ export LRDP_ANDROID_KEY_ALIAS=lrdp
 export LRDP_ANDROID_STORE_PASSWORD=...
 export LRDP_ANDROID_KEY_PASSWORD=...
 env 'ORG_GRADLE_PROJECT_lrdp.ndkVersion=28.2.13676358' \
-  flutter build apk --release --target-platform android-arm64 --build-name=0.3.0 --build-number=6
+  flutter build apk --release --target-platform android-arm64 --build-name=0.4.0 --build-number=7
 ```
 
-Signed APK attached to the GitHub release: https://github.com/lucinhu/LRDP/releases/download/v0.3.0-preview.1/lrdp-0.3.0-android-arm64-release.apk
-(SHA-256 `3ca9528b59073373fd0874b632c704738f18ef2464106a43cfcd97539510ce8d`; certificate SHA-256 `91:30:4E:3C:17:60:9C:FC:27:E0:1E:B8:67:B5:35:3D:10:F0:D5:F7:0F:22:07:03:C4:C0:E2:0F:88:0A:09:ED`).
+Signed APK attached to the GitHub release: https://github.com/lucinhu/LRDP/releases/download/v0.4.0-preview.1/lrdp-0.4.0-android-arm64-release.apk
+(SHA-256 `b214038b4637f59cfef8612db395f99e39c092ae3ff4987d91ff4d88fc5b01db`; certificate SHA-256 `91:30:4E:3C:17:60:9C:FC:27:E0:1E:B8:67:B5:35:3D:10:F0:D5:F7:0F:22:07:03:C4:C0:E2:0F:88:0A:09:ED`).
 
 ### Assistance Level
 
