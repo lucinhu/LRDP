@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lrdp/models/remote_input_mode.dart';
-import 'package:lrdp/ui/mobile_keyboard.dart';
+import 'package:lrdp/ui/remote_keyboard.dart';
 import 'package:lrdp/ui/remote_surface.dart';
 import 'package:lrdp/ui/remote_view.dart';
 import 'package:lrdp/ui/remote_view_memory.dart';
-import 'mobile_keyboard_test.dart' show PasteSession;
+import 'remote_keyboard_test.dart' show PasteSession;
 import 'remote_view_test.dart' show RecordingSession;
 
 Future<void> chooseMode(WidgetTester tester, String label) async {
@@ -72,7 +72,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: MobileKeyboard(
+            body: RemoteKeyboard(
               session: session,
               close: () {},
               shortcuts: false,
@@ -193,7 +193,7 @@ void main() {
         await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
         await tester.pumpAndSettle();
-        expect(find.byType(MobileKeyboard), findsNothing);
+        expect(find.byType(RemoteKeyboard), findsNothing);
         expect(
           tester.widget<RemoteSurface>(find.byType(RemoteSurface)).inputEnabled,
           isFalse,
@@ -430,14 +430,14 @@ void main() {
       expect(toggles, 2);
       await tester.tap(find.text('键盘'));
       await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.byKey(const Key('remoteKeyboardPanel')), findsOneWidget);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.home);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byKey(const Key('remoteKeyboardPanel')), findsNothing);
       expect(tester.widget<RemoteSurface>(surface).inputEnabled, isFalse);
       await tester.pumpWidget(const SizedBox());
       session.dispose();

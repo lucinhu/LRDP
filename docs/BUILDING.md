@@ -17,8 +17,9 @@ flutter test
 格式检查失败时，运行 `dart format lib test integration_test test_driver`，审查并提交格式调整，
 然后重跑检查。CI 保留格式校验，不会自动修改仓库中的文件。
 
-输入体验回归可单独运行 `flutter test test/input_experience_test.dart test/keyboard_modifiers_test.dart`，
-覆盖模式、草稿、软键盘编辑事件、锁定模式和单次组合键、数字／符号页、收起后偏好恢复与全屏释放布局。
+输入体验回归可单独运行 `flutter test test/input_experience_test.dart test/keyboard_modifiers_test.dart test/keyboard_repeat_test.dart test/desktop_keyboard_test.dart`，
+覆盖模式、草稿、软键盘编辑事件、锁定模式和单次组合键、数字／符号页、长按连续触发、
+桌面分组键盘面板、收起后偏好恢复与全屏释放布局。
 显示偏好与指针速度另运行 `flutter test test/display_controls_test.dart`，
 覆盖纹理/图像采样、缩放后的光标坐标，以及三种语言在 200% 字号下的设置操作。
 实际按键传输使用 `python3 scripts/run_keyboard_test.py`，
@@ -454,6 +455,13 @@ git add third_party/FreeRDP
 
 随后重跑原生构建、协议测试与 Flutter 测试，审查新版本通道/证书 API 和
 上游安全公告。改动仅应是子模块指针及 LRDP 自己的适配代码。
+
+`native/CMakeLists.txt` 在 `add_subdirectory` 之前临时给 `CMAKE_C_FLAGS` /
+`CMAKE_CXX_FLAGS` 追加 `-Wno-deprecated-declarations -Wno-switch -Wno-unused-result`，
+配置完上游后立即恢复。因此只有 vendored FreeRDP 构建出的对象会静音这三类诊断：3.32.2
+仍在使用它自己标注为弃用的 `WINPR_SLIST_HEADER` / `SEC_WINPR_*`，生成的 settings getters
+会对越界枚举值使用 `switch`，部分 `(void)` 调用仍保留 `warn_unused_result` 属性。
+LRDP 的 `native/src` 仍保持 `-Wall -Wextra -Werror`，子模块源码不变。
 
 原生桥接采用 Flutter FFI 插件的显式平台构建，用于整合 FreeRDP 的完整 CMake
 依赖图与 Apple 框架打包。其 Dart 层仅依赖稳定 C ABI，后续可迁移到

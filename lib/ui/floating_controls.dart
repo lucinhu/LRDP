@@ -54,7 +54,7 @@ class _FloatingControlsState extends State<FloatingControls> {
             key: _panel,
             elevation: 8,
             clipBehavior: Clip.antiAlias,
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(collapsed ? 28 : 18),
             child: collapsed
                 ? GestureDetector(

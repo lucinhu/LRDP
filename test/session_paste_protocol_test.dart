@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lrdp/models/connection_profile.dart';
 import 'package:lrdp/rdp/rdp_session.dart';
-import 'package:lrdp/ui/mobile_keyboard.dart';
+import 'package:lrdp/ui/remote_keyboard.dart';
 import 'package:lrdp/ui/theme.dart';
 import 'package:lrdp/ui/remote_view.dart';
 
@@ -129,7 +129,7 @@ void main() {
             home: Scaffold(
               body: Align(
                 alignment: Alignment.bottomCenter,
-                child: MobileKeyboard(
+                child: RemoteKeyboard(
                   session: session,
                   pasteText: !direct,
                   close: () {},

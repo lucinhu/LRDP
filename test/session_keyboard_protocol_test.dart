@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lrdp/models/connection_profile.dart';
 import 'package:lrdp/rdp/rdp_session.dart';
-import 'package:lrdp/ui/mobile_keyboard.dart';
+import 'package:lrdp/ui/remote_keyboard.dart';
 
 void main() {
   testWidgets('IME edits reach real RDP as Latin scan codes', (tester) async {
@@ -42,7 +42,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: MobileKeyboard(
+            body: RemoteKeyboard(
               session: session,
               close: () {},
               shortcuts: false,

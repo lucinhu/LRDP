@@ -17,7 +17,7 @@ import 'package:lrdp/rdp/rdp_session.dart';
 import 'package:lrdp/rdp/native_bindings.dart';
 import 'package:lrdp/ui/remote_view.dart';
 import 'package:lrdp/ui/remote_surface.dart';
-import 'package:lrdp/ui/mobile_keyboard.dart';
+import 'package:lrdp/ui/remote_keyboard.dart';
 import 'package:lrdp/ui/certificate_dialog.dart';
 import 'cursor_scenario.dart';
 
@@ -214,7 +214,7 @@ void main() {
           home: Scaffold(
             body: Align(
               alignment: Alignment.bottomCenter,
-              child: MobileKeyboard(
+              child: RemoteKeyboard(
                 session: session,
                 close: () {},
                 shortcuts: false,

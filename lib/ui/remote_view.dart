@@ -17,7 +17,7 @@ import 'transfer_dialog.dart';
 import 'adaptive.dart';
 import 'remote_surface.dart';
 import 'remote_view_memory.dart';
-import 'mobile_keyboard.dart';
+import 'remote_keyboard.dart';
 import 'session_info_sheet.dart';
 import 'floating_controls.dart';
 import 'image_clipboard.dart';
@@ -470,6 +470,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
     _localFocus.requestFocus();
     setState(() {
       _localControl = true;
+      _keyboard = false;
       _memory.controlsCollapsed = false;
     });
   }
@@ -481,6 +482,16 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
 
   KeyEventResult _shortcut(FocusNode node, KeyEvent event) {
     if (!widget.active) return KeyEventResult.ignored;
+    // Escape while the desktop keyboard panel owns focus closes the panel; the
+    // remote Esc key stays on the panel for sending to the session.
+    if (!phoneLayout(context) &&
+        _keyboard &&
+        !_localControl &&
+        event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      _hideKeyboard();
+      return KeyEventResult.handled;
+    }
     if (_localShortcutKeys.contains(event.physicalKey)) {
       if (event is KeyUpEvent) _localShortcutKeys.remove(event.physicalKey);
       return KeyEventResult.handled;
@@ -508,14 +519,43 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
   }
 
   void _hideKeyboard() {
+    final phone = phoneLayout(context);
     FocusScope.of(context).unfocus();
     setState(() {
       _keyboard = false;
-      _memory.controlsCollapsed = _localControl
-          ? false
-          : _controlsBeforeKeyboard;
+      if (_localControl) {
+        _memory.controlsCollapsed = false;
+      } else if (phone) {
+        // The phone dock collapses the tools to make room for the IME.
+        _memory.controlsCollapsed = _controlsBeforeKeyboard;
+      }
     });
-    if (_localControl) _localFocus.requestFocus();
+    if (_localControl) {
+      _localFocus.requestFocus();
+    } else {
+      _focus.requestFocus();
+    }
+  }
+
+  void _toggleKeyboard() {
+    // Opening the keyboard means typing into the remote session, so take mouse
+    // and keyboard control back first if it had been released locally.
+    if (_localControl) _resumeRemote();
+    if (_keyboard) {
+      _hideKeyboard();
+      return;
+    }
+    if (phoneLayout(context)) {
+      setState(() {
+        _controlsBeforeKeyboard = _memory.controlsCollapsed;
+        _keyboard = true;
+        _memory.controlsCollapsed = true;
+      });
+    } else {
+      // The desktop panel floats over the remote image and keeps the physical
+      // keyboard on the remote unless the composer itself is focused.
+      setState(() => _keyboard = true);
+    }
   }
 
   KeyEventResult _key(FocusNode node, KeyEvent event) {
@@ -536,42 +576,6 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
     }
     session.scan(scan, down);
     return KeyEventResult.handled;
-  }
-
-  Future<void> _sendText() async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.tr("发送文字")),
-        scrollable: true,
-        contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
-        content: SizedBox(
-          width: 520,
-          child: MobileKeyboard(
-            session: session,
-            shortcuts: false,
-            simulateKeys: _memory.keyboardSimulation,
-            initialModifierLock: _memory.modifierLock,
-            onModifierLockChanged: (value) => _memory.modifierLock = value,
-            initialNumberKeys: _memory.numberKeys,
-            onNumberKeysChanged: (value) => _memory.numberKeys = value,
-            pasteText: _memory.pasteText,
-            onInputModeChanged: _inputModeChanged,
-            initialDraft: _memory.textDraft,
-            onDraftChanged: (draft) => _memory.textDraft = draft,
-            onSessionShortcut: (event) {
-              final result = _shortcut(_localFocus, event);
-              if (result == KeyEventResult.handled && event is KeyDownEvent) {
-                Navigator.pop(context);
-              }
-              return result;
-            },
-            close: () => Navigator.pop(context),
-          ),
-        ),
-      ),
-    );
-    if (mounted && !_localControl) _focus.requestFocus();
   }
 
   @override
@@ -596,7 +600,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                 child: LayoutBuilder(
                   builder: (context, viewport) {
                     if (widget.active &&
-                        !_keyboard &&
+                        !(phone && _keyboard) &&
                         MediaQuery.viewInsetsOf(context).bottom == 0) {
                       session.setViewportSize(
                         viewport.maxWidth.round(),
@@ -651,22 +655,11 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                                 tooltip: context.tr("返回电脑列表（保持连接）"),
                               ),
                               _action(
-                                Icons.keyboard_outlined,
+                                _keyboard
+                                    ? Icons.keyboard_hide_outlined
+                                    : Icons.keyboard_outlined,
                                 context.tr("键盘"),
-                                connected
-                                    ? () {
-                                        if (phone) {
-                                          setState(() {
-                                            _controlsBeforeKeyboard =
-                                                _memory.controlsCollapsed;
-                                            _keyboard = true;
-                                            _memory.controlsCollapsed = true;
-                                          });
-                                        } else {
-                                          _sendText();
-                                        }
-                                      }
-                                    : null,
+                                connected ? _toggleKeyboard : null,
                               ),
                               _action(
                                 _trackpad
@@ -708,6 +701,48 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                             ],
                           ),
                         ),
+                        if (!phone && _keyboard && connected && !_localControl)
+                          Positioned(
+                            left: MediaQuery.paddingOf(context).left + 12,
+                            right: MediaQuery.paddingOf(context).right + 12,
+                            bottom: MediaQuery.paddingOf(context).bottom + 12,
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: math.max(
+                                    0,
+                                    math.min(1080, viewport.maxWidth - 32),
+                                  ),
+                                  maxHeight: math.max(
+                                    200,
+                                    math.min(560, viewport.maxHeight - 24),
+                                  ),
+                                ),
+                                child: RemoteKeyboard(
+                                  layout: RemoteKeyboardLayout.desktop,
+                                  session: session,
+                                  shortcuts: false,
+                                  simulateKeys: false,
+                                  allowKeySimulation: false,
+                                  close: _hideKeyboard,
+                                  initialDraft: _memory.textDraft,
+                                  onDraftChanged: (draft) =>
+                                      _memory.textDraft = draft,
+                                  pasteText: _memory.pasteText,
+                                  onPasteTextChanged: (value) =>
+                                      _memory.pasteText = value,
+                                  onInputModeChanged: _inputModeChanged,
+                                  initialModifierLock: _memory.modifierLock,
+                                  onModifierLockChanged: (value) =>
+                                      _memory.modifierLock = value,
+                                  initialNumberKeys: _memory.numberKeys,
+                                  onNumberKeysChanged: (value) =>
+                                      _memory.numberKeys = value,
+                                ),
+                              ),
+                            ),
+                          ),
                         if (desktop && widget.fullscreen)
                           Positioned(
                             top: MediaQuery.paddingOf(context).top + 8,
@@ -716,9 +751,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                               key: const Key('fullscreenControlHint'),
                               elevation: 3,
                               borderRadius: BorderRadius.circular(12),
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHigh,
+                              color: Theme.of(context).colorScheme.surface,
                               child: ConstrainedBox(
                                 constraints: BoxConstraints(
                                   maxWidth: math.min(
@@ -794,7 +827,7 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                     primary: false,
                     child: SafeArea(
                       top: false,
-                      child: MobileKeyboard(
+                      child: RemoteKeyboard(
                         session: session,
                         simulateKeys: _memory.keyboardSimulation,
                         initialModifierLock: _memory.modifierLock,

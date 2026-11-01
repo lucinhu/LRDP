@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lrdp/ui/mobile_keyboard.dart';
-import 'mobile_keyboard_test.dart' show PasteSession;
+import 'package:lrdp/ui/remote_keyboard.dart';
+import 'remote_keyboard_test.dart' show PasteSession;
 
 void main() {
   Future<void> mount(
@@ -16,7 +16,7 @@ void main() {
         home: Scaffold(
           body: Align(
             alignment: Alignment.bottomCenter,
-            child: MobileKeyboard(
+            child: RemoteKeyboard(
               session: session,
               close: () {},
               shortcuts: false,

@@ -188,7 +188,7 @@ void main() {
     });
   }
 
-  testWidgets('200% desktop text dialog scrolls errors above the IME', (
+  testWidgets('200% desktop keyboard panel stays reachable and scrolls', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1000, 600);
@@ -200,7 +200,9 @@ void main() {
     addTearDown(session.dispose);
     await tester.pumpWidget(
       MaterialApp(
-        theme: appTheme(Brightness.light),
+        theme: appTheme(
+          Brightness.light,
+        ).copyWith(platform: TargetPlatform.linux),
         home: Scaffold(
           body: RemoteView(
             session: session,
@@ -215,32 +217,35 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('键盘'));
     await tester.pumpAndSettle();
-    tester.view.viewInsets = const FakeViewPadding(bottom: 350);
+    expect(find.byKey(const Key('remoteKeyboardPanel')), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(tester.takeException(), isNull);
+    final field = find.byKey(const Key('remoteTextInput'));
+    await tester.ensureVisible(field);
     await tester.pumpAndSettle();
-    final mode = find.byKey(const Key('remoteInputMode'));
-    await tester.ensureVisible(mode);
+    expect(field.hitTestable(), findsOneWidget);
+    final arrow = find.byKey(const Key('remoteKey→'));
+    await tester.ensureVisible(arrow);
     await tester.pumpAndSettle();
-    await tester.tap(mode);
+    expect(arrow.hitTestable(), findsOneWidget);
+    await tester.tap(arrow);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    final extra = find.byKey(const Key('remoteExtraKeys'));
+    await tester.ensureVisible(extra);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('键盘模拟'));
+    await tester.tap(extra);
     await tester.pumpAndSettle();
-    tester.testTextInput.updateEditingValue(
-      const TextEditingValue(
-        text: '中文',
-        selection: TextSelection.collapsed(offset: 2),
-      ),
-    );
+    final f12 = find.byKey(const Key('remoteKeyF12'));
+    await tester.ensureVisible(f12);
     await tester.pumpAndSettle();
-    final error = find.textContaining('此内容无法模拟为按键');
-    await tester.ensureVisible(error);
-    await tester.pumpAndSettle();
-    expect(error.hitTestable(), findsOneWidget);
+    expect(f12.hitTestable(), findsOneWidget);
     final close = find.byTooltip('收起键盘');
     await tester.ensureVisible(close);
     await tester.pumpAndSettle();
     await tester.tap(close);
     await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byKey(const Key('remoteKeyboardPanel')), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

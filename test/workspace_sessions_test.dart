@@ -8,7 +8,7 @@ import 'package:lrdp/models/connection_profile.dart';
 import 'package:lrdp/rdp/rdp_session.dart';
 import 'package:lrdp/ui/certificate_dialog.dart';
 import 'package:lrdp/ui/remote_surface.dart';
-import 'package:lrdp/ui/mobile_keyboard.dart';
+import 'package:lrdp/ui/remote_keyboard.dart';
 import 'package:lrdp/ui/theme.dart';
 import 'package:lrdp/ui/workspace_screen.dart';
 
@@ -212,11 +212,11 @@ void main() {
     await tester.pumpAndSettle();
     tester.view.viewInsets = const FakeViewPadding(bottom: 280);
     await tester.pumpAndSettle();
-    expect(find.byType(MobileKeyboard), findsOneWidget);
+    expect(find.byType(RemoteKeyboard), findsOneWidget);
     await library(tester);
     tester.view.viewInsets = const FakeViewPadding();
     await open(tester, original.name);
-    expect(find.byType(MobileKeyboard), findsNothing);
+    expect(find.byType(RemoteKeyboard), findsNothing);
     final afterKeyboard = tester.widget<RemoteSurface>(
       find.byType(RemoteSurface),
     );

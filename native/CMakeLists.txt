@@ -141,7 +141,24 @@ else()
   endforeach()
   set(WITH_UNICODE_BUILTIN ON CACHE BOOL "" FORCE)
   set(WITH_JSON_DISABLED ON CACHE BOOL "" FORCE)
+  # FreeRDP 3.32 deprecates WINPR_SINGLE_LIST_ENTRY/WINPR_SLIST_HEADER
+  # (winpr/interlocked.h) and the SEC_WINPR_* credential typedefs
+  # (winpr/sspi.h) while still using them throughout winpr and libfreerdp;
+  # its generated settings getters also switch on out-of-range enum values,
+  # and GCC tags its own ignored (void) calls to warn_unused_result functions.
+  # The submodule is upstream and read-only (AGENTS.md), so silence only the
+  # vendored build's own diagnostics by configuring the subdirectory with
+  # -Wno-deprecated-declarations -Wno-switch -Wno-unused-result; LRDP's sources
+  # keep -Wall -Wextra -Werror.
+  set(_lrdp_configured_c_flags "${CMAKE_C_FLAGS}")
+  set(_lrdp_configured_cxx_flags "${CMAKE_CXX_FLAGS}")
+  string(APPEND CMAKE_C_FLAGS
+    " -Wno-deprecated-declarations -Wno-switch -Wno-unused-result")
+  string(APPEND CMAKE_CXX_FLAGS
+    " -Wno-deprecated-declarations -Wno-switch -Wno-unused-result")
   add_subdirectory("${FREERDP_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/freerdp" EXCLUDE_FROM_ALL)
+  set(CMAKE_C_FLAGS "${_lrdp_configured_c_flags}")
+  set(CMAKE_CXX_FLAGS "${_lrdp_configured_cxx_flags}")
   if(MINGW AND CMAKE_C_COMPILER_ID STREQUAL "GNU")
     # Upstream 3.32 passes DWORD* to UINT32* in its legacy keyboard remapper.
     # Both are 32-bit on Win64. Retain the warning and MSVC-style aliasing for

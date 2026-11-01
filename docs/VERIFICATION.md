@@ -2,6 +2,67 @@
 
 记录日期：2026-10-22。当前为开发预览。构建、真实协议和平台设备验收分别记录。
 
+## 键盘长按、桌面键盘面板与中性白外观（2026-11-01 开发批次）
+
+开发中的改动，尚未进入已发布的 0.3.0 预览包。本轮内容：
+
+- 屏幕键盘方向键、Home/End、PgUp/PgDn、Delete 与退格支持长按连续触发：长按识别后
+  每 60 ms 重复，轻点仍只发送一次；滑动按键栏由滚动识别器胜出，不会误发按键；
+  松开、指针取消、会话断开或控件销毁时立即停止。修饰键“单次组合／锁定模式”对重复生效。
+- 桌面端“键盘”从模态对话框改为浮在远程画面上的分组键盘面板：左侧为“文字输入／粘贴输入”
+  与发送，右侧按“修饰键、方向键、编辑键”分组，可展开“功能键、组合键、数字与符号”；
+  面板不改变远程视口与远程分辨率，打开时重新取得控制，`Ctrl + Alt + Home` 释放控制时自动收起。
+  桌面面板不提供“键盘模拟”（实体键盘仍直接控制远端）。
+- 浅色主题中性白：`surface` 保持纯白，`surfaceContainer*`、画布、描边和文字角色改为无主题色
+  偏色的中性灰阶；弹窗、悬浮工具栏和键盘面板使用白色表面，系统配色只决定强调色。
+  深色主题同步去除绿色偏色。品牌色 `pine`/`mint` 只用于强调色。
+
+已验证（本机开发环境，Flutter 3.47.9 / Dart 3.13.7，2026-11-01）：
+
+- `dart format --output=none --set-exit-if-changed lib test integration_test test_driver` 通过。
+- `flutter analyze` 无问题。
+- `flutter test`：**282** 个测试全部通过，其中新增
+  `test/keyboard_repeat_test.dart`（长按重复、非重复键单次、滑动防误触、断开停止）、
+  `test/desktop_keyboard_test.dart`（面板打开/关闭、Esc 关闭、发送文字、分组按键、长按重复、窄窗口布局）、
+  `test/theme_surface_test.dart`（中性表面、对比度、系统配色路径、真实弹窗/卡片颜色）；
+  并更新 `test/input_experience_test.dart`、`test/large_text_layout_test.dart` 的桌面路径。
+- 覆盖到的回归：桌面全屏释放控制收起面板、200% 字号下桌面面板可滚动并保持按键可点、
+  手机键盘栏原有模式/草稿/修饰键/数字符号页行为不变。
+
+未验证：真实桌面（X11/Wayland）和 Android/iOS 真机上的长按手感、厂商输入法组合行为、
+桌面键盘面板的实际观感与多显示器/高 DPI 表现。发布下一个正式包前需要补做这些平台验收，
+不能把本轮组件测试当作设备验收。
+
+### Android arm64 预览包与构建诊断清理（2026-11-01）
+
+- 本机按 `.github/workflows/release.yml` 的 Android 流程构建了 arm64 release 预览包：
+  OpenSSL 3.6.5（`scripts/build_android_openssl.sh arm64-v8a`）、FFmpeg 9.0.2
+  （`scripts/build_ffmpeg.sh android-arm64`，NDK r27.0.12077973）、JDK 21、Gradle 8.14。
+  设置 `LRDP_ANDROID_PREVIEW_SIGNING=1` 使用 debug 证书，`--target-platform android-arm64`。
+  `python3 scripts/check_android_apk.py ... --abi arm64-v8a --build-mode release` 通过
+  （ABI 集合、ELF/RELRO、ZIP 对齐、签名和入口策略）。APK 为 `dev.lrdp.lrdp` 0.3.0+6，
+  arm64-v8a、minSdk 24、targetSdk 36，SHA-256 为
+  `6d46565274bca6c59e4fe7fa26f21833cb92837d23c6c559692e569848910f6d`（debug 预览签名）。
+  该包只是本机预览，未在真机安装或运行，**待设备验收**。
+- 同日用项目正式发布密钥（离线备份，别名 `lrdp`，RSA 4096；证书 SHA-256
+  `91:30:4E:3C:17:60:9C:FC:27:E0:1E:B8:67:B5:35:3D:10:F0:D5:F7:0F:22:07:03:C4:C0:E2:0F:88:0A:09:ED`）
+  重新签名同一构建：不再设置 `LRDP_ANDROID_PREVIEW_SIGNING`，改为
+  `LRDP_ANDROID_KEYSTORE`、`LRDP_ANDROID_KEY_ALIAS`、`LRDP_ANDROID_STORE_PASSWORD`、
+  `LRDP_ANDROID_KEY_PASSWORD`，再执行
+  `flutter build apk --release --target lib/main.dart --target-platform android-arm64`。
+  产物仍是 `dev.lrdp.lrdp` 0.3.0+6、arm64-v8a，SHA-256 为
+  `d2dcc0e5525ae4a39bbb2332d0c2335515907d94113ae482aa0ab688814b70ef`；
+  `apksigner verify` 与 `check_android_apk.py` 均通过，构建日志 0 warning。
+  与预览包签名不同，覆盖安装前需先卸载旧预览包（会清除应用数据，请先导出连接配置）；
+  未在真机安装运行，**待设备验收**。
+- 上游 FreeRDP 3.32.2 的弃用诊断（`WINPR_SLIST_HEADER`、`SEC_WINPR_*`）与生成 getter 的
+  `-Wswitch` 与 GCC 的 `-Wunused-result` 噪音在 `native/CMakeLists.txt` 中只对 vendored
+  子目录静音（`-Wno-deprecated-declarations -Wno-switch -Wno-unused-result`，配置完即恢复），
+  未改子模块源码；LRDP 自有源码仍保持 `-Wall -Wextra -Werror`。`flutter build linux --debug`
+  与 Android release 构建日志均无 warning，`cmake --build build/native` 无 warning、
+  `ctest` 5/5 通过，`flutter test` 282 个测试通过，`flutter analyze` 无问题。
+
+
 ## 0.3.0 版本标识与发布（2026-10-31 批次）
 
 0.3.0 为当前批次。`pubspec.yaml` 的 version 为 **0.3.0+6**，GitHub 标签为
