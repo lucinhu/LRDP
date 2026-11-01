@@ -1,8 +1,8 @@
 name: lrdp
 description: A lightweight, local-first Flutter RDP client powered by FreeRDP.
 publish_to: none
-version: 0.3.0+6
-lrdp_release_tag: v0.3.0-preview.1
+version: 0.4.0+7
+lrdp_release_tag: v0.4.0-preview.1
 
 environment:
   sdk: '>=3.11.0 <4.0.0'

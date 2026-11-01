@@ -33,8 +33,8 @@ RepoType: git
 Repo: https://github.com/lucinhu/LRDP
 
 Builds:
-  - versionName: 0.3.0
-    versionCode: 6
+  - versionName: 0.4.0
+    versionCode: 7
     commit: 515f20769d6d2c935a80dfc3efe893dd809ec9e0
     timeout: 14400
     submodules: true
@@ -79,5 +79,5 @@ Builds:
 AutoUpdateMode: None
 UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+(-preview\.[0-9]+)?$
 UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
-CurrentVersion: 0.3.0
-CurrentVersionCode: 6
+CurrentVersion: 0.4.0
+CurrentVersionCode: 7
