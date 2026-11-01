@@ -63,9 +63,64 @@
   `ctest` 5/5 通过，`flutter test` 282 个测试通过，`flutter analyze` 无问题。
 
 
+## 0.4.0 版本标识与发布（2026-11-01 批次）
+
+0.4.0 为当前批次。`pubspec.yaml` 的 version 为 **0.4.0+7**，GitHub 标签为
+**v0.4.0-preview.1**；Android 由该版本号得到 versionCode **7**、versionName **0.4.0**。
+`lib/app_version.dart` 仍由 `scripts/generate_version.py` 从 `pubspec.yaml` 生成，CI 用
+`--check` 校验，不手工编辑生成文件。
+
+本轮内容（详细过程见本节开头的开发批次记录）：
+
+- 屏幕键盘长按连续触发：方向键、Home/End、PgUp/PgDn、Insert/Delete、退格与回车按住后每
+  **60 ms** 重复，轻点只发送一次；滑动按键栏由滚动识别器胜出，不误发按键；松开、指针
+  取消、会话断开或控件销毁时立即停止，修饰键的单次组合／锁定模式对重复生效。
+- 桌面端“键盘”由模态对话框改为会话内分组悬浮面板：左侧为文字输入／粘贴输入与发送，
+  右侧为修饰键、方向键倒 T 与编辑键分组，可展开功能键、组合键与数字／符号；面板浮在
+  远程画面上，不改变远程视口与分辨率，Esc 或“收起键盘”关闭，`Ctrl + Alt + Home`
+  释放控制时自动收起。
+- 浅色主题中性白：`surface` 保持纯白，`surfaceContainer*`、画布、描边与文字改为无偏色的
+  中性灰阶，弹窗白底、`surfaceTint` 透明；系统配色只决定强调色，深色主题同步去除偏色。
+- 构建诊断清理：只在构建 vendored FreeRDP 子目录时静音上游弃用警告、生成 getter 的
+  `-Wswitch` 与 GCC `-Wunused-result` 噪音，配置后即恢复；LRDP 源码保持
+  `-Wall -Wextra -Werror`，子模块未修改。
+
+本轮发布验证范围（如实）：GitHub Actions 发布工作流（run **41264305279**）在
+ubuntu-22.04 上构建 AppImage、Android ARM64 Release APK、源码包与 FFmpeg 重建资料；CI
+执行 `flutter analyze`、完整 `flutter test`（**282**）、原生 CTest（5/5）、
+`python3 -m unittest discover -s scripts/tests`、APK 静态校验（单 ABI、ELF/RELRO、ZIP
+对齐、签名、主入口）与 AppImage payload/glibc 校验。构建日志、`BUILD_INFO.json`、
+`RELEASE_INFO.json`、`SHA256SUMS` 与 `lrdp-0.4.0-verification.zip` 随 Release 发布。
+
+尚待验收：
+
+- 本轮 AppImage 的真实桌面验收（FUSE 与 `APPIMAGE_EXTRACT_AND_RUN=1` 启动、窗口、全屏、
+  输入释放、NLA 回环）未在发布流程内重跑；历史 0.2.0/0.3.0 批次的记录只对应旧二进制。
+- 键盘长按与桌面键盘面板的真实桌面/真机手感、厂商输入法组合行为与高 DPI 表现未验收。
+- Android ARM64 真机与厂商输入法未验收；本轮 APK 只到构建与静态校验。
+- Windows、macOS、iOS 本轮没有新的安装包，平台设备验收继续待做。
+- 其他 Linux 发行版与原生 Wayland 待验收。
+
+历史 0.2.0、0.3.0 批次的验收记录继续有效；上述“待验收”只针对 0.4.0 二进制。
+
+发布结果（2026-11-01）：GitHub Release
+[`v0.4.0-preview.1`](https://github.com/lucinhu/LRDP/releases/tag/v0.4.0-preview.1)
+（prerelease）已发布，标签提交 `8d03705`，工作流 run 41264305279 全部 job 成功。
+资产与 sha256：`lrdp-0.4.0-linux-x64.AppImage`
+`6112d6e956093ab5455739cd1159ffbbc0c2884b95e63c79dcac4ea6a30a7abc`
+（55,450,104 B）、`lrdp-0.4.0-android-arm64-release.apk`
+`b214038b4637f59cfef8612db395f99e39c092ae3ff4987d91ff4d88fc5b01db`
+（14,999,663 B，versionCode 7 / versionName 0.4.0，证书后缀 `…:0A:09:ED`）、
+`lrdp-0.4.0-source.tar.gz`
+`d4f3e57c15a4b03d034a8e497af5da67eeb7227933044eb57205ac4ad72246ff`、
+`lrdp-0.4.0-verification.zip` 与 `BUILD_INFO.json`/`RELEASE_INFO.json`/`SHA256SUMS`/
+`SOURCE_SHA256`；本地 `sha256sum -c` 通过。AUR `lrdp-bin` 已推送 **0.4.0-1**（AUR 仓库
+commit `1e4b8ab`），本地 `makepkg -Ccf --nodeps` 干净构建通过；F-Droid 元数据提交位点与
+IzzyOnDroid 申请草稿同步到该版本。
+
 ## 0.3.0 版本标识与发布（2026-10-31 批次）
 
-0.3.0 为当前批次。`pubspec.yaml` 的 version 为 **0.3.0+6**，GitHub 标签为
+0.3.0 为 2026-10-31 批次。`pubspec.yaml` 的 version 为 **0.3.0+6**，GitHub 标签为
 **v0.3.0-preview.1**；Android 由该版本号得到 versionCode **6**、versionName **0.3.0**。
 `lib/app_version.dart` 由 `scripts/generate_version.py` 生成，CI 运行
 `python3 scripts/generate_version.py --check` 校验生成文件与配置同步，发布前只改
