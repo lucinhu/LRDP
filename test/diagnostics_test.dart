@@ -52,7 +52,11 @@ Future<ProfileStore> _store([Map<String, Object> initial = const {}]) async {
   return store;
 }
 
-Future<void> _openSheet(WidgetTester tester, ProfileStore store) async {
+Future<void> _openSheet(
+  WidgetTester tester,
+  ProfileStore store, {
+  List<int> decoderBackends = const [],
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       locale: const Locale('zh', 'CN'),
@@ -67,7 +71,11 @@ Future<void> _openSheet(WidgetTester tester, ProfileStore store) async {
         body: Builder(
           builder: (context) => Center(
             child: FilledButton(
-              onPressed: () => showDiagnosticsSheet(context, store),
+              onPressed: () => showDiagnosticsSheet(
+                context,
+                store,
+                decoderBackends: decoderBackends,
+              ),
               child: const Text('打开诊断'),
             ),
           ),
@@ -171,9 +179,23 @@ void main() {
           domain: 'CORP',
         ),
       );
-      final report = await collectDiagnostics(store);
+      final report = await collectDiagnostics(
+        store,
+        decoderBackends: [0, 2, 1, 3],
+      );
 
       expect(report, contains('连接配置: 1'));
+      expect(report, contains('各会话最近成功帧'));
+      expect(report, contains('0=未知，1=CPU/FFmpeg，2=GPU/VA-API，3=GPU/CUDA'));
+      expect(
+        report,
+        endsWith(
+          '  session[1].decoderBackend: 0\n'
+          '  session[2].decoderBackend: 2\n'
+          '  session[3].decoderBackend: 1\n'
+          '  session[4].decoderBackend: 3',
+        ),
+      );
       for (final secret in [
         'support-secret',
         '财务服务器',
@@ -211,11 +233,11 @@ void main() {
         () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
       );
 
-      final report = await collectDiagnostics(store);
-      await _openSheet(tester, store);
+      final report = await collectDiagnostics(store, decoderBackends: [2]);
+      await _openSheet(tester, store, decoderBackends: [2]);
 
       expect(find.text('复制诊断信息'), findsOneWidget);
-      expect(find.text('仅包含版本、平台与显示设置，不含连接地址和凭据。'), findsOneWidget);
+      expect(find.text('仅包含版本、平台、显示设置和解码路径，不含连接地址和凭据。'), findsOneWidget);
       expect(
         tester.widget<SelectableText>(find.byType(SelectableText)).data,
         report,

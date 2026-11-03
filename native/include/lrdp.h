@@ -47,6 +47,10 @@ LRDP_API uint32_t lrdp_error_code(lrdp_session*);
  * that the server or destination application supports images),
  * 5 server negotiated file clipboard streams and this adapter supports them. */
 LRDP_API int lrdp_features(lrdp_session*);
+/* Optional additive ABI v5. Actual backend of the latest decoded H264 frame:
+ * 0 not yet reported, 1 software CPU, 2 VA-API GPU, 3 CUDA GPU. Per-surface
+ * fallback can change this while connected. NULL returns 0. */
+LRDP_API int lrdp_get_decoder_backend(lrdp_session*);
 /* Fields: 0 error, 1 SHA256 fingerprint, 2 received clipboard (consumed),
  * 3 paste status: idle/pending/sent/rejected/timeout/cancelled.
  * 4 audio status: off/paused/pausing/waiting/playing/unavailable.
@@ -101,6 +105,20 @@ LRDP_API int lrdp_cursor(lrdp_session*, uint8_t* out, size_t capacity,
 /* type: 0 mouse(flags,x,y), 1 scancode(flags,code), 2 UTF16(flags,unit),
  * 3 resize(width,height), 4 synchronize(toggle flags). Returns 0 if full. */
 LRDP_API int lrdp_input(lrdp_session*, int type, int a, int b, int c);
+/* Additive ABI v5 visibility mailbox. Defaults visible; accepts only 0/1,
+ * before/during connect, and returns 0 for NULL/invalid/stopped sessions.
+ * Returns 1 for acceptance, not delivery: rapid changes coalesce to the latest
+ * value. The network owner asks the server to suppress output while hidden and
+ * resume the full desktop when visible. Unsupported servers keep sending;
+ * in-flight updates may still arrive. This does not pause input or audio. */
+LRDP_API int lrdp_set_visible(lrdp_session*, int visible);
+/* Additive ABI v5 snapshot-rate mailbox. Accepts 1..240 before/during connect;
+ * defaults unlimited until explicitly set. Returns 0 for NULL/invalid/stopped
+ * sessions, 1 for acceptance. The owner merges paint damage and publishes the
+ * latest pixels at this maximum rate, including a final pending frame without
+ * further network traffic. First/resize frames publish immediately. This does
+ * not limit server traffic or codec decoding; visibility remains independent. */
+LRDP_API int lrdp_set_frame_rate(lrdp_session*, int frames_per_second);
 /* Playback permission mailbox. Defaults paused. Safe before/during connect;
  * does not disconnect RDP or change the user's negotiated audio preference.
  * Pausing drops queued device audio; resume plays only newly received data. */

@@ -14,11 +14,30 @@ static int lifecycle(const char* transfer_directory) {
   CHECK(lrdp_initialize("."));
   CHECK(lrdp_state(NULL) == LRDP_FAILED);
   CHECK(!lrdp_audio_active(NULL, 1));
+  CHECK(!lrdp_set_visible(NULL, 0)); CHECK(!lrdp_set_visible(NULL, 1));
+  CHECK(!lrdp_set_frame_rate(NULL, 30));
+  CHECK(lrdp_get_decoder_backend(NULL) == 0);
   lrdp_destroy(NULL);
   for (int i = 0; i < 20; i++) {
     lrdp_session* s = lrdp_create(); CHECK(s);
     CHECK(lrdp_state(s) == LRDP_IDLE);
+    CHECK(lrdp_get_decoder_backend(s) == 0);
     CHECK(lrdp_end_reason(s) == LRDP_END_NONE);
+    CHECK(!lrdp_set_visible(s, -1)); CHECK(!lrdp_set_visible(s, 2));
+    CHECK(lrdp_set_visible(s, 1)); CHECK(lrdp_set_visible(s, 1));
+    /* More requests than the bounded input queue can hold, before a consumer
+     * exists: visibility is a single latest-value mailbox, never queued input. */
+    for (int change = 0; change < 4096; change++)
+      CHECK(lrdp_set_visible(s, change & 1));
+    CHECK(lrdp_set_visible(s, 0)); CHECK(lrdp_set_visible(s, 0));
+    CHECK(!lrdp_set_frame_rate(s, 0)); CHECK(!lrdp_set_frame_rate(s, -1));
+    CHECK(!lrdp_set_frame_rate(s, 241));
+    /* This mailbox also coalesces instead of consuming bounded input slots. */
+    for (int change = 0; change < 4096; change++)
+      CHECK(lrdp_set_frame_rate(s, change % 240 + 1));
+    CHECK(lrdp_set_frame_rate(s, 1)); CHECK(lrdp_set_frame_rate(s, 240));
+    CHECK(lrdp_set_frame_rate(s, 30)); CHECK(lrdp_set_frame_rate(s, 30));
+    CHECK(lrdp_state(s) == LRDP_IDLE);
     char paste_status[32];
     CHECK(lrdp_read(s, 3, paste_status, sizeof(paste_status)) == 4);
     CHECK(strcmp(paste_status, "idle") == 0);
@@ -64,8 +83,19 @@ static int lifecycle(const char* transfer_directory) {
       CHECK(lrdp_start(s)); CHECK(!lrdp_start(s));
       CHECK(!lrdp_set(s, "port", "3389"));
       CHECK(!lrdp_set(s, "quality", "2"));  /* presets are pre-start only */
+      /* Unlike configuration, visibility remains writable after start. No
+       * server is required here; protocol delivery is tested by loopback. */
+      CHECK(lrdp_set_visible(s, 1)); CHECK(lrdp_set_visible(s, 0));
+      CHECK(!lrdp_set_visible(s, -1)); CHECK(!lrdp_set_visible(s, 2));
+      CHECK(lrdp_set_frame_rate(s, 120)); CHECK(lrdp_set_frame_rate(s, 30));
+      CHECK(!lrdp_set_frame_rate(s, 0)); CHECK(!lrdp_set_frame_rate(s, 241));
     }
-    lrdp_stop(s); CHECK(!lrdp_audio_active(s, 1)); lrdp_destroy(s);
+    lrdp_stop(s);
+    CHECK(!lrdp_audio_active(s, 1));
+    CHECK(!lrdp_set_visible(s, 0)); CHECK(!lrdp_set_visible(s, 1));
+    CHECK(!lrdp_set_frame_rate(s, 1)); CHECK(!lrdp_set_frame_rate(s, 240));
+    lrdp_stop(s); CHECK(!lrdp_set_visible(s, 1));
+    lrdp_destroy(s);
   }
   puts("bridge lifecycle, validation and cancellation passed"); return 0;
 }

@@ -83,7 +83,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   AppLifecycleState? _lifecycle;
   bool _mobile = false;
   bool get _foreground =>
-      !_mobile || _lifecycle == null || _lifecycle == AppLifecycleState.resumed;
+      _lifecycle == null ||
+      _lifecycle == AppLifecycleState.resumed ||
+      (!_mobile && _lifecycle == AppLifecycleState.inactive);
 
   @override
   void initState() {
@@ -1986,8 +1988,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             ListTile(
               leading: const Icon(Icons.bug_report_outlined),
               title: Text(context.tr("复制诊断信息")),
-              subtitle: Text(context.tr("仅包含版本、平台与显示设置，不含连接地址和凭据。")),
-              onTap: () => showDiagnosticsSheet(context, store),
+              subtitle: Text(context.tr("仅包含版本、平台、显示设置和解码路径，不含连接地址和凭据。")),
+              onTap: () => showDiagnosticsSheet(
+                context,
+                store,
+                decoderBackends: _sessions.values.map((s) => s.decoderBackend),
+              ),
             ),
           ],
         ),

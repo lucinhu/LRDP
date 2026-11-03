@@ -91,11 +91,32 @@ class NativeBindings {
         Int32 Function(Pointer<NativeSession>),
         int Function(Pointer<NativeSession>)
       >('lrdp_features');
+  // Additive ABI v5 extension. Missing symbols leave the backend unknown.
+  bool get supportsDecoderBackend =>
+      library.providesSymbol('lrdp_get_decoder_backend');
+  late final getDecoderBackend = library
+      .lookupFunction<
+        Int32 Function(Pointer<NativeSession>),
+        int Function(Pointer<NativeSession>)
+      >('lrdp_get_decoder_backend');
   late final audioActive = library
       .lookupFunction<
         Int32 Function(Pointer<NativeSession>, Int32),
         int Function(Pointer<NativeSession>, int)
       >('lrdp_audio_active');
+  // Additive ABI v5 extension; older libraries still pause local rendering.
+  bool get supportsVisibility => library.providesSymbol('lrdp_set_visible');
+  late final setVisible = library
+      .lookupFunction<
+        Int32 Function(Pointer<NativeSession>, Int32),
+        int Function(Pointer<NativeSession>, int)
+      >('lrdp_set_visible');
+  bool get supportsFramePacing => library.providesSymbol('lrdp_set_frame_rate');
+  late final setFrameRate = library
+      .lookupFunction<
+        Int32 Function(Pointer<NativeSession>, Int32),
+        int Function(Pointer<NativeSession>, int)
+      >('lrdp_set_frame_rate');
   late final read = library
       .lookupFunction<
         Int32 Function(Pointer<NativeSession>, Int32, Pointer<Utf8>, Size),

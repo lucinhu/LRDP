@@ -53,7 +53,8 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
   }
   private static native long nativeCreate(long ticket);
   private static native long[] nativeStatus(long handle);
-  private static native int nativeDraw(long handle, Surface surface, int width, int height);
+  // Positive results are the generation actually consumed, not the earlier status snapshot.
+  private static native long nativeDraw(long handle, Surface surface, int width, int height);
   private static native void nativeReset(long handle, boolean detach);
   private static native void nativeDestroy(long handle);
   private static native long[] nativeDiagnostics();
@@ -101,18 +102,21 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
     boolean queued, failed, loggedFirstFrame;
     long handle; // GL handler only.
     int width, height, retries;
+    int producerWidth, producerHeight;
+    long sizeChanges;
+    volatile long drawAttempts; // GL handler writes; main reads for per-video diagnostics.
     int frameRate = 60;
     long nextFrameNanos;
     long presentedGeneration = -1;
     Surface rateSurface;
     int surfaceFrameRate;
-    int surfaceEpoch;
+    volatile int surfaceEpoch;
     Map<String, Object> status = new HashMap<>();
     Video(long ticket) {
       producer = registry.createSurfaceProducer();
       id = producer.id();
       try {
-        producer.setSize(1, 1);
+        size(1, 1);
         producer.getSurface();
         producer.setCallback(this);
       } catch (RuntimeException exception) {
@@ -130,6 +134,21 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
         if (handle == 0)
           main.post(() -> failed = true);
       });
+    }
+    void size(int w, int h) {
+      if (producerWidth == w && producerHeight == h)
+        return;
+      producer.setSize(w, h);
+      producerWidth = w;
+      producerHeight = h;
+      sizeChanges++;
+      presentedGeneration = -1;
+    }
+    void invalidateSurface() {
+      rateSurface = null;
+      surfaceFrameRate = 0;
+      presentedGeneration = -1;
+      surfaceEpoch++;
     }
     void update(long[] data) {
       width = (int) data[0];
@@ -162,6 +181,7 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
         nextFrameNanos = now;
       nextFrameNanos += interval;
       queued = true;
+      final int statusEpoch = surfaceEpoch;
       gl.post(() -> {
         if (closed || handle == 0) {
           main.post(() -> {
@@ -172,8 +192,10 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
         }
         final long[] info = nativeStatus(handle);
         main.post(() -> {
-          if (closed)
+          if (closed || statusEpoch != surfaceEpoch) {
+            queued = false;
             return;
+          }
           if (info == null) {
             queued = false;
             failed = true;
@@ -184,12 +206,17 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
             queued = false;
             return;
           }
-          if (info[2] == presentedGeneration && surfaceFrameRate == frameRate) {
+          // Refresh hints are optional (and unavailable before API 30). They must
+          // never keep an already presented frame dirty or force an EGL draw.
+          final boolean needsHint = Build.VERSION.SDK_INT >= 30
+              && (rateSurface == null || surfaceFrameRate != frameRate);
+          if (info[2] == presentedGeneration && producerWidth == width
+              && producerHeight == height && !needsHint) {
             queued = false;
             return;
           }
           try {
-            producer.setSize(width, height);
+            size(width, height);
             final Surface surface = producer.getSurface();
             if (Build.VERSION.SDK_INT >= 30 && (rateSurface != surface || surfaceFrameRate != frameRate)) {
               try {
@@ -198,14 +225,19 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
               rateSurface = surface;
               surfaceFrameRate = frameRate;
             }
+            if (info[2] == presentedGeneration) {
+              queued = false;
+              return;
+            }
             final int w = width, h = height;
             final int epoch = surfaceEpoch;
             gl.post(() -> {
-              if (closed || !visible || !available) {
+              if (closed || !visible || !available || epoch != surfaceEpoch) {
                 main.post(() -> queued = false);
                 return;
               }
-              final int result = nativeDraw(handle, surface, w, h);
+              drawAttempts++;
+              final long result = nativeDraw(handle, surface, w, h);
               main.post(() -> {
                 queued = false;
                 if (closed || !visible || !available || epoch != surfaceEpoch)
@@ -215,7 +247,7 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
                 else if (result >= 0)
                   retries = 0;
                 if (result > 0)
-                  presentedGeneration = info[2];
+                  presentedGeneration = result;
               });
             });
           } catch (RuntimeException exception) {
@@ -229,29 +261,28 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
       Map<String, Object> value = new HashMap<>(status);
       value.put("failed", failed);
       value.put("frameRate", frameRate);
+      value.put("drawAttempts", drawAttempts);
+      value.put("sizeChanges", sizeChanges);
       return value;
     }
     void visibility(boolean value) {
+      if (visible == value)
+        return;
       visible = value;
       nextFrameNanos = 0;
-      if (value)
-        presentedGeneration = -1;
-      if (value)
-        surfaceEpoch++;
-      if (value)
-        scheduleTick();
-      if (value)
+      invalidateSurface();
+      if (value) {
         gl.post(() -> {
           if (!closed && handle != 0)
             nativeReset(handle, false);
         });
+        scheduleTick();
+      }
     }
     @Override
     public void onSurfaceCleanup() {
       available = false;
-      rateSurface = null;
-      presentedGeneration = -1;
-      surfaceEpoch++;
+      invalidateSurface();
       gl.post(() -> {
         if (!closed && handle != 0)
           nativeReset(handle, true);
@@ -260,13 +291,12 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
     @Override
     public void onSurfaceAvailable() {
       available = true;
-      presentedGeneration = -1;
-      surfaceEpoch++;
-      scheduleTick();
+      invalidateSurface();
       gl.post(() -> {
         if (!closed && handle != 0)
           nativeReset(handle, false);
       });
+      scheduleTick();
     }
     void close() {
       if (closed)
@@ -362,9 +392,10 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
           result.notImplemented();
           break;
         }
-        video.producer.setSize(video.width + 1, video.height + 1);
+        video.invalidateSurface();
+        video.size(video.width + 1, video.height + 1);
         video.producer.getSurface();
-        video.producer.setSize(Math.max(1, video.width), Math.max(1, video.height));
+        video.size(Math.max(1, video.width), Math.max(1, video.height));
         video.producer.getSurface();
         gl.post(() -> {
           if (!video.closed && video.handle != 0)

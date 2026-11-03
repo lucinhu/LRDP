@@ -43,21 +43,51 @@ Windows 对固定插件的 `MethodResult::Success(nullptr)` 调用做一处兼�
 
 ## Linux
 
-H.264 默认开启。先构建固定版本的最小静态 FFmpeg（需要 Make；x86 SIMD 建议安装 NASM）：
+H.264 默认开启。Linux 仓库内 FreeRDP 构建会自动尝试 VA-API（Intel/AMD 等）和 CUDA/NVDEC
+（NVIDIA）；当前码流实际解码及下载成功后才报告 GPU。驱动或设备不可用时自动使用 CPU。
+这是运行时能力选择，不会测量两种后端的耗时来选择更快者；低负载下 GPU 不一定更省电。
+
+先安装 Debian/Ubuntu 构建依赖（其他发行版安装同等开发包）：
 
 ```sh
+sudo apt install clang cmake ninja-build pkg-config make nasm curl python3 libgtk-3-dev libepoxy-dev liblzma-dev libssl-dev libsecret-1-dev libpulse-dev libva-dev libdrm-dev
 bash scripts/build_ffmpeg.sh linux-x64
 export LRDP_FFMPEG_ROOT="$PWD/build/deps/ffmpeg/linux-x64"
-```
-
-Debian/Ubuntu 构建依赖（其他发行版安装同等开发包）：
-
-```sh
-sudo apt install clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libssl-dev libsecret-1-dev libpulse-dev
 flutter run -d linux
 flutter build linux --release --target lib/main.dart
 bash scripts/package_linux.sh
 ```
+
+最小静态 FFmpeg 默认编入 H.264 软件解码、VA-API 与 NVDEC，不包含编码器或 CUDA toolkit。
+脚本在工作区下载固定摘要的 nv-codec-headers 12.1.14.0（MIT），缺少硬解开发依赖时明确失败，
+不静默生成软件版。`build/deps/ffmpeg/linux-x64/BUILD_INFO.json` 记录实际编译配置、源码摘要和
+静态依赖。运行包仍需要系统 `libva`、`libva-drm`、`libdrm` 和对应 GPU 驱动；VA-API 还需要
+发行版提供的厂商 VA 驱动及 render 节点访问权限。CUDA 运行时动态加载驱动，所用头文件要求
+Linux NVIDIA 驱动至少 530.41.03；最终能否解码仍取决于显卡与码流支持。
+
+明确的软件构建可用 `LRDP_LINUX_HW_DECODE=OFF bash scripts/build_ffmpeg.sh linux-x64`，
+并在原生 CMake 设置 `-DLRDP_LINUX_AUTO_H264=OFF`。已有旧版软件 FFmpeg 前缀也能继续构建，
+运行时会回退 CPU。系统 FreeRDP 开发构建、Android、Windows 和 Apple 不启用此 Linux 适配。
+该适配依赖固定 FreeRDP 3.32.2 的私有 codec 布局，升级子模块时需重新审查版本保护。
+
+硬件失败后按原顺序重放 SPS/PPS 和最近 IDR 起的参考帧，再继续 CPU 解码；不同时做两份解码。
+历史最多 16 MiB / 512 个包、参数最多 64 KiB，超过界限前主动切换 CPU，避免无界内存或丢失参考帧。
+回退对当前 surface 保持生效；重连或新 surface 会重新探测。信息面板显示最近一帧 H.264 的实际
+CPU / VA-API / CUDA 后端；旧原生库缺少可选 ABI 时显示未获取，不猜测后端。
+
+原生解码回归需要开发机的 FFmpeg（含 libx264，用于临时生成测试码流；不会打入应用）：
+
+```sh
+sudo apt install libavcodec-dev libavutil-dev libswscale-dev ffmpeg
+cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release -DLRDP_BUILD_TESTS=ON
+cmake --build build/native --parallel 3
+ctest --test-dir build/native --output-on-failure
+python3 scripts/run_h264_test.py --library build/native/liblrdp.so
+```
+
+最后一项使用私有回环 TLS、实际 RDPGFX AVC420 的 IDR/P 帧，检查像素、后端、输入和停止，
+需要系统 FreeRDP 3 服务端开发包与 FFmpeg 命令。它不依赖 Xvnc，也不读取当前桌面。
+本轮未声称 GPU 零拷贝：硬解图像下载为 I420 后仍由 FreeRDP 合成 BGRA 并上传 Flutter 纹理。
 
 默认直接编译仓库内固定版本的 FreeRDP，静态链接进 `liblrdp.so`，无需外部
 FreeRDP 客户端。安装包仍依赖 GTK、OpenSSL、libsecret、libpulse 等系统运行库。
@@ -145,6 +175,8 @@ python3 scripts/run_cursor_test.py --flutter
 python3 scripts/run_logoff_test.py
 python3 scripts/run_file_test.py
 python3 scripts/run_frame_rate_test.py
+python3 scripts/run_visibility_test.py
+python3 scripts/run_frame_pacing_test.py
 python3 scripts/run_resolution_test.py
 python3 scripts/run_file_clipboard_test.py
 python3 scripts/run_file_clipboard_test.py --flutter
@@ -152,6 +184,42 @@ python3 scripts/run_audio_test.py --build build/native
 python3 scripts/run_protocol_test.py --live-ui
 python3 scripts/run_protocol_test.py --release
 ```
+
+CPU 对照请使用 **Release** 原生库（Debug 与 Release 的解码开销不可直接比较）：
+
+```sh
+cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release -DLRDP_BUILD_TESTS=ON
+cmake --build build/native -j 4
+python3 scripts/run_visibility_test.py
+# 可选：与修改前独立保存的 Release 库对比，而非另一种构建模式的库
+python3 scripts/run_visibility_test.py --baseline-library /path/to/before/liblrdp.so
+```
+
+可见性脚本只启动私有 TLS 回环服务，编译本地 320×240、目标 240 Hz 原始位图生产器；
+需要系统 `freerdp-server3`、`freerdp3`、`winpr3` 开发包与 OpenSSL CLI，不需要 Xvnc。
+每个客户端在独立进程中加载库，采样进程 CPU 时间（100% 代表一个核心），报告在
+`build/visibility-runtime/VERDICT.json`。验证隐藏/恢复、快速切换、隐藏时输入与停止，
+以及未协商 Suppress Output 的安全退化。该数据不包括 Flutter、GPU 或服务端 CPU，
+不能直接外推到实际 AVC 视频或整机功耗。
+
+原生画面快照限帧测试使用同一私有 TLS fixture，验证实际发布代数，而非 UI 定时器。
+Linux 与 Android 共用的连接线程按目标帧率合并 damage；解码和网络接收仍正常进行。
+新符号 `lrdp_set_frame_rate` 为 ABI v5 的可选扩展：1..240，直接使用 C ABI 且未设置时
+仍不限帧，Dart worker 在连接前和修改帧率时设置。旧库缺少符号时仍走原来的画面限帧。
+
+```sh
+python3 scripts/run_frame_pacing_test.py
+python3 scripts/run_frame_pacing_test.py --baseline-library /path/to/before/liblrdp.so
+python3 scripts/run_frame_pacing_test.py --baseline-library /path/to/before/liblrdp.so \
+  --width 1920 --height 1080 --source-fps 60 --rates 30 \
+  --output build/frame-pacing-runtime-1080p
+```
+
+默认报告在 `build/frame-pacing-runtime/VERDICT.json`，验证动态 30/120/240/30 fps、
+完整像素、两处 2×2 damage 后无新 PDU 的末帧补发、输入与停止。使用 2×2 角标避开
+上游 GDI 对 `(0,0,1,1)` 无有效 invalidation 的边界；本轮未修改或声称修复上游边界。
+CPU 数据是各独立客户端进程的 2 秒短窗描述，100% 为单核，不能据此保证实际 AVC、
+Flutter 或 Android 设备上的同等降幅。320×240 场景更适合验证帧率，不能代表大分辨率收益。
 
 文件粘贴使用现有 `file_selector`，不增加依赖或应用权限。原生适配使用 ABI v5 的新增
 `lrdp_paste_files` 接口，Dart 按功能位 5 延迟查找；服务端未协商文件流时不启用入口。
@@ -716,6 +784,30 @@ CPU 兼容构建使用 `--dart-define=LRDP_DISABLE_TEXTURES=true`。历史四用
 不能将它当作默认原生 Surface 的截图证据。常规客户 Release 不设置该选项。
 已实现 Android Surface 后端；ARM64 真机、较低 Android API、不同设备 GPU 和物理
 网络下的功耗/帧延迟仍需各自验收。模拟器软件 GPU 不代表实体设备的硬件加速性能。
+
+### Android 静态画面 CPU 回归
+
+```sh
+# 仅主机 Java 调度回归，无需 Android SDK、NDK 或 Gradle；需要 javac/cc
+python3 scripts/test_android_video_scheduler.py
+# 独立 API26 x86_64 AVD，真实 JNI/EGL/截图；需要准备 Android OpenSSL/FFmpeg 依赖
+python3 scripts/run_android_cpu_test.py --prepare-only
+python3 scripts/run_android_cpu_test.py
+```
+
+主机脚本编译生产 Java 插件，仅替代 Android/Flutter 平台接口与 JNI，覆盖 API24/26/29/30/35、
+静止画面、status/draw 代数竞争、64 位 generation、Surface epoch 和失败重试；不替代设备验收。
+设备脚本在 `build/android-cpu-runtime/avd` 创建自己的 `LRDP_CPU_API26` AVD，使用
+ADB 5038 / emulator-5556，拒绝端口上的其他 AVD，不操作 5560/5570 或用户已存在的设备。
+不需要 Xvnc；TLS fixture 仅绑定私有回环地址，经 adb reverse 连接。SDK 按
+`ANDROID_SDK_ROOT` / `ANDROID_HOME` / 本地配置发现，Flutter 按 `FLUTTER_ROOT` /
+本地配置 / PATH 发现；Java 可指定 `JAVA_HOME`，NDK 27.0.12077973。
+原生依赖根仍为 `build/deps/android-openssl` 与 `build/deps/ffmpeg/android`。
+
+设备报告 `build/android-cpu-runtime/VERDICT.json` 应核对流动画面实际上传、静止后的
+`uploads` / `drawAttempts` / `sizeChanges` 无增长、FPS 修改、Surface 重建、隐藏恢复、
+系统截图颜色及销毁后资源计数。使用 Debug 集成入口与模拟器软件 GPU，不能据此宣称
+ARM64 真机功耗或 Release 整体 CPU 已验收。`--reuse-apk` 必须匹配源码、依赖和 APK 摘要。
 
 ### 中文发送修复包回归
 

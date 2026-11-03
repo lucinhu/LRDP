@@ -178,8 +178,8 @@ def main():
         bridge = appdir / 'usr/lib/liblrdp.so'
         bridge_sha = sha256_file(bridge)
         exports = native_exports(bridge)
-        if len(exports) != 28:
-            raise SystemExit(f'expected 28 native exports, found {len(exports)}')
+        if len(exports) != 31:
+            raise SystemExit(f'expected 31 native exports, found {len(exports)}')
     freerdp = Path('third_party/FreeRDP')
     if sha256_cwd(freerdp, 'status', '--porcelain'):
         raise SystemExit('FreeRDP must remain unmodified')

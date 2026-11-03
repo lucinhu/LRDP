@@ -417,14 +417,13 @@ const localizedMessages = <String, Map<String, String>>{
     "CPU 图像": "CPU 图像",
     "H.264 视频": "H.264 视频",
     "不可用": "不可用",
-    "仅包含版本、平台与显示设置，不含连接地址和凭据。": "仅包含版本、平台与显示设置，不含连接地址和凭据。",
+    "仅包含版本、平台、显示设置和解码路径，不含连接地址和凭据。": "仅包含版本、平台、显示设置和解码路径，不含连接地址和凭据。",
     "任务管理器（Ctrl+Shift+Esc）": "任务管理器（Ctrl+Shift+Esc）",
     "会话信息": "会话信息",
     "位图（GDI）": "位图（GDI）",
     "保存备份文件": "保存备份文件",
     "关闭窗口（Alt+F4）": "关闭窗口（Alt+F4）",
-    "关闭视频编码，改用位图更新：文字更锐利、解码几乎不耗 CPU，但 1080p 下流量约 20 Mbps。修改后需重新连接才会生效。":
-        "关闭视频编码，改用位图更新：文字更锐利、解码几乎不耗 CPU，但 1080p 下流量约 20 Mbps。修改后需重新连接才会生效。",
+    "使用位图更新以获得清晰文字，通常会增加流量。修改后需重新连接。": "使用位图更新以获得清晰文字，通常会增加流量。修改后需重新连接。",
     "切换窗口（Alt+Tab）": "切换窗口（Alt+Tab）",
     "剪贴板能力": "剪贴板能力",
     "原生纹理": "原生纹理",
@@ -444,8 +443,8 @@ const localizedMessages = <String, Map<String, String>>{
     "已暂停": "已暂停",
     "已解码帧数": "已解码帧数",
     "帧率上限": "帧率上限",
-    "强制 H.264 视频编码并关闭远端壁纸、主题与动画：流量最低，1080p 解码约占半个 CPU 核。修改后需重新连接才会生效。":
-        "强制 H.264 视频编码并关闭远端壁纸、主题与动画：流量最低，1080p 解码约占半个 CPU 核。修改后需重新连接才会生效。",
+    "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码。修改后需重新连接。":
+        "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码。修改后需重新连接。",
     "截取远程屏幕（PrintScreen）": "截取远程屏幕（PrintScreen）",
     "打开资源管理器（Win+E）": "打开资源管理器（Win+E）",
     "文件": "文件",
@@ -458,8 +457,8 @@ const localizedMessages = <String, Map<String, String>>{
     "正在暂停": "正在暂停",
     "清晰文字": "清晰文字",
     "渲染方式": "渲染方式",
-    "由服务器选择编码（常见为 H.264 视频）：省带宽，但解码会更耗 CPU。修改后需重新连接才会生效。":
-        "由服务器选择编码（常见为 H.264 视频）：省带宽，但解码会更耗 CPU。修改后需重新连接才会生效。",
+    "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码。修改后需重新连接。":
+        "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码。修改后需重新连接。",
     "画质": "画质",
     "省流量": "省流量",
     "等待音频": "等待音频",
@@ -476,6 +475,7 @@ const localizedMessages = <String, Map<String, String>>{
     "锁定远程电脑（Win+L）": "锁定远程电脑（Win+L）",
     "需要证书": "需要证书",
     "音频状态": "音频状态",
+    "解码路径未获取": "解码路径未获取",
   },
   "zh-TW": {
     "IPv6 地址格式不正确": "IPv6 地址格式不正確",
@@ -894,14 +894,13 @@ const localizedMessages = <String, Map<String, String>>{
     "CPU 图像": "CPU 影像",
     "H.264 视频": "H.264 視訊",
     "不可用": "不可用",
-    "仅包含版本、平台与显示设置，不含连接地址和凭据。": "僅包含版本、平台與顯示設定，不含連線位址和認證資料。",
+    "仅包含版本、平台、显示设置和解码路径，不含连接地址和凭据。": "僅包含版本、平台、顯示設定和解碼路徑，不含連線位址和憑證。",
     "任务管理器（Ctrl+Shift+Esc）": "工作管理員（Ctrl+Shift+Esc）",
     "会话信息": "工作階段資訊",
     "位图（GDI）": "點陣圖（GDI）",
     "保存备份文件": "儲存備份檔案",
     "关闭窗口（Alt+F4）": "關閉視窗（Alt+F4）",
-    "关闭视频编码，改用位图更新：文字更锐利、解码几乎不耗 CPU，但 1080p 下流量约 20 Mbps。修改后需重新连接才会生效。":
-        "關閉視訊編碼，改用點陣圖更新：文字更銳利、解碼幾乎不耗 CPU，但 1080p 下流量約 20 Mbps。修改後需重新連線才會生效。",
+    "使用位图更新以获得清晰文字，通常会增加流量。修改后需重新连接。": "使用點陣圖更新以獲得清晰文字，通常會增加流量。修改後需重新連線。",
     "切换窗口（Alt+Tab）": "切換視窗（Alt+Tab）",
     "剪贴板能力": "剪貼簿能力",
     "原生纹理": "原生紋理",
@@ -921,8 +920,8 @@ const localizedMessages = <String, Map<String, String>>{
     "已暂停": "已暫停",
     "已解码帧数": "已解碼影格數",
     "帧率上限": "影格率上限",
-    "强制 H.264 视频编码并关闭远端壁纸、主题与动画：流量最低，1080p 解码约占半个 CPU 核。修改后需重新连接才会生效。":
-        "強制 H.264 視訊編碼並關閉遠端桌布、主題與動畫：流量最低，1080p 解碼約佔半個 CPU 核心。修改後需重新連線才會生效。",
+    "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码。修改后需重新连接。":
+        "使用 H.264 並關閉遠端桌布、主題與動畫以節省流量。Linux 下自動選擇 GPU 或 CPU 解碼。修改後需重新連線。",
     "截取远程屏幕（PrintScreen）": "擷取遠端畫面（PrintScreen）",
     "打开资源管理器（Win+E）": "開啟檔案總管（Win+E）",
     "文件": "檔案",
@@ -935,8 +934,8 @@ const localizedMessages = <String, Map<String, String>>{
     "正在暂停": "正在暫停",
     "清晰文字": "清晰文字",
     "渲染方式": "算繪方式",
-    "由服务器选择编码（常见为 H.264 视频）：省带宽，但解码会更耗 CPU。修改后需重新连接才会生效。":
-        "由伺服器選擇編碼（常見為 H.264 視訊）：節省頻寬，但解碼會更耗 CPU。修改後需重新連線才會生效。",
+    "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码。修改后需重新连接。":
+        "由伺服器選擇編碼。Linux 下 H.264 自動選擇 GPU 或 CPU 解碼。修改後需重新連線。",
     "画质": "畫質",
     "省流量": "省流量",
     "等待音频": "等待音訊",
@@ -953,6 +952,7 @@ const localizedMessages = <String, Map<String, String>>{
     "锁定远程电脑（Win+L）": "鎖定遠端電腦（Win+L）",
     "需要证书": "需要憑證",
     "音频状态": "音訊狀態",
+    "解码路径未获取": "解碼路徑未取得",
   },
   "en": {
     "IPv6 地址格式不正确": "Invalid IPv6 address",
@@ -1451,15 +1451,15 @@ const localizedMessages = <String, Map<String, String>>{
     "CPU 图像": "CPU image",
     "H.264 视频": "H.264 video",
     "不可用": "Unavailable",
-    "仅包含版本、平台与显示设置，不含连接地址和凭据。":
-        "Contains the app version, platform and display settings only; no addresses or credentials.",
+    "仅包含版本、平台、显示设置和解码路径，不含连接地址和凭据。":
+        "Includes version, platform, display settings and decoder paths only; no connection addresses or credentials.",
     "任务管理器（Ctrl+Shift+Esc）": "Task Manager (Ctrl+Shift+Esc)",
     "会话信息": "Session info",
     "位图（GDI）": "Bitmap (GDI)",
     "保存备份文件": "Save backup",
     "关闭窗口（Alt+F4）": "Close window (Alt+F4)",
-    "关闭视频编码，改用位图更新：文字更锐利、解码几乎不耗 CPU，但 1080p 下流量约 20 Mbps。修改后需重新连接才会生效。":
-        "Disables video codecs in favour of bitmap updates: sharper text and almost no decoding CPU, but 1080p costs roughly 20 Mbps. Reconnect for changes to take effect.",
+    "使用位图更新以获得清晰文字，通常会增加流量。修改后需重新连接。":
+        "Use bitmap updates for sharper text, usually at the cost of more bandwidth. Reconnect to apply.",
     "切换窗口（Alt+Tab）": "Switch windows (Alt+Tab)",
     "剪贴板能力": "Clipboard support",
     "原生纹理": "Native texture",
@@ -1481,8 +1481,8 @@ const localizedMessages = <String, Map<String, String>>{
     "已暂停": "Paused",
     "已解码帧数": "Decoded frames",
     "帧率上限": "Frame rate limit",
-    "强制 H.264 视频编码并关闭远端壁纸、主题与动画：流量最低，1080p 解码约占半个 CPU 核。修改后需重新连接才会生效。":
-        "Forces H.264 video and disables remote wallpaper, themes and animations: lowest bandwidth, but 1080p decoding uses about half a CPU core. Reconnect for changes to take effect.",
+    "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码。修改后需重新连接。":
+        "Use H.264 and disable remote wallpaper, themes and animations to save bandwidth. On Linux, decoding automatically uses the GPU or CPU. Reconnect to apply.",
     "截取远程屏幕（PrintScreen）": "Capture remote screen (PrintScreen)",
     "打开资源管理器（Win+E）": "Open File Explorer (Win+E)",
     "文件": "Files",
@@ -1495,8 +1495,8 @@ const localizedMessages = <String, Map<String, String>>{
     "正在暂停": "Pausing",
     "清晰文字": "Sharp text",
     "渲染方式": "Renderer",
-    "由服务器选择编码（常见为 H.264 视频）：省带宽，但解码会更耗 CPU。修改后需重新连接才会生效。":
-        "The server chooses the codec (usually H.264 video): saves bandwidth but decoding costs more CPU. Reconnect for changes to take effect.",
+    "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码。修改后需重新连接。":
+        "Let the server choose the encoding. On Linux, H.264 automatically uses GPU or CPU decoding. Reconnect to apply.",
     "画质": "Quality",
     "省流量": "Save bandwidth",
     "等待音频": "Waiting for audio",
@@ -1513,5 +1513,6 @@ const localizedMessages = <String, Map<String, String>>{
     "锁定远程电脑（Win+L）": "Lock remote PC (Win+L)",
     "需要证书": "Certificate required",
     "音频状态": "Audio state",
+    "解码路径未获取": "Decoder unknown",
   },
 };

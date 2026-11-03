@@ -50,6 +50,7 @@ jobs:
             ca-certificates clang cmake curl desktop-file-utils dpkg-dev file git \
             gobject-introspection libgirepository1.0-dev libgtk-3-dev libepoxy-dev \
             liblzma-dev libssl-dev libsecret-1-dev libpulse-dev librsvg2-dev \
+            libva-dev libdrm-dev libavcodec-dev libavutil-dev libswscale-dev \
             libfuse2 libegl1-mesa libgl1-mesa-dri libglu1-mesa ibus-gtk3 \
             fcitx5-frontend-gtk3 fonts-noto-cjk make nasm ninja-build patchelf \
             pkg-config python3 unzip xz-utils zstd
@@ -207,7 +208,7 @@ jobs:
       - name: Toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y nasm gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 xz-utils curl
+          sudo apt-get install -y nasm gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 xz-utils curl pkg-config gcc make python3 libva-dev libdrm-dev
           mkdir -p build/release-logs
           yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.12077973" 2>&1 | tail -3
@@ -269,35 +270,8 @@ jobs:
             2>&1 | tee build/release-logs/assemble.log
       - name: Release notes
         run: |
-          cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
-          LRDP **0.4.0** 开发预览（`v0.4.0-preview.1`，Android versionCode 7）。
+          cp "docs/releases/$RELEASE_TAG.md" "$RUNNER_TEMP/notes.md"
 
-          本次二进制由 GitHub Actions 在 ubuntu-22.04 上从本标签对应提交构建：Linux x86_64 AppImage（glibc ≤ 2.35 校验通过）、Android ARM64 正式签名 APK、源码与 FFmpeg 重建资料。原生 ABI 保持 v5（28 个导出），FreeRDP 子模块未修改。
-
-          ## 功能
-
-          - 屏幕键盘长按连续触发：方向键、Home/End、PgUp/PgDn、Insert/Delete、退格与回车支持按住重复（60 ms 间隔），轻点仍只发送一次；横向滑动按键栏由滚动识别器胜出，不会误发按键，松开、指针取消、会话断开或控件销毁时立即停止。
-          - 桌面端键盘从模态对话框改为会话内分组悬浮面板：左侧为文字输入/粘贴输入与发送，右侧为修饰键、方向键倒 T 与编辑键分组，可展开功能键、组合键与数字/符号；面板浮在远程画面上，不改变远程视口与分辨率，Esc 或“收起键盘”关闭，`Ctrl + Alt + Home` 释放控制时自动收起。
-          - 浅色主题中性白：Material 3 中性色阶不再被种子色或系统强调色染成绿灰，`surface` 保持纯白，`surfaceContainer*`、画布、描边与文字改为中性灰阶；弹窗、悬浮工具栏与键盘面板使用白色表面，深色主题同步去除偏色。系统配色仍只决定强调色。
-          - 构建诊断清理：只在构建 vendored FreeRDP 子目录时静音上游弃用警告、生成 getter 的 `-Wswitch` 与 GCC `-Wunused-result` 噪音，配置后即恢复；LRDP 自有源码仍保持 `-Wall -Wextra -Werror`，子模块未修改，Linux 与 Android 构建输出 0 warning。
-
-          ## 验证范围
-
-          CI 已执行 Flutter analyze、完整 `flutter test`（282）、原生 CTest（5/5）、Python 检查、Android APK 静态校验（ABI/RELRO/ZIP 对齐/签名/主入口）与 AppImage payload/glibc 校验；日志与构建信息见 `lrdp-0.4.0-verification.zip`、`BUILD_INFO.json`。
-
-          **尚未验收**：本轮 AppImage 的交互式 OS 验收（FUSE/解压启动、窗口、全屏、输入释放、NLA 回环）未在发布流程内重跑；键盘长按与桌面键盘面板的真实桌面/真机手感、厂商输入法与高 DPI 表现待验收；Android ARM64 真机未验收；本次不提供 Windows/macOS/iOS 安装包；其他发行版与原生 Wayland 待验收。历史 0.2.0 与 0.3.0 批次的验收记录仍然有效。
-
-          ## 安装
-
-          ```sh
-          chmod +x lrdp-0.4.0-linux-x64.AppImage
-          ./lrdp-0.4.0-linux-x64.AppImage
-          ```
-
-          需要 glibc ≥ 2.35 与可用的 OpenGL/EGL；无 FUSE 时可用 `APPIMAGE_EXTRACT_AND_RUN=1` 启动。Android 安装 ARM64 APK；APK 使用 LRDP 正式发布密钥签名，可覆盖安装 0.3.0 正式签名包；本地调试签名或更早的预览包需要先卸载（会清除应用数据）。
-
-          校验：`sha256sum -c SHA256SUMS`。
-          NOTES
       - name: Create or update release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

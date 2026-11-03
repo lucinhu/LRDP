@@ -35,6 +35,9 @@
 #include <errno.h>
 #include "clipboard_image.h"
 #include "clipboard_files.h"
+#ifdef LRDP_LINUX_AUTO_H264
+#include "h264_freerdp.h"
+#endif
 
 #define MAX_CURSOR 384
 #define MAX_DIM 4096
@@ -65,8 +68,17 @@ struct lrdp_session {
   freerdp* instance;
   HANDLE thread, stop, wake;
   CRITICAL_SECTION lock;
-  int state, features, end_reason;
+  int state, features, end_reason, decoder_backend;
   BOOL audio_requested;
+  BOOL visible_requested; /* Lock-protected, independent of the input queue. */
+  BOOL visible_applied;   /* Network owner only; initially visible on the wire. */
+  BOOL visibility_dirty;  /* Network owner only; replay after reactivation. */
+  int frame_rate_requested; /* Lock-protected mailbox; zero means unlimited. */
+  /* Pacer state is connection-owner only; pending pixels stay in GDI. */
+  int frame_rate, frame_width, frame_height;
+  BOOL frame_pending, frame_published;
+  UINT64 frame_last_published, frame_deadline;
+  lrdp_video_rect frame_damage;
   lrdp_audio_gate* audio;
   UINT32 error_code;
   lrdp_video* video;
@@ -261,23 +273,88 @@ static BOOL begin_paint(rdpContext* c) {
   c->gdi->primary->hdc->hwnd->invalid->null = TRUE;
   return TRUE;
 }
+static UINT64 frame_interval(const lrdp_session* s) {
+  return s->frame_rate ? 1000000000ULL / (UINT64)s->frame_rate : 0;
+}
+static void frame_rate_apply(lrdp_session* s, int rate) {
+  if (rate == s->frame_rate) return;
+  s->frame_rate = rate;
+  /* A changed rate starts a new schedule from the last real publication, so a
+   * faster rate can flush an already pending frame without another paint. */
+  s->frame_deadline = s->frame_published && rate ?
+    s->frame_last_published + frame_interval(s) : 0;
+}
+static BOOL frame_flush(rdpContext* c, UINT64 now) {
+  lrdp_session* s = owner(c);
+  if (!s->frame_pending || (s->frame_rate && now < s->frame_deadline)) return TRUE;
+  rdpGdi* g = c->gdi;
+  if (!lrdp_video_store_publish(s->video, g->primary_buffer, g->width, g->height,
+                              g->stride, &s->frame_damage)) return FALSE;
+  s->frame_pending = FALSE;
+  s->frame_published = TRUE;
+  s->frame_last_published = now;
+  const UINT64 interval = frame_interval(s);
+  if (!interval) s->frame_deadline = 0;
+  else if (!s->frame_deadline) s->frame_deadline = now + interval;
+  else {
+    /* Preserve phase despite millisecond waits and source jitter. Skip missed
+     * slots in one step; never emit catch-up copies of the same frame. */
+    s->frame_deadline += ((now - s->frame_deadline) / interval + 1) * interval;
+  }
+  return TRUE;
+}
+static DWORD frame_wait(lrdp_session* s, UINT64 now) {
+  if (!s->frame_pending) return 50;
+  if (!s->frame_rate || now >= s->frame_deadline) return 0;
+  /* Round up: truncation would spin for the remainder of a millisecond. */
+  const UINT64 wait = (s->frame_deadline - now + 999999) / 1000000;
+  return wait < 50 ? (DWORD)wait : 50;
+}
 static BOOL end_paint(rdpContext* c) {
   lrdp_session* s = owner(c);
   rdpGdi* g = c->gdi;
   const HGDI_RGN invalid = g->primary->hdc->hwnd->invalid;
   if (!invalid || invalid->null) return TRUE;
   if (g->width < 1 || g->height < 1 || g->width > MAX_DIM || g->height > MAX_DIM) return FALSE;
-  /* update_begin_paint() resets this box, so it bounds exactly the pixels this
-   * frame changed. The store clips it again and copies only that region. */
-  const lrdp_video_rect damage = {invalid->x, invalid->y, invalid->w, invalid->h};
-  return lrdp_video_store_publish(s->video, g->primary_buffer, g->width, g->height,
-                                  g->stride, &damage);
+  /* BeginPaint resets GDI's box. Retain a separate union until publication:
+   * the current primary buffer contains the latest pixels for the whole union. */
+  INT64 left = invalid->x, top = invalid->y;
+  INT64 right = left + invalid->w, bottom = top + invalid->h;
+  if (left < 0) left = 0;
+  if (top < 0) top = 0;
+  if (right > g->width) right = g->width;
+  if (bottom > g->height) bottom = g->height;
+  if (right <= left || bottom <= top) return TRUE;
+  if (s->frame_width != g->width || s->frame_height != g->height) {
+    /* New GDI storage invalidates old pending damage. Its first painted frame
+     * must replace the previous snapshot completely, and without a rate delay. */
+    s->frame_width = g->width; s->frame_height = g->height;
+    s->frame_pending = s->frame_published = FALSE;
+    s->frame_deadline = 0;
+    left = top = 0; right = g->width; bottom = g->height;
+  }
+  if (s->frame_pending) {
+    const lrdp_video_rect* d = &s->frame_damage;
+    if (d->x < left) left = d->x;
+    if (d->y < top) top = d->y;
+    if ((INT64)d->x + d->width > right) right = (INT64)d->x + d->width;
+    if ((INT64)d->y + d->height > bottom) bottom = (INT64)d->y + d->height;
+  }
+  s->frame_damage = (lrdp_video_rect){(int32_t)left, (int32_t)top,
+    (int32_t)(right - left), (int32_t)(bottom - top)};
+  s->frame_pending = TRUE;
+  return frame_flush(c, winpr_GetTickCount64NS());
 }
 static BOOL desktop_resize(rdpContext* c) {
   UINT32 w = freerdp_settings_get_uint32(c->settings, FreeRDP_DesktopWidth);
   UINT32 h = freerdp_settings_get_uint32(c->settings, FreeRDP_DesktopHeight);
   if (w > MAX_DIM || h > MAX_DIM || w < 1 || h < 1) return FALSE;
-  return gdi_resize(c->gdi, w, h);
+  if (!gdi_resize(c->gdi, w, h)) return FALSE;
+  lrdp_session* s = owner(c);
+  s->frame_pending = s->frame_published = FALSE;
+  s->frame_width = s->frame_height = 0;
+  s->frame_deadline = 0;
+  return TRUE;
 }
 static DWORD verify_certificate(freerdp* f, const char* host, UINT16 port,
     const char* cn, const char* subject, const char* issuer, const char* pem, DWORD flags) {
@@ -645,14 +722,30 @@ static UINT gfx_surface_command(RdpgfxClientContext* gfx, const RDPGFX_SURFACE_C
   EnterCriticalSection(&s->lock);
   pcRdpgfxSurfaceCommand decode = s->gfx_surface_command;
   LeaveCriticalSection(&s->lock);
+  BOOL avc = command->codecId == RDPGFX_CODECID_AVC420 || command->codecId == RDPGFX_CODECID_AVC444 ||
+             command->codecId == RDPGFX_CODECID_AVC444v2;
+#ifdef LRDP_LINUX_AUTO_H264
+  gdiGfxSurface* surface = avc && gfx->GetSurfaceData ? gfx->GetSurfaceData(gfx, command->surfaceId) : NULL;
+  if (avc && !lrdp_h264_prepare_surface(surface)) {
+    failure(s, "Unable to initialize remote graphics decoder");
+    return ERROR_INTERNAL_ERROR;
+  }
+#endif
   UINT status = decode ? decode(gfx, command) : ERROR_INTERNAL_ERROR;
   if (status != CHANNEL_RC_OK) {
     failure(s, "Unable to decode remote graphics");
     return status;
   }
-  if (command->codecId == RDPGFX_CODECID_AVC420 || command->codecId == RDPGFX_CODECID_AVC444 ||
-      command->codecId == RDPGFX_CODECID_AVC444v2) {
-    EnterCriticalSection(&s->lock); s->features |= 4; LeaveCriticalSection(&s->lock);
+  if (avc) {
+#ifdef LRDP_LINUX_AUTO_H264
+    int backend = lrdp_h264_surface_backend(surface);
+#else
+    int backend = 1; /* This build uses the original software GDI codec. */
+#endif
+    EnterCriticalSection(&s->lock);
+    s->features |= 4;
+    if (backend) s->decoder_backend = backend;
+    LeaveCriticalSection(&s->lock);
   }
   return status;
 }
@@ -698,9 +791,15 @@ static void channel_disconnected(void* context, const ChannelDisconnectedEventAr
   } else if (strcmp(e->name, RDPGFX_DVC_CHANNEL_NAME) == 0 && c->gdi)
     gdi_graphics_pipeline_uninit(c->gdi, e->pInterface);
 }
+static void visibility_activated(void* context, const ActivatedEventArgs* e) {
+  /* PubSub is dispatched by the connection owner, before reactivation reaches
+   * ACTIVE. Reapply the latest mailbox value only once that sequence completes. */
+  if (!e->firstActivation) owner(context)->visibility_dirty = TRUE;
+}
 static BOOL pre_connect(freerdp* f) {
   if (PubSub_SubscribeChannelConnected(f->context->pubSub, channel_connected) < 0 ||
-      PubSub_SubscribeChannelDisconnected(f->context->pubSub, channel_disconnected) < 0)
+      PubSub_SubscribeChannelDisconnected(f->context->pubSub, channel_disconnected) < 0 ||
+      PubSub_SubscribeActivated(f->context->pubSub, visibility_activated) < 0)
     return FALSE;
   return TRUE;
 }
@@ -730,6 +829,7 @@ static BOOL post_connect(freerdp* f) {
   const BOOL unicode = freerdp_settings_get_bool(f->context->settings, FreeRDP_UnicodeInput);
   EnterCriticalSection(&s->lock);
   s->features = (s->features & ~8) | (unicode ? 8 : 0);
+  s->frame_rate = s->frame_rate_requested;
   LeaveCriticalSection(&s->lock);
   if (!gdi_init(f, PIXEL_FORMAT_BGRA32)) return FALSE;
   f->context->update->BeginPaint = begin_paint;
@@ -861,7 +961,39 @@ static BOOL process_clipboard(lrdp_session* s) {
   return TRUE;
 }
 static BOOL process_input(lrdp_session* s) {
-  /* This mailbox is independent of the bounded keyboard/mouse queue. */
+  /* Apply only the latest visibility request, on the connection owner. The
+   * default visible state needs no initial PDU; pre-connect hidden requests
+   * reach here only after freerdp_connect has completed. */
+  EnterCriticalSection(&s->lock);
+  const BOOL visible = s->visible_requested;
+  const int frame_rate = s->frame_rate_requested;
+  const BOOL stopping = WaitForSingleObject(s->stop, 0) == WAIT_OBJECT_0;
+  LeaveCriticalSection(&s->lock);
+  if (stopping) return TRUE;
+  frame_rate_apply(s, frame_rate);
+  rdpContext* context = s->instance->context;
+  if (freerdp_is_active_state(context)) {
+    if (!freerdp_settings_get_bool(context->settings, FreeRDP_SuppressOutput)) {
+      /* Capability negotiation can revoke support while hidden. Restore local
+       * GFX output, but keep the wire state unapplied and dirty for any later
+       * supported activation. Upstream would otherwise report a no-op success. */
+      context->gdi->suppressOutput = FALSE;
+      s->visibility_dirty = TRUE;
+    } else if (s->visibility_dirty || visible != s->visible_applied) {
+      /* The server may reset suppression on reactivation while GDI keeps its
+       * flag. Force the helper past its same-value shortcut so dirty replay is
+       * a real PDU, and undo its eager local change if sending fails. */
+      const BOOL previous_suppress = context->gdi->suppressOutput;
+      context->gdi->suppressOutput = visible;
+      if (!gdi_send_suppress_output(context->gdi, !visible)) {
+        context->gdi->suppressOutput = previous_suppress;
+        return FALSE;
+      }
+      s->visible_applied = visible;
+      s->visibility_dirty = FALSE;
+    }
+  }
+  /* Mailboxes are independent of the bounded keyboard/mouse queue. */
   lrdp_audio_gate_apply(s->audio);
   while (WaitForSingleObject(s->stop, 0) != WAIT_OBJECT_0) {
     EnterCriticalSection(&s->lock);
@@ -947,11 +1079,15 @@ static DWORD WINAPI run(LPVOID arg) {
       HANDLE handles[64] = {s->stop, s->wake};
       DWORD n = freerdp_get_event_handles(c, handles + 2, 62);
       if (!n) { io_failed = TRUE; break; }
-      DWORD result = WaitForMultipleObjects(n + 2, handles, FALSE, 50);
+      DWORD result = WaitForMultipleObjects(n + 2, handles, FALSE,
+                                           frame_wait(s, winpr_GetTickCount64NS()));
       if (result == WAIT_FAILED) { io_failed = TRUE; break; }
       if (WaitForSingleObject(s->stop, 0) == WAIT_OBJECT_0) break;
       ResetEvent(s->wake);
       if (!process_input(s) || !freerdp_check_event_handles(c)) { io_failed = TRUE; break; }
+      if (WaitForSingleObject(s->stop, 0) == WAIT_OBJECT_0) break;
+      /* Flush a trailing paint even when no further network event arrives. */
+      if (!frame_flush(c, winpr_GetTickCount64NS())) { io_failed = TRUE; break; }
     }
   }
   if (connected && WaitForSingleObject(s->stop, 0) == WAIT_OBJECT_0) {
@@ -1000,6 +1136,7 @@ lrdp_session* lrdp_create(void) {
   lrdp_session* s = calloc(1, sizeof(*s));
   if (!s) return NULL;
   InitializeCriticalSection(&s->lock);
+  s->visible_requested = s->visible_applied = TRUE;
   s->video = lrdp_video_store_new();
   s->audio = lrdp_audio_gate_new();
   s->cursor_info[5] = s->cursor_info[6] = -1;
@@ -1168,6 +1305,11 @@ int lrdp_features(lrdp_session* s) {
   EnterCriticalSection(&s->lock); int features = s->features; LeaveCriticalSection(&s->lock);
   return features;
 }
+int lrdp_get_decoder_backend(lrdp_session* s) {
+  if (!s) return 0;
+  EnterCriticalSection(&s->lock); int backend = s->decoder_backend; LeaveCriticalSection(&s->lock);
+  return backend;
+}
 int lrdp_read(lrdp_session* s, int field, char* out, size_t capacity) {
   if (!s || !out || !capacity || field < 0 || field > 4) return -1;
   EnterCriticalSection(&s->lock);
@@ -1207,6 +1349,30 @@ int lrdp_input(lrdp_session* s, int type, int a, int b, int c) {
   if (next == s->tail) { LeaveCriticalSection(&s->lock); return 0; }
   s->queue[s->head] = (input_event){type, a, b, c}; s->head = next;
   LeaveCriticalSection(&s->lock); SetEvent(s->wake); return 1;
+}
+int lrdp_set_visible(lrdp_session* s, int visible) {
+  if (!s || (visible != 0 && visible != 1)) return 0;
+  EnterCriticalSection(&s->lock);
+  if (WaitForSingleObject(s->stop, 0) == WAIT_OBJECT_0) {
+    LeaveCriticalSection(&s->lock); return 0;
+  }
+  const BOOL changed = s->visible_requested != visible;
+  s->visible_requested = visible;
+  LeaveCriticalSection(&s->lock);
+  if (changed) SetEvent(s->wake);
+  return 1;
+}
+int lrdp_set_frame_rate(lrdp_session* s, int frames_per_second) {
+  if (!s || frames_per_second < 1 || frames_per_second > 240) return 0;
+  EnterCriticalSection(&s->lock);
+  if (WaitForSingleObject(s->stop, 0) == WAIT_OBJECT_0) {
+    LeaveCriticalSection(&s->lock); return 0;
+  }
+  const BOOL changed = s->frame_rate_requested != frames_per_second;
+  s->frame_rate_requested = frames_per_second;
+  LeaveCriticalSection(&s->lock);
+  if (changed) SetEvent(s->wake);
+  return 1;
 }
 /* Caller holds lock. A deliberate local publication supersedes older remote
  * responses, but must preserve the one-request barrier until its reply arrives. */

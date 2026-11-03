@@ -316,7 +316,7 @@ JNIEXPORT jlongArray JNICALL JNI_METHOD(nativeStatus)(JNIEnv* env, jclass type, 
   if (result) (*env)->SetLongArrayRegion(env, result, 0, 5, values);
   return result;
 }
-JNIEXPORT jint JNICALL JNI_METHOD(nativeDraw)(JNIEnv* env, jclass type, jlong handle,
+JNIEXPORT jlong JNICALL JNI_METHOD(nativeDraw)(JNIEnv* env, jclass type, jlong handle,
                                               jobject surface, jint width, jint height) {
   (void)type;
   android_video* self = (android_video*)(intptr_t)handle;
@@ -341,7 +341,10 @@ JNIEXPORT jint JNICALL JNI_METHOD(nativeDraw)(JNIEnv* env, jclass type, jlong ha
     unsigned long long frames = ++drawn_frames;
     if (frames % 120 == 0) trace_counts("frames");
   }
-  return result;
+  /* The renderer can consume a newer generation than Java's earlier status
+   * query. Report the actual committed upload, including unchanged retries,
+   * so a static final frame does not leave Java permanently one frame behind. */
+  return result >= 0 ? (jlong)self->generation : result;
 }
 JNIEXPORT void JNICALL JNI_METHOD(nativeReset)(JNIEnv* env, jclass type, jlong handle,
                                                jboolean detach) {

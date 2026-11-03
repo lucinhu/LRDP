@@ -10,9 +10,13 @@ import '../l10n/app_strings.dart';
 /// Shows a sanitized support report with one copy action.
 Future<void> showDiagnosticsSheet(
   BuildContext context,
-  ProfileStore store,
-) async {
-  final report = await collectDiagnostics(store);
+  ProfileStore store, {
+  Iterable<int> decoderBackends = const [],
+}) async {
+  final report = await collectDiagnostics(
+    store,
+    decoderBackends: decoderBackends,
+  );
   if (!context.mounted) return;
   await showModalBottomSheet<void>(
     context: context,
@@ -73,7 +77,7 @@ class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  context.tr('仅包含版本、平台与显示设置，不含连接地址和凭据。'),
+                  context.tr('仅包含版本、平台、显示设置和解码路径，不含连接地址和凭据。'),
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),

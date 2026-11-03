@@ -248,6 +248,41 @@ void main() {
     store.dispose();
   });
 
+  testWidgets('desktop hides graphics only when the window is hidden', (
+    tester,
+  ) async {
+    foreground(tester);
+    final store = await prepare([original]);
+    final sessions = <TestSession>[];
+    await mount(tester, store, sessions, desktop: true);
+    await open(tester, original.name);
+    final session = sessions.single;
+    expect(session.visible, true);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    expect(
+      session.visible,
+      true,
+      reason: 'An unfocused visible window still draws',
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    await tester.pump();
+    expect(session.visible, false);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    expect(session.visible, false);
+    foreground(tester);
+    await tester.pumpAndSettle();
+    expect(session.visible, true);
+    expect(
+      session.passwords,
+      hasLength(1),
+      reason: 'Resume reuses the connection',
+    );
+    await tester.pumpWidget(const SizedBox());
+    store.dispose();
+  });
+
   testWidgets('desktop tab switching retains each connection view', (
     tester,
   ) async {

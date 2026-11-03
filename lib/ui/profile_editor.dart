@@ -81,11 +81,10 @@ class _ProfileEditorState extends State<ProfileEditor> {
   };
   String get _qualityHelp => switch (_quality) {
     ConnectionQuality.automatic =>
-      "由服务器选择编码（常见为 H.264 视频）：省带宽，但解码会更耗 CPU。修改后需重新连接才会生效。",
+      "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码。修改后需重新连接。",
     ConnectionQuality.saveBandwidth =>
-      "强制 H.264 视频编码并关闭远端壁纸、主题与动画：流量最低，1080p 解码约占半个 CPU 核。修改后需重新连接才会生效。",
-    ConnectionQuality.sharpText =>
-      "关闭视频编码，改用位图更新：文字更锐利、解码几乎不耗 CPU，但 1080p 下流量约 20 Mbps。修改后需重新连接才会生效。",
+      "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码。修改后需重新连接。",
+    ConnectionQuality.sharpText => "使用位图更新以获得清晰文字，通常会增加流量。修改后需重新连接。",
   };
   late String _resolution = widget.profile?.automaticResolution ?? true
       ? _automatic

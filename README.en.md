@@ -4,9 +4,9 @@
 
 LRDP (Lightweight RDP) is a lightweight, local-first RDP client built with **Flutter + FreeRDP**. FreeRDP runs embedded in the app, so no external RDP client is involved.
 
-The current version is a **0.4.0 development preview**, targeting Linux, Android, Windows, macOS and iOS. Build and verification progress for each platform is listed in the table below.
+The current version is a **0.5.0 development preview**, targeting Linux, Android, Windows, macOS and iOS. Build and verification progress for each platform is listed in the table below.
 
-[Download preview](https://github.com/lucinhu/LRDP/releases/tag/v0.4.0-preview.1) · [Usage guide](docs/USAGE.md) · [Building guide](docs/BUILDING.md) · [Clipboard and files](docs/CLIPBOARD.md) · [Verification record](docs/VERIFICATION.md)
+[Download preview](https://github.com/lucinhu/LRDP/releases/tag/v0.5.0-preview.1) · [Usage guide](docs/USAGE.md) · [Building guide](docs/BUILDING.md) · [Clipboard and files](docs/CLIPBOARD.md) · [Verification record](docs/VERIFICATION.md)
 
 ![LRDP desktop connection library with an example profile](docs/screenshots/workspace.png)
 
@@ -33,7 +33,7 @@ The screenshots above were taken on the Android emulator using a local loopback 
 - **Connection management**: quick connect, groups, favorites, search, recent connections, switching between multiple sessions, and `.rdp` profile import/export.
 - **Phone controls**: full-screen sessions, a draggable and collapsible floating toolbar, trackpad and direct touch, two-finger scrolling, right-click, zoom and drag; the “More” menu sends eight common shortcut combinations including Task Manager, switch window and show desktop. The remote desktop stays usable while the keyboard is expanded.
 - **Text and keyboard**: Chinese input, pasting whole passages and simulated soft-keyboard keys. Ctrl, Shift, Alt and Win support one-shot combinations and locked holding, and the extended row switches between digits/symbols and navigation/function keys; the desktop app opens a grouped floating keyboard panel, and the arrow, editing and backspace keys on the on-screen keyboard support press-and-hold repeat.
-- **Display**: automatic resolution, dynamic resolution changes, zoom and pan, smooth/sharp scaling, remote mouse cursor, H.264 software decoding, a display frame-rate cap that follows the screen refresh rate, and automatic/save-bandwidth/sharp-text quality presets negotiated at connect time (changing them requires reconnecting).
+- **Display**: automatic resolution, dynamic resolution changes, zoom and pan, smooth/sharp scaling, remote mouse cursor, H.264 decoding (Linux automatically tries GPU decoding with CPU fallback), a display frame-rate cap that follows the screen refresh rate, and automatic/save-bandwidth/sharp-text quality presets negotiated at connect time (changing them requires reconnecting).
 - **Session info**: open “More” on the remote desktop to see connection state, remote resolution, encoding and rendering path, measured frame rate, uploaded/decoded frames, and audio and clipboard capabilities.
 - **Clipboard and files**: text and bidirectional picture clipboard, pasting local files to the remote, and copying files both ways through the file transfer station.
 - **Appearance and language**: system color scheme, light/dark themes that follow the system, neutral-white panels and a hue-free grey ramp in light mode (dialogs, the floating toolbar and the keyboard panel no longer carry the theme color or a green cast), and support for Simplified Chinese, Traditional Chinese and English.
@@ -60,12 +60,12 @@ Verification scope differs between features; exact versions, test methods and li
 On Linux x86_64, download the `.AppImage` from Releases and run it directly after making it executable:
 
 ```sh
-chmod +x lrdp-0.4.0-linux-x64.AppImage
-./lrdp-0.4.0-linux-x64.AppImage
+chmod +x lrdp-0.5.0-linux-x64.AppImage
+./lrdp-0.5.0-linux-x64.AppImage
 ```
 
 The AppImage bundles application runtime libraries such as GTK and OpenSSL; it requires glibc ≥ 2.35 and a working OpenGL/EGL environment.
-If the system has no FUSE, start it with `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.4.0-linux-x64.AppImage`.
+If the system has no FUSE, start it with `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.5.0-linux-x64.AppImage`.
 Android users download the ARM64 preview APK. Each package is released together with the full source, build information and SHA-256 checksum files.
 
 1. Tap “Add computer” and enter the address, username, password and domain information if needed. The address can include the port directly, for example `192.168.1.10:3390`; for IPv6 use `[2001:db8::1]:3389`.
@@ -135,7 +135,7 @@ export LRDP_FFMPEG_ROOT="$PWD/build/deps/ffmpeg/linux-x64"
 flutter run -d linux
 ```
 
-For an existing workspace, initialise the dependencies with `git submodule update --init --recursive`. FreeRDP 3.32.2 is pinned in the `third_party/FreeRDP` submodule; the adaptation code is maintained separately and keeps the upstream source unchanged. H.264 uses FFmpeg 9.0.2 as a minimal static software decoder.
+For an existing workspace, initialise the dependencies with `git submodule update --init --recursive`. FreeRDP 3.32.2 is pinned in the `third_party/FreeRDP` submodule; the adaptation code is maintained separately and keeps the upstream source unchanged. H.264 uses a minimal static FFmpeg 9.0.2 build. Linux automatically tries VA-API / CUDA and falls back to CPU if actual decoding or download fails; other platforms retain software decoding.
 
 Linux system dependencies, the Android SDK/NDK and signing, the Windows toolchain and the Apple platform build steps are described in [BUILDING.md](docs/BUILDING.md).
 
@@ -151,7 +151,7 @@ scripts/                Dependency builds, packaging and isolated protocol tests
 
 Routine checks use `flutter analyze` and `flutter test`. Native changes also require CTest and isolated loopback protocol tests; the steps are in the [building guide](docs/BUILDING.md) and actual results in the [verification record](docs/VERIFICATION.md).
 
-Protocol tests use private services and virtual desktops; unit tests, protocol passing and platform device verification are recorded separately. See [development progress](docs/ROADMAP.md) for upcoming work; RD Gateway, RemoteApp, multiple monitors and hardware video decoding are still to be implemented.
+Protocol tests use private services and virtual desktops; unit tests, protocol passing and platform device verification are recorded separately. See [development progress](docs/ROADMAP.md) for upcoming work; see the verification record for the implemented Linux GPU decoding and its limits. Hardware video decoding on other platforms, RD Gateway, RemoteApp and multiple monitors are still to be implemented.
 
 ## License
 

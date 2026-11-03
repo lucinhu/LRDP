@@ -111,7 +111,9 @@ class _SessionInfoSheetState extends State<SessionInfoSheet> {
           _row(
             context,
             '编码',
-            context.tr(session.hasDecodedAvc ? 'H.264 视频' : '位图（GDI）'),
+            session.hasDecodedAvc
+                ? '${context.tr('H.264 视频')} · ${_decoderLabel(context, session.decoderBackend)}'
+                : context.tr('位图（GDI）'),
           ),
           _row(context, '实测帧率', context.tr('{0} 帧/秒', [_measuredFps])),
           _row(
@@ -146,15 +148,25 @@ class _SessionInfoSheetState extends State<SessionInfoSheet> {
             ),
           ),
           const SizedBox(width: 16),
-          Text(
-            value,
-            style: theme.textTheme.bodyMedium,
-            textAlign: TextAlign.end,
+          Flexible(
+            flex: 2,
+            child: Text(
+              value,
+              style: theme.textTheme.bodyMedium,
+              textAlign: TextAlign.end,
+            ),
           ),
         ],
       ),
     );
   }
+
+  String _decoderLabel(BuildContext context, int backend) => switch (backend) {
+    1 => 'CPU (FFmpeg)',
+    2 => 'GPU (VA-API)',
+    3 => 'GPU (CUDA)',
+    _ => context.tr('解码路径未获取'),
+  };
 
   String _stateLabel(SessionState state) => switch (state) {
     SessionState.connecting => '连接中',

@@ -39,10 +39,16 @@ ffmpeg = root / 'build/deps/downloads/ffmpeg-9.0.2.tar.xz'
 ffmpeg_sha = '8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e'
 if hashlib.sha256(ffmpeg.read_bytes()).hexdigest() != ffmpeg_sha:
     raise SystemExit('Run scripts/fetch_ffmpeg.sh to obtain the exact FFmpeg sources')
+nvcodec = root / 'build/deps/downloads/nv-codec-headers-12.1.14.0.tar.gz'
+nvcodec_sha = '62b30ab37e4e9be0d0c5b37b8fee4b094e38e570984d56e1135a6b6c2c164c9f'
+if not nvcodec.is_file() or hashlib.sha256(nvcodec.read_bytes()).hexdigest() != nvcodec_sha:
+    raise SystemExit('Run scripts/fetch_nvcodec.sh to obtain the exact Linux hardware headers')
 metadata = {'source_sha256': fingerprint.hexdigest(), 'source_files': len(paths),
     'native_abi': 5, 'freerdp_commit': commit, 'freerdp_source_modified': False,
     'ffmpeg_version': '9.0.2', 'ffmpeg_sha256': ffmpeg_sha,
-    'ffmpeg_license': 'LGPL-2.1-or-later', 'ffmpeg_sources': 'vendor/ffmpeg-9.0.2.tar.xz'}
+    'ffmpeg_license': 'LGPL-2.1-or-later', 'ffmpeg_sources': 'vendor/ffmpeg-9.0.2.tar.xz',
+    'nv_codec_headers_version': '12.1.14.0', 'nv_codec_headers_sha256': nvcodec_sha,
+    'nv_codec_headers_license': 'MIT', 'nv_codec_headers_sources': f'vendor/{nvcodec.name}'}
 readme = '''LRDP development source and rebuild kit
 
 Application sources and the unmodified FreeRDP submodule snapshot are already
@@ -54,6 +60,7 @@ For ongoing upstream updates use the original Git repository and its submodule.
 For an offline FFmpeg source fetch, from this directory:
   mkdir -p build/deps/downloads
   cp vendor/ffmpeg-9.0.2.tar.xz build/deps/downloads/
+  cp vendor/nv-codec-headers-12.1.14.0.tar.gz build/deps/downloads/
   bash scripts/build_ffmpeg.sh linux-x64
   export LRDP_FFMPEG_ROOT="$PWD/build/deps/ffmpeg/linux-x64"
 
@@ -81,6 +88,7 @@ with tarfile.open(destination, 'w:gz', compresslevel=6) as archive:
         else:
             archive.add(root / path, arcname=f'{name}/{path}', recursive=False)
     archive.add(ffmpeg, arcname=f'{name}/vendor/{ffmpeg.name}')
+    archive.add(nvcodec, arcname=f'{name}/vendor/{nvcodec.name}')
     for platform in ('linux-x64', 'windows-x64', 'android/arm64-v8a', 'android/x86_64'):
         for filename in ('BUILD_INFO.json', 'configure-options.txt', 'LICENSE-FFmpeg.txt'):
             path = root / 'build/deps/ffmpeg' / platform / filename

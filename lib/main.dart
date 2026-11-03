@@ -14,6 +14,7 @@ Future<void> main() async {
       'OpenSSL',
       'AndroidCpuFeatures',
       'FFmpeg',
+      'nv-codec-headers',
     ]) {
       yield LicenseEntryWithLineBreaks([
         component,

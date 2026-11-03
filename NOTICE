@@ -22,6 +22,11 @@ See assets/licenses/FFmpeg.txt. GPL, version-3-only and nonfree components are
 disabled. Preserve the corresponding source/rebuild bundle with distributions
 that include statically linked FFmpeg.
 
+Linux hardware decoding builds also use nv-codec-headers 12.1.14.0 under the MIT
+license; see assets/licenses/nv-codec-headers.txt. The fixed source and checksum
+are documented in scripts/fetch_nvcodec.sh. CUDA/NVDEC driver libraries are
+loaded from the host at runtime; no CUDA toolkit or NVIDIA driver is bundled.
+
 The Linux AppImage also bundles libraries and GTK resources from Ubuntu 22.04.
 Their package versions and copyright notices are retained under
 usr/share/doc/lrdp/BUILD_PACKAGES.txt and dependency-copyrights inside the image.

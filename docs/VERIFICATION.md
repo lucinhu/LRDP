@@ -2,6 +2,172 @@
 
 记录日期：2026-10-22。当前为开发预览。构建、真实协议和平台设备验收分别记录。
 
+## Linux H.264 自动 GPU / CPU（2026-11-03 第三批）
+
+本批已完成实现和本机 Linux Release 构建，未发布新 AppImage。以下历史记录中的“未启用硬解”
+指各记录当时的版本，不能用于判断本批 Linux 行为。
+
+- 默认按编译能力依次尝试 VA-API render 节点和 CUDA/NVDEC；只有实际硬件帧解码及下载成功
+  才报告 GPU。创建 device 成功不作为解码成功。未确认的候选失败后重放码流尝试下个候选，
+  已确认后端运行期失败则重建 CPU，并按 SPS/PPS、最近 IDR 和后续参考包重放，不并行双解。
+- 历史上限 16 MiB / 512 包，参数集按 ID 更新且总量不超过 64 KiB；到达历史上限前主动切 CPU。
+  同一 surface 回退后保持 CPU，重连或新 surface 再探测。仍由软件 GDI 合成 I420 → BGRA，
+  随后复制和纹理上传；没有端到端 GPU 零拷贝或按 CPU/GPU 实测速度选优。
+- 适配固定仓库 FreeRDP 3.32.2 私有 codec 布局并有版本保护；上游子模块没有改动。
+  系统 FreeRDP、Android、Apple、Windows 保留原软件路径。
+- ABI v5 新增可选 `lrdp_get_decoder_backend`（0 未获取、1 CPU、2 VA-API、3 CUDA），
+  Dart 在既有控制轮询中读取，只有变化才通知；会话信息显示最近成功 H.264 帧后端。
+  旧库缺符号时显示未获取，匿名诊断只记录各会话数字后端，不记录连接资料。
+
+实际验证：
+
+| 项目 | 结果与范围 |
+| --- | --- |
+| 原生 CTest | Release 最终静态 FFmpeg 构建 **6/6**，包括解码引擎、桥接生命周期和既有缓冲测试 |
+| 解码故障恢复 | 真实无损 libx264 I/P、多 GOP 逐像素；send/receive/transfer/format 四类故障重放、独立 SPS/PPS、无参数 IDR、512 包 / bytes 上限、NV12 → I420、stride、尺寸变化、多 context 和非法输入通过 |
+| 内存检查 | 引擎 `--software-only` 的 ASan / UBSan / LSan 通过；未将真实 CUDA 驱动自身分配算入无泄漏结论 |
+| FFmpeg Linux 静态构建 | 9.0.2 实际启用 h264_vaapi / h264_nvdec，独立 static consumer 枚举 CUDA / VAAPI；ldd 无 FFmpeg 动态库。auto 缺开发依赖明确失败；OFF 实际构建为零硬解配置 |
+| 真实 GPU 协议 | 最终 Linux Release 包内库，私有 TLS → drdynvc → RDPGFX AVC420；baseline 8-bit 420、QP20、320×240、BT.709 full range，9 个实际 IDR/P AU。后端 **CUDA（3）**，generation 1..9，三色完整 RGB 与 FFmpeg CPU 参考最大误差 **0 / 1 / 0**（容差 5），alpha 精确；静默保留末帧、输入 A、主动停止通过 |
+| 真实 CPU 协议 | 同一源码、CPU-only FFmpeg 前缀，自动引擎保持开启；上述真实 AVC420 协议及像素全部通过，后端 **CPU（1）**，不是回退普通位图假通过 |
+| 输入 / 停止 | 最终硬解静态原生库的普通及阻塞 TLS 输入释放、stop 回环通过 |
+| Flutter | analyze 无问题；全套 **289 passed / 11 skipped**。含后端变化去重、旧库 unknown、信息页窄屏、匿名诊断、本地化和画质选择 / 保存回归 |
+| Linux 应用 | `LRDP_FFMPEG_ROOT="$PWD/build/deps/ffmpeg/linux-x64" LRDP_BUILD_JOBS=3 flutter build linux --release --target lib/main.dart` 通过；对该 bundle 的原生库再次运行真实 H.264 回环，通过 CUDA 实际出帧 |
+
+复现命令和依赖见 [构建文档](BUILDING.md#linux)。证据：
+`build/h264-auto-validation/`、`build/h264-runtime-static/VERDICT.json`、
+`build/h264-runtime-cpu/VERDICT.json`、`build/h264-runtime-linux-release/VERDICT.json`；
+FFmpeg 构建证据在 `build/deps/logs/ffmpeg-linux-hw-static-verification.json` 和
+`build/deps/logs/ffmpeg-script-mode-validation.json`。最终 Release bundle 的 `liblrdp.so` SHA-256：
+`39f8bd6640d322e915fcb5998aaf4098ba3ca2460339e14a10a835f914d1d820`。
+CPU-only 协议库 SHA-256：`80b7321566fd6c9723eb6a2a1044ea0db347b0f0515a4143f938fba4f4066a23`。
+
+实际 GPU 环境为当前开发机的 NVIDIA CUDA；两个 VA-API 节点初始化均失败，然后成功选择 CUDA。
+**尚未验收**：VA-API 成功路径、AVC444 / AVC444v2 的真实服务互操作、用户另一台笔记本和其他 GPU、
+Windows RDP / KRDP 实际桌面、Linux 新 UI 的真实窗口 / 耗电 / 长时间会话、Android 或其他平台硬解。
+新 bundle 在当前发行版构建，不等于 Ubuntu 22.04 便携包验收。没有把 320×240 的颜色协议检查
+当作 1080p 视频 CPU benchmark，也没有承诺将用户报告的 26% 降至固定数值。
+AppImage 仍须通过现有鼠标 / 全屏与打包验收门槛；此处未绕过门槛生成或发布新包。
+
+## Linux / Android 快照限帧与静态绘制（2026-11-03 第二批）
+
+在上一批后台优化基础上继续修改，未发布新版本：
+
+- 两端共用原生 `lrdp_set_frame_rate` 可选 ABI v5 接口。Dart 在连接前和修改帧率时设置；
+  连接线程合并尚未发布的 GDI damage，到期仅复制最新像素。首次画面、尺寸变化与末帧
+  分别处理；没有新网络事件也会补发到期末帧。时钟跳过迟到时隙，毫秒等待向上取整。
+  C ABI 未设置时维持不限帧；旧库缺少符号时兼容。此优化减少快照复制，不关闭协议解码。
+- Android 将 Surface 刷新率提示与画面 dirty 分开，修复 API24–29 无刷新率提示时的
+  静态画面重复绘制；JNI 返回实际呈现代数，避免 status/draw 竞争反复提交旧代数。
+  generation 保持 64 位；缓存 producer 尺寸；Surface epoch 防止旧任务覆盖重建状态。
+- `video_bench` 的 30 fps 时间预算修正了纳秒换算错误，并明确为墙钟时间估算，
+  不再误标为实际单核 CPU。
+
+本机 Linux x64、Release、vendored FreeRDP 3.32.2 / 系统 FFmpeg：
+
+- `flutter analyze --no-pub` 无问题，完整 Flutter 测试 **286 通过 / 11 条件跳过**；
+  原生 CTest **5/5**，覆盖限帧参数、连接前设置、4096 次合并及停止后拒绝。
+- `flutter build linux --release` 成功，产物 `build/linux/x64/release/bundle`；
+  bundled `liblrdp.so` 导出新接口。此项为构建检查，未验收新的 Linux GPU/窗口截图。
+- 私有 TLS 回环快照测试 `scripts/run_frame_pacing_test.py`：默认源 320×240/240 Hz，
+  设置 30→120→240→30 后实际发布 **29.999 / 119.992 / 239.978 / 29.999 fps**。
+  旧库和新库都通过完整 307200 字节、两处 disjoint 2×2 更新后静默、输入及停止检查；
+  新库末帧约 **20.5 ms** 内送出，之后静止代数增量为 0。
+- 1920×1080/60 Hz 回环中，源保持约 60 Hz，新库快照发布 **60→29.997 fps**；
+  单帧 8294400 字节，快照全帧复制次数约减半。静默末帧约 **28.9 ms**，完整像素通过。
+  两秒客户端进程 CPU 窗口：新库 30 fps **39.52%**、旧库不限帧 **41.72%**；
+  新库自己的不限帧窗口 **45.28%**。100% 为单核，包含网络/解码线程但不含服务端、
+  Flutter 或 GPU；负载与窗口差异明显，不以这些短窗保证固定降幅。320×240 对照
+  **6.05% / 6.06%**，没有明确 CPU 改善。
+- 报告：`build/frame-pacing-runtime/VERDICT.json`、
+  `build/frame-pacing-runtime-1080p/VERDICT.json`。
+  当前库 SHA-256 `66113bd1b371939c529cdd38d13e9f7cce6f5a69c74bccd6467ac2846dc9f6b9`；
+  对照为上一批 Release `f7f235baa0f74e7b5bae7cc77c5b51a736a486cf011718e07427adb2115982a0`。
+- 另重跑尺寸协商、Flutter 帧率和 input-stop 私有 TLS 脚本均通过；后台暂停/撤销能力/
+  同尺寸重激活脚本也通过。fixture 使用 2×2 角标避开上游 GDI 对原点 1×1 更新不报告
+  invalidation 的边界；原始诊断另存，不声称该上游问题已修复，未修改子模块源码。
+
+Android 主机回归已通过：`scripts/test_android_video_scheduler.py` 编译生产 Java 插件，
+以平台/JNI 替身覆盖 API24/26/29/30/35 的 **111 条断言**。包含连续 300 个静态时隙、
+status/draw 代数竞争、超过 2^33 的代数、epoch、失败与重建，不能代替实际 EGL 验收。
+
+Android 独立原生 Release 构建已通过：NDK 27.0.12077973、API 24、OpenSSL 3.5.9 LTS、
+FFmpeg 9.0.2，x86_64 / arm64-v8a 均实际编译 `android_video.c` 并链接成功；7 个 JNI
+导出完整，所有 ELF LOAD 段均 16 KiB 对齐，动态依赖只有 Android 系统库。记录为
+`build/deps/ANDROID_BUILD_PREPARATION.md`、`build/deps/android-native-results.json`。
+ARM64 此项为构建及 ELF 检查，不能代替真机运行。
+
+Android API26 / x86_64 专用非 root 模拟器，Flutter debug 集成 APK、真实 SurfaceProducer /
+JNI / EGL、SwiftShader 软件 GPU，`scripts/run_android_cpu_test.py` 全流程通过：
+
+- 私有 TLS 320×240 / 240 Hz 位图服务；`native_texture=1`、`decoded_frames=0`，确实经过
+  原生纹理而非 Dart 像素解码。请求 60 / 30 / 120 fps，上传实测 **59.81 / 29.93 / 59.85**
+  次/秒；显示器实际约 60 Hz，不据此声称 120 Hz 显示已验收。
+- 数据流静默后，连续 1 秒 `drawAttempts`、`uploads`、`generation`、`sizeChanges` 均不增长。
+  静止时修改 120→60→30 fps 后再等 1 秒，也没有多余 JNI draw、上传或改尺寸。
+- Surface 重建正常重新上传一次，尺寸变更计数 2→4；隐藏 1 秒不增加 draw/upload，恢复
+  正常重新上传一次，随后 1 秒继续静止。静默、重建、恢复三张系统截图的两角/中心颜色
+  全部精确匹配。首次截图被状态栏遮罩影响，修正测试画布 SafeArea 后按原颜色标准重跑。
+- 键盘 A 确认与服务端正常退出通过；停止后 surface / object / GPU texture / registration /
+  scheduled tick / context / cleanup failure 均为 0，累计呈现 122 次、上传失败 0。
+- 最终报告 `build/android-cpu-runtime/VERDICT.json`；三个像素截图也保存在该目录。
+  此验证记录静态调度与资源行为，没有测量 Android 整进程 CPU、AVC 或真机耗电。
+
+普通入口 `lib/main.dart` 的 Android ARM64 Release 预览 APK 也已生成：
+`build/android-cpu-runtime/lrdp-main-arm64-release-preview.apk`，使用本地开发预览签名，
+不是集成测试入口；ABI、ELF/RELRO、16 KiB ZIP 对齐、v2/v3 签名、非 debuggable 和
+Release 入口检查均通过。SHA-256：
+`454c2e801c683f615cec38505a95ce5dfcf11e0ad61034e2871e683f361e4703`。
+构建摘要 `build/android-cpu-runtime/MAIN_PREVIEW.json`。该 ARM64 安装包未在 ARM64
+真机运行；设备运行证据对应上面的 API26 x86_64 集成 APK。专用测试模拟器已确认停止。
+
+限制：未启用硬件 H.264 解码；降低输出快照复制率不等于降低 AVC 解码或网络流量。
+Android ARM64 真机 GPU、功耗与长时间温度表现、真实 Windows 服务端及其他平台仍需验收。
+
+## 后台会话 CPU 与状态轮询（2026-11-03 开发批次）
+
+本轮改动尚未打入发布包：
+
+- worker 将状态、音频状态、粘贴结果与剪贴板查询从显示帧率中分离，前台每 33 ms、
+  后台每 100 ms 查询。画面与光标仍按用户设置的帧率处理；1 fps 时控制查询仍为
+  33 ms；迟到的定时器跳过旧时隙，不补跑积压的帧或查询。
+- 新增可选 ABI v5 符号 `lrdp_set_visible`，通过锁保护的独立邮箱合并可见性变更。
+  FreeRDP 连接线程在协商支持时发送 Suppress Output，隐藏请求停止画面、恢复请求
+  重新发送全桌面；不支持的服务端继续原有接收处理。旧 ABI v5 动态库无该符号时，
+  Dart 保留本地暂停显示的兼容行为。受理请求不代表服务端已经暂停，仍可能收到在途帧。
+- 桌面窗口明确进入 hidden/paused 才暂停画面，inactive（失焦）仍显示；切换后台标签、
+  返回连接列表或手机进入后台沿用同一可见性链路。连接、输入和音频权限各自独立。
+
+本机 Linux x64，Flutter 3.47.9 / Dart 3.13.7，原生 Release、vendored FreeRDP 3.32.2、
+系统 FFmpeg，已验证：
+
+- `flutter analyze --no-pub` 无问题；完整 `flutter test --no-pub`：286 通过、11 个按环境
+  条件跳过。新增独立时钟的查询次数/低帧率响应/恢复不追帧测试，以及桌面失焦、隐藏、
+  恢复复用连接的组件测试。
+- 原生 CTest **5/5**；覆盖可见性参数、连接前/启动后写入、4096 次快速合并、停止后拒绝。
+- `python3 scripts/run_frame_rate_test.py`：私有 TLS、320×240 原始位图 240 Hz 生产器，
+  Flutter CPU 图像路径实测 30/120/240 设置分别约 **30.0/118.8/223.8 fps**；隐藏后不再
+  交付图像，恢复后继续更新，服务端实际记录 `SuppressOutput allow=0`、`allow=1`。
+  这是无物理屏幕的协议与 worker 检查，240 fps 为上限而非保证。
+- `python3 scripts/run_input_stop_test.py`：正常/接收端堵塞两条真实 TLS 路径通过，正常
+  停止 11 ms、堵塞停止 504 ms；已有键盘/Unicode/鼠标释放与后续拖动点击验证通过。
+
+- `python3 scripts/run_visibility_test.py --baseline-library /tmp/lrdp-before-cpu.so`：
+  新库/新库+服务端不协商暂停/改动前 Release 库三个独立客户端进程全部通过。目标 240 Hz
+  位图流中，旧库本地隐藏后原生客户端 CPU 为单核 **6.614%**，新库协议暂停后为
+  **0.082%**（本次 2 秒窗口下降约 98.75%）；新库前台约 **6.714%**。这是短窗口描述性
+  数据，CPU 不设硬阈值，受宿主负载影响，不含 Flutter、GPU 或服务端开销。
+  隐藏期间帧 generation 增量为 0，前台/恢复发布约 240 fps；200 次快速切换、连接前
+  隐藏、隐藏时输入与停止、恢复的完整 307200 字节画面均通过。同尺寸重激活后真实重发
+  暂停 PDU；重激活撤销能力后不再发送该 PDU，接收/恢复继续推进，无永久本地抑制。
+  未协商能力分支也持续收到图像。报告为 `build/visibility-runtime/VERDICT.json`。
+  最终新库 SHA-256：`f7f235baa0f74e7b5bae7cc77c5b51a736a486cf011718e07427adb2115982a0`；
+  对照库 SHA-256：`c7f2c7385881312a5662c5ee32a87a86651570605adacc09fd77070747c1e389`。
+
+本轮未做 Windows、macOS、Android/iOS 真机、桌面合成器最小化行为或真实 Windows RDP
+服务端验收；没有启用硬件 H.264 解码。前台 AVC 解码仍可能是 CPU 主消耗，不能把降低
+状态查询次数或回环位图的后台收益当作实际 AVC 会话的同等加速。服务端需要支持并遵循
+Suppress Output 才能获得协议层后台降载。
+
 ## 键盘长按、桌面键盘面板与中性白外观（2026-11-01 开发批次）
 
 开发中的改动，尚未进入已发布的 0.3.0 预览包。本轮内容：
@@ -1233,7 +1399,7 @@ Unicode/CLIPRDR 协议夹具不发送桌面图形，对应中文截图显示“�
 - 其他 Linux 发行版 ABI、系统钥匙串、实际网络下的性能/耗电及 8 小时稳定性。
 - Android ARM64 / Windows / macOS / iOS 实机音频、实际延迟、A/V 同步和声卡切换恢复；Android 模拟器已检查自身音轨，主机声音回录使用隔离虚拟声卡。
 - 长时间后台缓存进程冻结、系统终止后恢复、蓝牙路由与锁屏音频；当前实现不提供手机前台服务。
-- Apple 原生纹理、Windows 主应用/真实 GPU；Android 较低 API / 不同 GPU / ARM64 真机；硬件解码、远端文件剪贴板下载、文件夹粘贴、RD Gateway、RemoteApp 与多显示器。
+- Apple 原生纹理、Windows 主应用/真实 GPU；Android 较低 API / 不同 GPU / ARM64 真机；Linux VA-API / AVC444 及其他平台硬件解码、远端文件剪贴板下载、文件夹粘贴、RD Gateway、RemoteApp 与多显示器。
 - 帧损坏区域局部更新的真实会话效果：Linux 真实 RDP 纹理显示与 CPU 占用对比、Android 真机像素比对、Windows 真机 DLL/GPU 渲染，以及不同硬件上的 `lrdp_video_bench` 复核。
 
 文件重定向使用标准 RDPDR，服务端需允许；中文粘贴需允许 CLIPRDR。

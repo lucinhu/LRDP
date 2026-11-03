@@ -13,7 +13,7 @@ import '../data/clipboard_files.dart';
 import 'native_bindings.dart';
 import 'rdp_cursor.dart';
 import 'native_video.dart';
-import 'frame_rate.dart';
+import 'session_polling.dart';
 import 'clipboard_picture.dart';
 
 enum SessionState {
@@ -99,6 +99,11 @@ class RdpSession extends ChangeNotifier {
   bool get fileClipboardSupported => features & 33 == 33;
   bool get unicodeInputSupported => features & 8 != 0;
   bool get hasDecodedAvc => features & 4 != 0;
+
+  /// Backend of the latest successfully decoded H.264 frame across surfaces:
+  /// 0 unknown (including older libraries), 1 FFmpeg, 2 VA-API, 3 CUDA.
+  int get decoderBackend => _decoderBackend;
+  int _decoderBackend = 0;
   String? remoteClipboard;
   ({Uint8List bytes, int kind})? remotePicture;
   void discardRemotePicture() {
@@ -274,7 +279,7 @@ class RdpSession extends ChangeNotifier {
     connectedAt = null;
     state = SessionState.connecting;
     endReason = SessionEndReason.none;
-    errorCode = features = 0;
+    errorCode = features = _decoderBackend = 0;
     error = fingerprint = '';
     notifyListeners();
     if (_disposed || epoch != _epoch) return;
@@ -354,6 +359,12 @@ class RdpSession extends ChangeNotifier {
             features = event['value'] as int;
             _updateAutomaticResolution();
             notifyListeners();
+          case 'decoderBackend':
+            final backend = event['value'] as int;
+            if (_decoderBackend != backend) {
+              _decoderBackend = backend;
+              notifyListeners();
+            }
           case 'audioStatus':
             audioStatus = event['value'] as String;
             notifyListeners();
@@ -769,18 +780,16 @@ void _sessionWorker(Map<String, dynamic> init) {
   var visible = init['visible'] as bool? ?? true;
   var frameRate = 60;
   final pacingClock = Stopwatch()..start();
-  var nextPoll = 0;
+  final polling = SessionPolling(visible: visible, frameRate: frameRate);
   void Function(Timer)? tick;
   void schedulePolling() {
     timer?.cancel();
-    nextPoll = 0;
+    polling
+      ..visible = visible
+      ..frameRate = frameRate
+      ..reset();
     if (finished || tick == null) return;
-    timer = Timer.periodic(
-      visible
-          ? FrameRatePolicy.interval(frameRate)
-          : const Duration(milliseconds: 33),
-      tick,
-    );
+    timer = Timer.periodic(polling.interval, tick);
   }
 
   var audioAllowed = init['audioAllowed'] as bool? ?? !Platform.isAndroid;
@@ -843,6 +852,8 @@ void _sessionWorker(Map<String, dynamic> init) {
 
   try {
     api = NativeBindings();
+    final supportsDecoderBackend = api.supportsDecoderBackend;
+    var previousDecoderBackend = 0;
     final configuredDirectory = init['directory'] as String?;
     final Directory directory;
     if (configuredDirectory == null) {
@@ -893,6 +904,8 @@ void _sessionWorker(Map<String, dynamic> init) {
     }
     config.clear();
     api.audioActive(session, visible && audioAllowed ? 1 : 0);
+    if (api.supportsVisibility) api.setVisible(session, visible ? 1 : 0);
+    if (api.supportsFramePacing) api.setFrameRate(session, frameRate);
     if (api.start(session) != 1) throw StateError('无法启动 RDP 连接');
     if ((Platform.isLinux || Platform.isAndroid || Platform.isWindows) &&
         api.supportsNativeVideo) {
@@ -946,6 +959,9 @@ void _sessionWorker(Map<String, dynamic> init) {
             final value = msg[1] as bool;
             if (visible != value) {
               visible = value;
+              if (api!.supportsVisibility) {
+                api.setVisible(session, visible ? 1 : 0);
+              }
               schedulePolling();
             }
             api!.audioActive(session, visible && audioAllowed ? 1 : 0);
@@ -953,6 +969,9 @@ void _sessionWorker(Map<String, dynamic> init) {
             final value = (msg[1] as int).clamp(1, 240);
             if (value != frameRate) {
               frameRate = value;
+              if (api!.supportsFramePacing) {
+                api.setFrameRate(session, frameRate);
+              }
               schedulePolling();
             }
           case 'video':
@@ -1062,97 +1081,98 @@ void _sessionWorker(Map<String, dynamic> init) {
     );
     tick = (_) => guarded(() {
       if (finished) return;
-      // Dart timers may round 8.333 ms down to 8 ms. Keep a monotonic
-      // deadline so 120 Hz does not become 125 Hz, and never queue catch-up
-      // decodes after a slow frame or a foreground transition.
-      if (visible) {
-        final now = pacingClock.elapsedMicroseconds;
-        if (now < nextPoll) return;
-        final interval = FrameRatePolicy.interval(frameRate).inMicroseconds;
-        if (nextPoll == 0 || now - nextPoll > interval) nextPoll = now;
-        nextPoll += interval;
-      }
-      final state = api!.state(session);
-      final audioStatus = read(4);
-      if (audioStatus != previousAudioStatus) {
-        previousAudioStatus = audioStatus;
-        events.send({'type': 'audioStatus', 'value': audioStatus});
-      }
-      if (pasteRequest case final id?) {
-        final status = read(3);
-        if (status != 'pending') {
-          pasteRequest = null;
+      final due = polling.poll(pacingClock.elapsedMicroseconds);
+      if (due.control) {
+        final state = api!.state(session);
+        if (supportsDecoderBackend) {
+          final backend = api.getDecoderBackend(session);
+          if (backend != previousDecoderBackend) {
+            previousDecoderBackend = backend;
+            events.send({'type': 'decoderBackend', 'value': backend});
+          }
+        }
+        final audioStatus = read(4);
+        if (audioStatus != previousAudioStatus) {
+          previousAudioStatus = audioStatus;
+          events.send({'type': 'audioStatus', 'value': audioStatus});
+        }
+        if (pasteRequest case final id?) {
+          final status = read(3);
+          if (status != 'pending') {
+            pasteRequest = null;
+            events.send({
+              'type': 'pasteResult',
+              'id': id,
+              'ok': status == 'sent',
+              'message': pasteKind == 'files'
+                  ? '远端未确认文件粘贴，可使用文件中转站'
+                  : status == 'timeout'
+                  ? '远程端未及时确认粘贴，文字已保留。请检查远程输入框后再试'
+                  : '远程端未接受粘贴，文字已保留',
+            });
+          }
+        }
+        if (state != previousState) {
+          previousState = state;
           events.send({
-            'type': 'pasteResult',
-            'id': id,
-            'ok': status == 'sent',
-            'message': pasteKind == 'files'
-                ? '远端未确认文件粘贴，可使用文件中转站'
-                : status == 'timeout'
-                ? '远程端未及时确认粘贴，文字已保留。请检查远程输入框后再试'
-                : '远程端未接受粘贴，文字已保留',
+            'type': 'state',
+            'state': state,
+            'reason': api.endReason(session),
+            'code': api.errorCode(session),
+            'error': read(0),
+            'fingerprint': read(1),
+            'version': api.version().toDartString(),
           });
         }
-      }
-      if (state != previousState) {
-        previousState = state;
-        events.send({
-          'type': 'state',
-          'state': state,
-          'reason': api.endReason(session),
-          'code': api.errorCode(session),
-          'error': read(0),
-          'fingerprint': read(1),
-          'version': api.version().toDartString(),
-        });
-      }
-      if (state >= SessionState.closed.index) {
-        finish();
-        return;
-      }
-      if (state != SessionState.connected.index) return;
-      final features = api.features(session);
-      if (features != previousFeatures) {
-        previousFeatures = features;
-        events.send({'type': 'features', 'value': features});
-      }
-      final clipboardSize = api.read(session, 2, textBuffer, 1024 * 1024 + 1);
-      if (clipboardSize >= 0) {
-        events.send({
-          'type': 'clipboard',
-          'text': textBuffer.toDartString(length: clipboardSize),
-        });
-      }
-      for (var i = 0; i < 128 && unicode.isNotEmpty; i++) {
-        final key = unicode.first;
-        if (api.input(session, 2, key.$1, key.$2, 0) == 0) break;
-        unicode.removeFirst();
-      }
-      if (!visible) return;
-      if (!imageInFlight && features & 16 != 0) {
-        final needed = -api.readImage(session, nullptr, 0, nullptr);
-        if (needed > 0 && needed <= ClipboardPicture.maxBytes) {
-          final data = calloc<Uint8>(needed), kind = calloc<Int32>();
-          try {
-            final count = api.readImage(session, data, needed, kind);
-            if (count > 0) {
-              imageInFlight = true;
-              events.send({
-                'type': 'clipboardImage',
-                'kind': kind.value,
-                'bytes': TransferableTypedData.fromList([
-                  data.asTypedList(count),
-                ]),
-              });
+        if (state >= SessionState.closed.index) {
+          finish();
+          return;
+        }
+        if (state != SessionState.connected.index) return;
+        final features = api.features(session);
+        if (features != previousFeatures) {
+          previousFeatures = features;
+          events.send({'type': 'features', 'value': features});
+        }
+        final clipboardSize = api.read(session, 2, textBuffer, 1024 * 1024 + 1);
+        if (clipboardSize >= 0) {
+          events.send({
+            'type': 'clipboard',
+            'text': textBuffer.toDartString(length: clipboardSize),
+          });
+        }
+        if (visible && !imageInFlight && features & 16 != 0) {
+          final needed = -api.readImage(session, nullptr, 0, nullptr);
+          if (needed > 0 && needed <= ClipboardPicture.maxBytes) {
+            final data = calloc<Uint8>(needed), kind = calloc<Int32>();
+            try {
+              final count = api.readImage(session, data, needed, kind);
+              if (count > 0) {
+                imageInFlight = true;
+                events.send({
+                  'type': 'clipboardImage',
+                  'kind': kind.value,
+                  'bytes': TransferableTypedData.fromList([
+                    data.asTypedList(count),
+                  ]),
+                });
+              }
+            } finally {
+              calloc.free(data);
+              calloc.free(kind);
             }
-          } finally {
-            calloc.free(data);
-            calloc.free(kind);
           }
         }
       }
+      if (previousState != SessionState.connected.index) return;
+      for (var i = 0; i < 128 && unicode.isNotEmpty; i++) {
+        final key = unicode.first;
+        if (api!.input(session, 2, key.$1, key.$2, 0) == 0) break;
+        unicode.removeFirst();
+      }
+      if (!due.frame) return;
       if (!cursorInFlight) {
-        final bytes = api.cursor(
+        final bytes = api!.cursor(
           session,
           cursorPixels,
           384 * 384 * 8,
@@ -1176,7 +1196,7 @@ void _sessionWorker(Map<String, dynamic> init) {
         }
       }
       if (nativeVideo || inFlight) return;
-      var size = api.frame(
+      var size = api!.frame(
         session,
         pixels,
         capacity,

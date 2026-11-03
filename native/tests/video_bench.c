@@ -54,9 +54,9 @@ static int copy_damage(const uint8_t* pixels, int32_t width, int32_t height,
 static void report(const char* label, uint64_t elapsed, int iterations, size_t bytes_per_op) {
   const double per_op_ns = (double)elapsed / iterations;
   const double megabyte_rate = per_op_ns > 0 ? (double)bytes_per_op / per_op_ns * 1000.0 : 0.0;
-  printf("  %-26s %8.1f us/frame  %8zu B/frame  %6.0f MB/s  %5.2f%% of one core at 30 fps\n",
+  printf("  %-26s %8.1f us/frame  %8zu B/frame  %6.0f MB/s  %5.2f%% elapsed-time budget at 30 fps\n",
          label, per_op_ns / 1000.0, bytes_per_op, megabyte_rate,
-         per_op_ns * 30.0 / 1e6 * 100.0);
+         per_op_ns * 30.0 / 1e9 * 100.0);
 }
 
 int main(void) {

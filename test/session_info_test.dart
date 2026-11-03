@@ -8,6 +8,13 @@ import 'package:lrdp/ui/session_info_sheet.dart';
 
 const _profile = ConnectionProfile(id: 'info', name: 'Info', host: '192.0.2.1');
 
+class _BackendSession extends RdpSession {
+  _BackendSession() : super(_profile);
+  int backend = 0;
+  @override
+  int get decoderBackend => backend;
+}
+
 Widget _harness(Widget child) => MaterialApp(
   locale: AppStrings.localeFor('zh-CN'),
   supportedLocales: AppStrings.supportedLocales,
@@ -55,6 +62,31 @@ void main() {
     expect(find.text('文本, 图片, 文件'), findsOneWidget);
     expect(find.text('90 帧/秒'), findsOneWidget);
   });
+
+  testWidgets(
+    'H.264 reports the latest backend including unknown and CPU fallback',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final session = _BackendSession()..features = 4;
+      addTearDown(session.dispose);
+      await tester.pumpWidget(_harness(SessionInfoSheet(session: session)));
+      expect(find.text('H.264 视频 · 解码路径未获取'), findsOneWidget);
+
+      for (final entry in [
+        (2, 'GPU (VA-API)'),
+        (3, 'GPU (CUDA)'),
+        (1, 'CPU (FFmpeg)'),
+        (0, '解码路径未获取'),
+      ]) {
+        session.backend = entry.$1;
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text('H.264 视频 · ${entry.$2}'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
 
   testWidgets('measured frame rate follows decoded frames', (tester) async {
     var now = DateTime(2026, 10, 31, 12);

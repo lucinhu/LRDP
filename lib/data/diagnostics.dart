@@ -17,7 +17,9 @@ String buildDiagnostics({
   required String locale,
   required int profileCount,
   required Map<String, Object?> settings,
+  Iterable<int> decoderBackends = const [],
 }) {
+  final backends = decoderBackends.toList();
   final keys = settings.keys.toList()..sort();
   final lines = <String>[
     'LRDP 诊断信息',
@@ -28,6 +30,11 @@ String buildDiagnostics({
     '设置:',
     for (final key in keys)
       '  ${_singleLine(key)}: ${_singleLine('${settings[key]}')}',
+    if (backends.isNotEmpty) ...[
+      'H.264 解码（各会话最近成功帧，0=未知，1=CPU/FFmpeg，2=GPU/VA-API，3=GPU/CUDA）:',
+      for (var i = 0; i < backends.length; i++)
+        '  session[${i + 1}].decoderBackend: ${backends[i]}',
+    ],
   ];
   return lines.join('\n');
 }
@@ -35,15 +42,19 @@ String buildDiagnostics({
 /// Collects the support report for the current installation.
 ///
 /// Reads the release tag, host platform, language preference, profile count
-/// and display/update preferences only. Profile contents, secure-storage
-/// values and update tokens are never read.
-Future<String> collectDiagnostics(ProfileStore store) async {
+/// and display/update preferences, with anonymous decoder backend values.
+/// Profile contents, secure-storage values and update tokens are never read.
+Future<String> collectDiagnostics(
+  ProfileStore store, {
+  Iterable<int> decoderBackends = const [],
+}) async {
   final language = store.language;
   return buildDiagnostics(
     appTag: appReleaseTag,
     platform: '${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
     locale: AppStrings.languageNames[language] ?? language,
     profileCount: store.profiles.length,
+    decoderBackends: decoderBackends,
     settings: <String, Object?>{
       'themeMode': store.themeMode.name,
       'frameRateLimit': store.frameRateLimit,

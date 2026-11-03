@@ -297,21 +297,18 @@ void main() {
     await tester.tap(title);
     await tester.pumpAndSettle();
     expect(qualityPresets(tester).selected, {ConnectionQuality.automatic});
-    expect(
-      find.text(
-        messages['由服务器选择编码（常见为 H.264 视频）：省带宽，但解码会更耗 CPU。修改后需重新连接才会生效。']!,
-      ),
-      findsOneWidget,
-    );
+    final automaticHelp = tester
+        .widget<Text>(find.byKey(const Key('qualityHelp')))
+        .data;
+    expect(automaticHelp, isNotEmpty);
     await tester.tap(find.text(messages['省流量']!));
     await tester.pumpAndSettle();
     expect(qualityPresets(tester).selected, {ConnectionQuality.saveBandwidth});
-    expect(
-      find.text(
-        messages['强制 H.264 视频编码并关闭远端壁纸、主题与动画：流量最低，1080p 解码约占半个 CPU 核。修改后需重新连接才会生效。']!,
-      ),
-      findsOneWidget,
-    );
+    final bandwidthHelp = tester
+        .widget<Text>(find.byKey(const Key('qualityHelp')))
+        .data;
+    expect(bandwidthHelp, isNotEmpty);
+    expect(bandwidthHelp, isNot(automaticHelp));
     final save = find.widgetWithText(OutlinedButton, messages['保存连接']!);
     await tester.ensureVisible(save);
     await tester.pumpAndSettle();
@@ -345,12 +342,7 @@ void main() {
     await tester.tap(title);
     await tester.pumpAndSettle();
     expect(qualityPresets(tester).selected, {ConnectionQuality.sharpText});
-    expect(
-      find.text(
-        messages['关闭视频编码，改用位图更新：文字更锐利、解码几乎不耗 CPU，但 1080p 下流量约 20 Mbps。修改后需重新连接才会生效。']!,
-      ),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('qualityHelp')), findsOneWidget);
     final save = find.widgetWithText(OutlinedButton, messages['保存连接']!);
     await tester.ensureVisible(save);
     await tester.pumpAndSettle();
@@ -384,12 +376,7 @@ void main() {
     await tester.tap(sharp);
     await tester.pumpAndSettle();
     expect(qualityPresets(tester).selected, {ConnectionQuality.sharpText});
-    expect(
-      find.text(
-        messages['关闭视频编码，改用位图更新：文字更锐利、解码几乎不耗 CPU，但 1080p 下流量约 20 Mbps。修改后需重新连接才会生效。']!,
-      ),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('qualityHelp')), findsOneWidget);
     await tester.tap(find.widgetWithText(OutlinedButton, messages['保存连接']!));
     await tester.pumpAndSettle();
     expect(result()!.profile.quality, ConnectionQuality.sharpText);

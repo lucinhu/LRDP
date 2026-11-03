@@ -4,9 +4,9 @@
 
 LRDP（Lightweight RDP）是基于 **Flutter + FreeRDP** 的轻量级开源 RDP 客户端，面向手机和桌面的日常远程连接。Flutter 提供界面与交互，内嵌 FreeRDP 处理远程连接、画面、输入和虚拟通道，不依赖外部 RDP 客户端。
 
-当前版本为 **0.4.0 开发预览**，目标平台为 Linux、Android、Windows、macOS 和 iOS。各平台的构建与验证进度见下表。
+当前版本为 **0.5.0 开发预览**，目标平台为 Linux、Android、Windows、macOS 和 iOS。各平台的构建与验证进度见下表。
 
-[下载预览版](https://github.com/lucinhu/LRDP/releases/tag/v0.4.0-preview.1) · [使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
+[下载预览版](https://github.com/lucinhu/LRDP/releases/tag/v0.5.0-preview.1) · [使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
 
 ![LRDP 桌面连接库，使用示例配置](docs/screenshots/workspace.png)
 
@@ -33,7 +33,7 @@ LRDP（Lightweight RDP）是基于 **Flutter + FreeRDP** 的轻量级开源 RDP 
 - **连接管理**：快速连接、分组、收藏、搜索、最近使用、多个会话切换，以及 `.rdp` 配置导入与导出。
 - **手机操作**：全屏会话、可拖动和收起的悬浮工具栏、触控板与直接触控、双指滚动、右键、缩放和拖拽；“更多”菜单中的组合键包含任务管理器、切换窗口、显示桌面等 8 项常用快捷键。键盘展开时仍可操作远程画面。
 - **文字与键盘**：中文输入、整段文字粘贴和软键盘按键模拟。Ctrl、Shift、Alt、Win 支持单次组合与锁定保持，扩展栏可切换数字／符号和导航／功能键；桌面端使用分组悬浮键盘面板，屏幕键盘上的方向键、编辑键与退格支持长按连续触发。
-- **画面显示**：自动分辨率、动态调整分辨率、缩放与平移、平滑／锐利缩放、远端鼠标光标、H.264 软件解码、随屏幕刷新率调整的显示帧率上限，以及自动／省流量／清晰文字三档画质（连接时协商，修改后需重新连接）。
+- **画面显示**：自动分辨率、动态调整分辨率、缩放与平移、平滑／锐利缩放、远端鼠标光标、H.264 解码（Linux 自动尝试 GPU、失败回退 CPU）、随屏幕刷新率调整的显示帧率上限，以及自动／省流量／清晰文字三档画质（连接时协商，修改后需重新连接）。
 - **会话信息**：在远端画面“更多”中查看连接状态、远程分辨率、编码与渲染方式、实测帧率、已上传／已解码帧数，以及音频与剪贴板能力。
 - **剪贴板与文件**：文字与双向图片剪贴板、选择本机文件粘贴到远端，以及通过文件中转站双向复制文件。
 - **外观与语言**：系统配色、跟随系统的深浅主题，浅色模式使用中性白面板和中性灰阶（弹窗、悬浮工具栏与键盘面板不再带主题色或绿色偏色），支持简体中文、繁体中文和 English。
@@ -60,12 +60,12 @@ LRDP（Lightweight RDP）是基于 **Flutter + FreeRDP** 的轻量级开源 RDP 
 Linux x86_64 可下载 Release 中的 `.AppImage`，赋予执行权限后直接运行：
 
 ```sh
-chmod +x lrdp-0.4.0-linux-x64.AppImage
-./lrdp-0.4.0-linux-x64.AppImage
+chmod +x lrdp-0.5.0-linux-x64.AppImage
+./lrdp-0.5.0-linux-x64.AppImage
 ```
 
 AppImage 已包含 GTK、OpenSSL 等应用运行库；需要 glibc ≥ 2.35 与可用的 OpenGL/EGL 环境。
-如果系统没有 FUSE，可用 `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.4.0-linux-x64.AppImage` 启动。
+如果系统没有 FUSE，可用 `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.5.0-linux-x64.AppImage` 启动。
 Android 下载 ARM64 预览 APK。各包与完整源码、构建信息及 SHA-256 校验文件一同发布。
 
 1. 点击“添加电脑”，填写地址、用户名、密码，以及需要的域信息。地址可直接包含端口，例如 `192.168.1.10:3390`；IPv6 使用 `[2001:db8::1]:3389`。
@@ -137,7 +137,7 @@ export LRDP_FFMPEG_ROOT="$PWD/build/deps/ffmpeg/linux-x64"
 flutter run -d linux
 ```
 
-已有工作区可用 `git submodule update --init --recursive` 初始化依赖。FreeRDP 3.32.2 固定在 `third_party/FreeRDP` 子模块中，适配代码独立维护，保持上游源码不变。H.264 使用 FFmpeg 9.0.2 的最小静态软件解码器。
+已有工作区可用 `git submodule update --init --recursive` 初始化依赖。FreeRDP 3.32.2 固定在 `third_party/FreeRDP` 子模块中，适配代码独立维护，保持上游源码不变。H.264 使用 FFmpeg 9.0.2 最小静态构建；Linux 自动尝试 VA-API / CUDA，实际解码或下载失败后回退 CPU，其他平台保留软件路径。
 
 Linux 系统依赖、Android SDK/NDK 与签名、Windows 工具链和 Apple 平台构建步骤见 [BUILDING.md](docs/BUILDING.md)。
 
@@ -153,7 +153,7 @@ scripts/                 依赖构建、打包与隔离协议测试
 
 常规检查使用 `flutter analyze` 和 `flutter test`。原生变更还需运行 CTest 与隔离回环协议测试；测试步骤见 [构建指南](docs/BUILDING.md)，实际结果见 [验收记录](docs/VERIFICATION.md)。
 
-协议测试使用私有服务和虚拟桌面，单元测试、协议通过与平台设备验收分别记录。后续工作见 [开发进度](docs/ROADMAP.md)；RD Gateway、RemoteApp、多显示器和硬件视频解码仍待实现。
+协议测试使用私有服务和虚拟桌面，单元测试、协议通过与平台设备验收分别记录。后续工作见 [开发进度](docs/ROADMAP.md)；Linux GPU 自动解码的范围与限制见验收记录；其他平台的硬件视频解码、RD Gateway、RemoteApp 和多显示器仍待实现。
 
 ## 许可
 

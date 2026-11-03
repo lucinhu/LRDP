@@ -66,6 +66,10 @@ with tempfile.TemporaryDirectory(prefix='lrdp-frame-rate-') as temporary, ExitSt
     assert server.wait(timeout=5) == 0, 'Producer did not receive the completion key'
     result = json.loads(verdict.read_text())
     assert result['passed']
+    output_controls = [line for line in (output / 'server.log').read_text().splitlines()
+                       if line.startswith('SuppressOutput allow=')]
+    assert output_controls == ['SuppressOutput allow=0', 'SuppressOutput allow=1'], output_controls
+    result['server_graphics_paused_and_resumed'] = True
     result['library_sha256'] = hashlib.file_digest((root / 'build/native/liblrdp.so').open('rb'), 'sha256').hexdigest()
     verdict.write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(result, indent=2))
