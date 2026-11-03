@@ -5,8 +5,8 @@
 分发上游 GitHub Release 中预编译的 Linux x64 Flutter 应用（AppImage），不重新编译
 Flutter / FreeRDP 代码。
 
-上游版本：tag `v0.4.0-preview.1`（release commit `8d03705…`），应用版本 `0.4.0+7`，
-`applicationId` 为 `dev.lrdp.lrdp`。`pkgver` 取上游应用版本 `0.4.0`；`pkgrel=1`。
+上游版本：tag `v0.5.0-preview.1`（release commit `b3157b8…`），应用版本 `0.5.0+8`，
+`applicationId` 为 `dev.lrdp.lrdp`。`pkgver` 取上游应用版本 `0.5.0`；`pkgrel=1`。
 `package()` 继续移除 AppImage AppRun hook 里的 `GDK_BACKEND=x11`（见下文
 “HiDPI 与 Wayland 缩放”）；从 0.3.0 起上游 AppImage 自身已不带该行，补丁是幂等的空操作。
 
@@ -14,7 +14,7 @@ Flutter / FreeRDP 代码。
 
 | 文件 | 说明 |
 | --- | --- |
-| `lrdp-bin/PKGBUILD` | 打包脚本：`source` 指向 release 的 `lrdp-0.4.0-linux-x64.AppImage` + 品牌图标；`build()` 用 `--appimage-extract` 解包（无需 FUSE），`package()` 安装到 `/opt/lrdp`。 |
+| `lrdp-bin/PKGBUILD` | 打包脚本：`source` 指向 release 的 `lrdp-0.5.0-linux-x64.AppImage` + 品牌图标；`build()` 用 `--appimage-extract` 解包（无需 FUSE），`package()` 安装到 `/opt/lrdp`。 |
 | `lrdp-bin/.SRCINFO` | 由 `makepkg --printsrcinfo` 生成，提交 AUR 时必须与 PKGBUILD 一致。 |
 | `lrdp-bin/LICENSE` | 0BSD，仅覆盖本目录的 AUR 打包文件；LRDP 应用本身为 Apache-2.0（安装后的 `/usr/share/licenses/lrdp-bin/LICENSE`）。 |
 | `lrdp-bin/.gitignore` | 忽略 `makepkg` 的 `src/`、`pkg/` 与 `*.pkg.tar.zst`。 |
@@ -36,18 +36,27 @@ Flutter / FreeRDP 代码。
 路径用 `pacman -Qo` 映射为 Arch 包名：
 
 ```
-./lrdp-0.4.0-linux-x64.AppImage --appimage-extract
+./lrdp-0.5.0-linux-x64.AppImage --appimage-extract
 ldd squashfs-root/usr/bin/lrdp | grep -E '=> /usr/lib/'
 pacman -Qoq /usr/lib/libharfbuzz.so.0      # => harfbuzz
 ```
 
-结果共 23 个系统库；`glibc`、`libgcc`、`libstdc++`、`bzip2` 属于 `base` 元包，未重复列出。
+`glibc`、`libgcc`、`libstdc++`、`bzip2` 属于 `base` 元包，未重复列出。
 最终 `depends`：`brotli expat fontconfig freetype2 fribidi graphite harfbuzz
-libgpg-error libx11 libxau libxcb libxdmcp wayland zlib`。
+libgpg-error libdrm libva libx11 libxau libxcb libxdmcp wayland zlib libglvnd`。
+
+0.5.0 的原生库直接链接 `libva.so.2`、`libva-drm.so.2` 和 `libdrm.so.2`，即使随后使用
+CPU 解码，动态加载时也需要它们，因此 `libva`、`libdrm` 是必需依赖。`package()` 仅移除
+AppImage 内的 `usr/lib/libva.so.2` 与 `usr/lib/libva-drm.so.2`，改用 Arch 同一版本的一对
+系统库；其他二进制与 AppRun 保持原样。内置 Ubuntu libva 的 VA-API 版本为 1.14，默认驱动目录为
+`/usr/lib/x86_64-linux-gnu/dri`，而本机 Arch libva 为 1.24、驱动位于 `/usr/lib/dri`。
+仅设置目录不能解决新驱动仅导出 `__vaDriverInit_1_24` 的初始化版本不匹配问题。
 
 另外显式加入 `libglvnd`：AppImage 自带的 libepoxy/libgdk 通过 `dlopen(3)` 加载
-`libEGL/libGL/libGLESv2`（`ldd` 看不到），Flutter 的 OpenGL 渲染需要这些入口；
-`mesa` 作为显卡/软件渲染驱动放入 `optdepends`。
+`libEGL/libGL/libGLESv2`（`ldd` 看不到），Flutter 的 OpenGL 渲染需要这些入口。
+`optdepends` 包括 `mesa`（OpenGL/支持的 VA-API 驱动）、`intel-media-driver`（Broadwell+
+Intel 核显 VA-API）及 `nvidia-utils`（支持 H.264 的 NVIDIA CUDA/NVDEC）。显卡驱动、内核、
+设备权限和码流支持仍由用户系统决定；不需要安装完整 CUDA toolkit，硬解不可用时自动回退 CPU。
 
 > 上游 AppImage 的详细构建信息（appimagetool、linuxdeploy、GTK 插件版本与所有
 > ELF 的 sha256、glibc 上限 2.35）保存在解包树的
@@ -56,12 +65,12 @@ libgpg-error libx11 libxau libxcb libxdmcp wayland zlib`。
 
 ## 来源校验
 
-1. **主产物 AppImage**：`https://github.com/lucinhu/LRDP/releases/download/v0.4.0-preview.1/lrdp-0.4.0-linux-x64.AppImage`
-   - `sha256 = 6112d6e956093ab5455739cd1159ffbbc0c2884b95e63c79dcac4ea6a30a7abc`
+1. **主产物 AppImage**：`https://github.com/lucinhu/LRDP/releases/download/v0.5.0-preview.1/lrdp-0.5.0-linux-x64.AppImage`
+   - `sha256 = 777c1b4e51ef64d9273f015270c40d38353fcecc1080895927ba9b95d02b9b2f`
    - 与 release 资产 `SHA256SUMS` 中的同名条目一致（本地实测 `sha256sum -c` 通过）；
-   - release 另有 `SOURCE_SHA256`（`fe9b219…`，源码包 sha256）和 `RELEASE_INFO.json`
+   - release 另有 `SOURCE_SHA256`（`a94f13e…`，源码快照指纹；归档文件摘要见 `SHA256SUMS`）和 `RELEASE_INFO.json`
      （`release_commit`、`application_runtime_commit`、`native_abi=5`）可供核对。
-2. **品牌图标**：取自 tag `v0.4.0-preview.1` 的 `assets/branding/`，sha256 写在 `sha256sums` 中；
+2. **品牌图标**：取自 tag `v0.5.0-preview.1` 的 `assets/branding/`，sha256 写在 `sha256sums` 中；
    其中 256x256 直接使用 AppImage 内 `usr/share/icons/hicolor/256x256/apps/dev.lrdp.lrdp.png`，
    并与 `assets/branding/lrdp-256.png` 完全一致（`638641bb…`），用作交叉校验。
 3. **完整性**：`build()` 里校验解包结果必须有 `AppRun` 与 `usr/bin/lrdp`，否则构建失败。
@@ -139,6 +148,31 @@ SRCDEST=/home/lucinhu/workspace/flutter/LRDP/build/aur/src PKGDEST=/tmp/aurpkg04
   `apprun-hooks/linuxdeploy-plugin-gtk.sh` 中无 `GDK_BACKEND=x11`（`sed` 为幂等操作）。
 - 未做真实图形界面启动测试（按项目约定不占用用户桌面；Wayland/xdotool 自动化也不可用）。
 
+### 本地验证记录（2026-11-04，0.5.0 版本，pkgrel=1）
+
+```bash
+(
+  cd build/aur-0.5.0/work
+  SRCDEST="$PWD/../sources" PKGDEST="$PWD/../packages" BUILDDIR="$PWD" \
+    makepkg --log --noconfirm
+)
+```
+
+- 正常启用运行/编译依赖检查，6 个 source 全部 sha256 通过；缓存使用已验证的公开 AppImage
+  与发布标签中的品牌文件，没有重新下载或替换应用二进制。
+- 产物：`lrdp-bin-0.5.0-1-x86_64.pkg.tar.zst`，66,337,570 B，2,202 个归档条目，
+  `sha256 = 4cc179c63631025e49e4c5757846926e676a5e3e88cbcfec47dada4082803759`。
+- 检查安装布局、desktop、5 个尺寸图标 + SVG、许可证与 9 份文档；`/opt/lrdp` 为 0755。
+  仅移除两份内置 libva，`ldd` 确认改用 `/usr/lib/libva.so.2`、`libva-drm.so.2` 和
+  `libdrm.so.2`，入口及原生库均 0 个 `not found`。
+- 原生库摘要仍与正式 AppImage 一致：
+  `8b374673068728542378832431c08c4914022c80d419253652bb1c4e39079909`。
+  对安装树原生库运行私有回环 TLS/RDPGFX AVC420 测试通过，实际后端为 CUDA，
+  9 帧 IDR/P、三色像素最大误差 0/1/0（容差 5）、尾帧、输入及停止均通过。
+- 清空显示环境并隔离 XDG 配置后，AppRun 正常到达 GTK 的 `cannot open display`，
+  无动态库缺失。未安装到本机、未启动真实图形界面，也未验证 VA-API 正向解码或其他显卡。
+  详细记录位于 `build/aur-0.5.0/`（构建目录，不提交 AUR）。
+
 ### 已知限制（继承上游 AppImage，不是打包引入）
 
 - AppImage 内 gdk-pixbuf 的 TIFF loader 与 GTK 的 IBus 输入模块没有把自带依赖库放进
@@ -171,7 +205,7 @@ sed -i '/^export GDK_BACKEND=x11/d' \
 
 ## AUR 推送步骤
 
-前置：release `v0.4.0-preview.1` 已公开，asset 可匿名下载且与 `SHA256SUMS` 一致。
+前置：release `v0.5.0-preview.1` 已公开，asset 可匿名下载且与 `SHA256SUMS` 一致。
 
 ```bash
 # 1) 首次 clone AUR 仓库
@@ -189,7 +223,7 @@ makepkg -Ccf
 
 # 5) 提交并推送
 git add PKGBUILD .SRCINFO LICENSE .gitignore
-git commit -m "upgpkg: lrdp-bin 0.4.0-1"
+git commit -m "upgpkg: lrdp-bin 0.5.0-1"
 git push
 ```
 
