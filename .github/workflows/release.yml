@@ -54,8 +54,22 @@ jobs:
             libfuse2 libegl1-mesa libgl1-mesa-dri libglu1-mesa ibus-gtk3 \
             fcitx5-frontend-gtk3 fonts-noto-cjk make nasm ninja-build patchelf \
             pkg-config python3 unzip xz-utils zstd
+      - name: Fetch pinned FFmpeg archive
+        run: |
+          mkdir -p build/deps/downloads
+          archive=build/deps/downloads/ffmpeg-9.0.2.tar.xz
+          if ! curl --fail --location --silent --show-error --connect-timeout 15 --max-time 60 --retry 1 \
+            https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o "$archive"; then
+            curl --fail --location --silent --show-error --connect-timeout 20 --max-time 180 --retry 2 \
+              https://github.com/lucinhu/LRDP/releases/download/v0.4.0-preview.1/lrdp-0.4.0-source.tar.gz \
+              -o "$RUNNER_TEMP/lrdp-previous-source.tar.gz"
+            tar -xOzf "$RUNNER_TEMP/lrdp-previous-source.tar.gz" \
+              lrdp-0.4.0-source/vendor/ffmpeg-9.0.2.tar.xz > "$archive"
+          fi
+          echo '8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e  build/deps/downloads/ffmpeg-9.0.2.tar.xz' | sha256sum --check
       - name: Build static FFmpeg (linux-x64)
         run: |
+          set -o pipefail
           mkdir -p build/release-logs
           LRDP_BUILD_JOBS=4 bash scripts/build_ffmpeg.sh linux-x64 2>&1 | tee build/release-logs/ffmpeg-linux.log
       - name: Version, format and static analysis
@@ -129,6 +143,19 @@ jobs:
             "platform-tools" "build-tools;36.0.0" \
             "ndk;27.0.12077973" "ndk;28.2.13676358" 2>&1 | tail -5
           echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/27.0.12077973" >> "$GITHUB_ENV"
+      - name: Fetch pinned FFmpeg archive
+        run: |
+          mkdir -p build/deps/downloads
+          archive=build/deps/downloads/ffmpeg-9.0.2.tar.xz
+          if ! curl --fail --location --silent --show-error --connect-timeout 15 --max-time 60 --retry 1 \
+            https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o "$archive"; then
+            curl --fail --location --silent --show-error --connect-timeout 20 --max-time 180 --retry 2 \
+              https://github.com/lucinhu/LRDP/releases/download/v0.4.0-preview.1/lrdp-0.4.0-source.tar.gz \
+              -o "$RUNNER_TEMP/lrdp-previous-source.tar.gz"
+            tar -xOzf "$RUNNER_TEMP/lrdp-previous-source.tar.gz" \
+              lrdp-0.4.0-source/vendor/ffmpeg-9.0.2.tar.xz > "$archive"
+          fi
+          echo '8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e  build/deps/downloads/ffmpeg-9.0.2.tar.xz' | sha256sum --check
       - name: Android OpenSSL and FFmpeg
         run: |
           set -o pipefail
@@ -210,9 +237,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y nasm gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 xz-utils curl pkg-config gcc make python3 libva-dev libdrm-dev
           mkdir -p build/release-logs
-          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.12077973" 2>&1 | tail -3
+          if [ ! -x "$ANDROID_SDK_ROOT/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]; then
+            timeout 180 bash -c 'yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses' > /dev/null || true
+            timeout 600 "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.12077973"
+          fi
           echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/27.0.12077973" >> "$GITHUB_ENV"
+      - name: Fetch pinned FFmpeg archive
+        run: |
+          mkdir -p build/deps/downloads
+          archive=build/deps/downloads/ffmpeg-9.0.2.tar.xz
+          if ! curl --fail --location --silent --show-error --connect-timeout 15 --max-time 60 --retry 1 \
+            https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o "$archive"; then
+            curl --fail --location --silent --show-error --connect-timeout 20 --max-time 180 --retry 2 \
+              https://github.com/lucinhu/LRDP/releases/download/v0.4.0-preview.1/lrdp-0.4.0-source.tar.gz \
+              -o "$RUNNER_TEMP/lrdp-previous-source.tar.gz"
+            tar -xOzf "$RUNNER_TEMP/lrdp-previous-source.tar.gz" \
+              lrdp-0.4.0-source/vendor/ffmpeg-9.0.2.tar.xz > "$archive"
+          fi
+          echo '8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e  build/deps/downloads/ffmpeg-9.0.2.tar.xz' | sha256sum --check
       - name: Static FFmpeg for every documented platform
         run: |
           set -o pipefail
