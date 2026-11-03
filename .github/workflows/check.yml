@@ -24,6 +24,19 @@ jobs:
           dart --version
       - name: Build dependencies
         run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libepoxy-dev liblzma-dev libssl-dev libsecret-1-dev libpulse-dev libva-dev libdrm-dev libavcodec-dev libavutil-dev libswscale-dev nasm
+      - name: Fetch pinned FFmpeg archive
+        run: |
+          mkdir -p build/deps/downloads
+          archive=build/deps/downloads/ffmpeg-9.0.2.tar.xz
+          if ! curl --fail --location --silent --show-error --connect-timeout 15 --max-time 60 --retry 1 \
+            https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o "$archive"; then
+            curl --fail --location --silent --show-error --connect-timeout 20 --max-time 180 --retry 2 \
+              https://github.com/lucinhu/LRDP/releases/download/v0.4.0-preview.1/lrdp-0.4.0-source.tar.gz \
+              -o "$RUNNER_TEMP/lrdp-previous-source.tar.gz"
+            tar -xOzf "$RUNNER_TEMP/lrdp-previous-source.tar.gz" \
+              lrdp-0.4.0-source/vendor/ffmpeg-9.0.2.tar.xz > "$archive"
+          fi
+          echo '8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e  build/deps/downloads/ffmpeg-9.0.2.tar.xz' | sha256sum --check
       - run: bash scripts/build_ffmpeg.sh linux-x64
       - run: flutter pub get
       - run: python3 scripts/generate_version.py --check
