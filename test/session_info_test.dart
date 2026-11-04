@@ -77,7 +77,9 @@ void main() {
       for (final entry in [
         (2, 'GPU (VA-API)'),
         (3, 'GPU (CUDA)'),
+        (4, '硬件（MediaCodec）'),
         (1, 'CPU (FFmpeg)'),
+        (99, '解码路径未获取'),
         (0, '解码路径未获取'),
       ]) {
         session.backend = entry.$1;

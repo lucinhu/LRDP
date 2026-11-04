@@ -17,6 +17,7 @@
 #include <winpr/ssl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #define WIDTH 320
 #define HEIGHT 240
@@ -24,7 +25,21 @@
 static const char *cert_path, *key_path;
 static BOOL finished, success, caps_ready;
 static unsigned packet_count;
+static UINT64 initial_delay_ms = 200, frame_interval_ms = 350;
 static struct { BYTE* data; UINT32 length; } packets[MAX_PACKETS];
+
+/* Device screenshot startup can outlast the default first color group. These
+ * bounded fixture-only timings do not affect application decode or its oracle. */
+static BOOL timing_option(const char* name, UINT64* value) {
+  const char* text = getenv(name);
+  if (!text) return TRUE;
+  if (*text < '0' || *text > '9') return FALSE;
+  char* end = NULL;
+  unsigned long parsed = strtoul(text, &end, 10);
+  if (*end || parsed > 2000) return FALSE;
+  *value = parsed;
+  return TRUE;
+}
 
 static BOOL post_connect(freerdp_peer* peer) {
   (void)peer; return TRUE;
@@ -152,11 +167,11 @@ static BOOL accepted(freerdp_listener* listener, freerdp_peer* peer) {
     if (!surface) {
       if (!initialize_surface(gfx)) break;
       surface = TRUE;
-      next_frame = GetTickCount64() + 200;
+      next_frame = GetTickCount64() + initial_delay_ms;
     }
     if (sent < packet_count && GetTickCount64() >= next_frame) {
       if (!send_frame(gfx, sent++)) break;
-      next_frame = GetTickCount64() + 350;
+      next_frame = GetTickCount64() + frame_interval_ms;
       if (sent == packet_count) { puts("AVC420 final frame then silence"); fflush(stdout); }
     }
   }
@@ -172,6 +187,11 @@ cleanup:
 }
 int main(int argc, char** argv) {
   if (argc < 5 || argc - 4 > MAX_PACKETS) return 2;
+  if (!timing_option("LRDP_H264_INITIAL_DELAY_MS", &initial_delay_ms) ||
+      !timing_option("LRDP_H264_FRAME_INTERVAL_MS", &frame_interval_ms)) return 2;
+  printf("AVC420 timing initial_ms=%" PRIu64 " interval_ms=%" PRIu64 "\n",
+         initial_delay_ms, frame_interval_ms);
+  fflush(stdout);
   cert_path = argv[2]; key_path = argv[3];
   packet_count = (unsigned)(argc - 4);
   for (unsigned i = 0; i < packet_count; i++) {

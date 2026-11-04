@@ -2,8 +2,12 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 #include "h264_decoder.h"
-
+#ifdef __ANDROID__
+#include "h264_android.h"
+#else
 #include <dirent.h>
+#endif
+
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
@@ -33,9 +37,13 @@ struct lrdp_h264_decoder {
   struct SwsContext* sws;
   enum AVPixelFormat hw_format;
   enum AVHWDeviceType device_type;
+#ifdef __ANDROID__
+  lrdp_android_h264* android;
+#else
   enum AVPixelFormat vaapi_format, cuda_format;
   struct dirent** render_devices;
   int render_count, render_next, cuda_tried;
+#endif
   int trial, confirmed, format_failed, need_idr, params_dirty;
   parameter params[PARAMETER_COUNT];
   size_t params_size;
@@ -106,6 +114,10 @@ static int open_codec(lrdp_h264_decoder* d, int hardware) {
   return avcodec_open2(d->context, d->codec, NULL);
 }
 static int open_cpu(lrdp_h264_decoder* d) {
+#ifdef __ANDROID__
+  lrdp_android_h264_free(d->android);
+  d->android = NULL;
+#endif
   close_codec(d);
   d->trial = 0;
 #ifdef LRDP_H264_DECODER_TESTING
@@ -113,6 +125,20 @@ static int open_cpu(lrdp_h264_decoder* d) {
 #endif
   return open_codec(d, 0);
 }
+#ifdef __ANDROID__
+static int next_device(lrdp_h264_decoder* d) {
+  if (!d->android) return 0;
+  close_codec(d);
+  d->trial = lrdp_android_h264_next(d->android) > 0;
+  return d->trial;
+}
+static int select_device(lrdp_h264_decoder* d) {
+  /* new() selects the first candidate; next() advances only after failure. */
+  d->android = lrdp_android_h264_new();
+  d->trial = d->android != NULL;
+  return d->trial;
+}
+#else
 static int try_device(lrdp_h264_decoder* d, enum AVHWDeviceType type,
                       enum AVPixelFormat format, const char* name) {
   close_codec(d);
@@ -159,6 +185,7 @@ static int select_device(lrdp_h264_decoder* d) {
   }
   return next_device(d);
 }
+#endif
 
 /* Read only the small Exp-Golomb prefix that identifies SPS/PPS. Removing
  * emulation-prevention bytes here avoids trusting arbitrary RBSP lengths. */
@@ -318,6 +345,18 @@ static int inject(lrdp_h264_decoder* d, int fault) {
 static int consume(lrdp_h264_decoder* d, const AVPacket* p) {
   int got = 0, rc;
   if (inject(d, LRDP_H264_TEST_SEND)) return AVERROR_EXTERNAL;
+#ifdef __ANDROID__
+  if (d->android && d->trial) {
+    av_frame_unref(d->received);
+    rc = lrdp_android_h264_decode(d->android, p->data, (size_t)p->size, d->received);
+    if (rc == 1 && d->received->format == AV_PIX_FMT_YUV420P)
+      rc = publish_frame(d, d->received);
+    else if (rc >= 0) rc = AVERROR_INVALIDDATA;
+    av_frame_unref(d->received);
+    if (rc == 1) d->confirmed = 1;
+    return rc;
+  }
+#endif
   rc = avcodec_send_packet(d->context, p);
   if (rc < 0) return rc;
   while (1) {
@@ -394,7 +433,9 @@ static int recover_hardware(lrdp_h264_decoder* d, const char* why, int error) {
 static lrdp_h264_decoder* decoder_new(int probe_devices) {
   lrdp_h264_decoder* d = av_mallocz(sizeof(*d));
   if (!d) return NULL;
+#ifndef __ANDROID__
   d->vaapi_format = d->cuda_format = AV_PIX_FMT_NONE;
+#endif
   d->codec = avcodec_find_decoder(AV_CODEC_ID_H264);
   d->received = av_frame_alloc();
   d->downloaded = av_frame_alloc();
@@ -406,7 +447,11 @@ static lrdp_h264_decoder* decoder_new(int probe_devices) {
     lrdp_h264_decoder_free(d); return NULL;
   }
   if (!probe_devices || !select_device(d)) {
+#ifdef __ANDROID__
+    reason(d, "No usable Android hardware H264 decoder; using software", 0);
+#else
     reason(d, "No usable FFmpeg VAAPI render device or CUDA device; using software", 0);
+#endif
     if (open_cpu(d) < 0) { lrdp_h264_decoder_free(d); return NULL; }
   }
   return d;
@@ -417,8 +462,12 @@ void lrdp_h264_decoder_free(lrdp_h264_decoder* d) {
   close_codec(d);
   clear_history(d);
   for (size_t i = 0; i < PARAMETER_COUNT; ++i) av_free(d->params[i].data);
+#ifdef __ANDROID__
+  lrdp_android_h264_free(d->android);
+#else
   for (int i = 0; i < d->render_count; ++i) free(d->render_devices[i]);
   free(d->render_devices);
+#endif
   av_frame_free(&d->received);
   av_frame_free(&d->downloaded);
   av_frame_free(&d->output);
@@ -434,7 +483,7 @@ int lrdp_h264_decoder_decode(lrdp_h264_decoder* d, const uint8_t* data, size_t s
   if (inspect_packet(d, data, size, &idr, &slices) < 0) return -1;
   if (!slices) return 0;
   if (d->need_idr && !idr) return -1;
-  if (!d->context && open_cpu(d) < 0) return -1;
+  if (!d->context && !d->trial && open_cpu(d) < 0) return -1;
   AVPacket* p = packet(d, data, size, d->params_dirty || idr);
   if (!p) return -1;
   d->params_dirty = 0;
@@ -476,7 +525,11 @@ const lrdp_h264_frame* lrdp_h264_decoder_frame(const lrdp_h264_decoder* d) {
 }
 const char* lrdp_h264_decoder_backend(const lrdp_h264_decoder* d) {
   if (!d) return "software";
+#ifdef __ANDROID__
+  if (d->confirmed && d->android) return "mediacodec";
+#else
   if (d->confirmed) return d->device_type == AV_HWDEVICE_TYPE_VAAPI ? "vaapi" : "cuda";
+#endif
   return d->trial ? "pending" : "software";
 }
 const char* lrdp_h264_decoder_fallback_reason(const lrdp_h264_decoder* d) {

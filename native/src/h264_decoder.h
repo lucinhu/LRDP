@@ -27,8 +27,9 @@ void lrdp_h264_decoder_free(lrdp_h264_decoder* decoder);
 int lrdp_h264_decoder_decode(lrdp_h264_decoder* decoder,
                              const uint8_t* data, size_t size);
 const lrdp_h264_frame* lrdp_h264_decoder_frame(const lrdp_h264_decoder* decoder);
-/* "pending", "software", "vaapi", or "cuda". Hardware names are returned
- * only after an actual hardware frame was decoded and downloaded. */
+/* "pending", "software", "vaapi", "cuda", or "mediacodec". Hardware names
+ * are returned only after a real frame was decoded and copied to owned I420.
+ * Android uses its synchronous platform decoder; CPU always uses FFmpeg. */
 const char* lrdp_h264_decoder_backend(const lrdp_h264_decoder* decoder);
 /* Empty if there was no fallback. Owned by the decoder; never NULL. */
 const char* lrdp_h264_decoder_fallback_reason(const lrdp_h264_decoder* decoder);

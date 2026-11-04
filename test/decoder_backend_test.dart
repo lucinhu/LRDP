@@ -60,15 +60,15 @@ void main() {
         final changed = Completer<void>();
         void listener() {
           values.add(session.decoderBackend);
-          if (values.length == 4) changed.complete();
+          if (values.length == 5) changed.complete();
         }
 
         session.addListener(listener);
-        for (final value in [0, 2, 2, 3, 3, 1, 1, 0]) {
+        for (final value in [0, 2, 2, 3, 3, 4, 4, 1, 1, 0]) {
           worker.backend(value);
         }
         await changed.future.timeout(const Duration(seconds: 5));
-        expect(values, [2, 3, 1, 0]);
+        expect(values, [2, 3, 4, 1, 0]);
         session.removeListener(listener);
 
         worker.backend(2);

@@ -73,6 +73,13 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
     } catch (UnsatisfiedLinkError ignored) {
       loaded = false;
     }
+    if (loaded) {
+      try {
+        H264Decoder.nativeInitialize();
+      } catch (LinkageError | RuntimeException ignored) {
+        // Hardware decode is optional; an older library still supports video.
+      }
+    }
     thread = new HandlerThread("lrdp-video");
     thread.start();
     gl = new Handler(thread.getLooper());
@@ -322,6 +329,39 @@ public final class LrdpNativePlugin implements FlutterPlugin, MethodChannel.Meth
   public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
     if (!loaded || !attached) {
       unavailable(result);
+      return;
+    }
+    if (call.method.equals("h264Capabilities") || call.method.equals("h264Diagnostics")) {
+      final boolean capabilities = call.method.equals("h264Capabilities");
+      gl.post(() -> {
+        Map<String, Object> value = capabilities
+            ? H264Decoder.capabilities(debug) : H264Decoder.diagnostics(debug);
+        main.post(() -> result.success(value));
+      });
+      return;
+    }
+    if (call.method.equals("testH264SoftwareCodec")) {
+      if (!debug) {
+        result.error("h264-test-unsupported", "H264 test hooks require a Debug test build", null);
+        return;
+      }
+      final Object argument = call.argument("name");
+      if (argument != null && !(argument instanceof String)) {
+        result.error("h264-test-invalid", "Codec name must be a string or null", null);
+        return;
+      }
+      final String name = (String) argument;
+      gl.post(() -> {
+        try {
+          boolean changed = H264Decoder.nativeSetTestCodec(name);
+          main.post(() -> {
+            if (changed) result.success(null);
+            else result.error("h264-test-rejected", "Codec override requires no active native decoder", null);
+          });
+        } catch (LinkageError | RuntimeException ignored) {
+          main.post(() -> result.error("h264-test-unsupported", "H264 test hooks are not compiled in", null));
+        }
+      });
       return;
     }
     if (call.method.equals("diagnostics")) {

@@ -181,19 +181,23 @@ void main() {
       );
       final report = await collectDiagnostics(
         store,
-        decoderBackends: [0, 2, 1, 3],
+        decoderBackends: [0, 2, 1, 3, 4],
       );
 
       expect(report, contains('连接配置: 1'));
       expect(report, contains('各会话最近成功帧'));
-      expect(report, contains('0=未知，1=CPU/FFmpeg，2=GPU/VA-API，3=GPU/CUDA'));
+      expect(
+        report,
+        contains('0=未知，1=CPU/FFmpeg，2=GPU/VA-API，3=GPU/CUDA，4=硬件/MediaCodec'),
+      );
       expect(
         report,
         endsWith(
           '  session[1].decoderBackend: 0\n'
           '  session[2].decoderBackend: 2\n'
           '  session[3].decoderBackend: 1\n'
-          '  session[4].decoderBackend: 3',
+          '  session[4].decoderBackend: 3\n'
+          '  session[5].decoderBackend: 4',
         ),
       );
       for (final secret in [
@@ -233,8 +237,8 @@ void main() {
         () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
       );
 
-      final report = await collectDiagnostics(store, decoderBackends: [2]);
-      await _openSheet(tester, store, decoderBackends: [2]);
+      final report = await collectDiagnostics(store, decoderBackends: [4]);
+      await _openSheet(tester, store, decoderBackends: [4]);
 
       expect(find.text('复制诊断信息'), findsOneWidget);
       expect(find.text('仅包含版本、平台、显示设置和解码路径，不含连接地址和凭据。'), findsOneWidget);

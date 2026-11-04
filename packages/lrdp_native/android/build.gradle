@@ -76,7 +76,8 @@ android {
         externalNativeBuild {
             cmake {
                 targets "lrdp_core"
-                arguments "-DANDROID_STL=c++_shared"
+                arguments "-DANDROID_STL=c++_shared",
+                    "-DLRDP_ANDROID_H264_TESTING=${project.findProperty('lrdp.h264Testing') == '1' ? 'ON' : 'OFF'}"
             }
         }
     }

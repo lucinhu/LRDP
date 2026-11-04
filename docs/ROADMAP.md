@@ -50,7 +50,8 @@
 - [x] 配置备份与可脱敏诊断：备份格式 `lrdp.profiles` v1 仅含连接配置、不含密码与证书指纹，导入按地址+端口+用户名去重并为冲突 id 生成新 id；诊断报告只含版本、平台、语言、配置数量与显示设置并可一键复制；单元与组件测试通过（移动端文件选择器、跨平台备份恢复待真机验收）
 - [ ] Apple 原生纹理、Windows/MSVC 主应用与真实 GPU，以及 Android ARM64 真机和不同 GPU 验收；GDI 到原生缓冲在局部更新路径外仍有整帧回退
 - [x] Linux H.264 自动选择 VA-API / CUDA，实际硬解失败后有界参考帧重放回退 CPU；会话显示实际后端。最小静态 FFmpeg、CUDA 与 CPU 的真实 TLS/AVC420 协议通过，VA-API 成功与 AVC444 互操作待验收
-- [ ] Android / Windows / Apple 的硬件 H.264（MediaCodec / DXVA / VideoToolbox），Linux 更多 GPU / Windows RDP 服务及各档位的真实 CPU、画质与耗电测量
+- [x] Android 10+ MediaCodec 自动选择、同步当前 AU 的 Image/JNI 适配、实际后端信息与有界 CPU 重放已实现；双 ABI 编译、主机回归及 API26/36 模拟器 CPU 回退通过，MediaCodec 成功出帧仍待验收
+- [ ] Android MediaCodec 的真实 Image/JNI 成功链与 ARM64 手机硬解、Windows / Apple 硬件 H.264（DXVA / VideoToolbox）、Linux 更多 GPU / Windows RDP 服务及各档位的真实 CPU、画质与耗电测量
 - [x] 手机底部操作栏、双指滚动/捏合、双击拖拽、手势说明与软键盘工具条（真机待验收）
 - [x] 缩放视野跟随光标、鼠标边缘持续平移、双指轻点右键与横向滚动；滚动/捏合判别和中断释放（真机待验收）
 - [x] 每个会话分别保留缩放、光标与操作模式；手机返回列表、桌面标签切换、键盘/旋转/分辨率变化及新连接位置序号的布局回归；过滤触摸悬停引起的坐标偏移（真机待验收）

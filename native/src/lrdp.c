@@ -35,7 +35,7 @@
 #include <errno.h>
 #include "clipboard_image.h"
 #include "clipboard_files.h"
-#ifdef LRDP_LINUX_AUTO_H264
+#ifdef LRDP_AUTO_H264
 #include "h264_freerdp.h"
 #endif
 
@@ -724,7 +724,7 @@ static UINT gfx_surface_command(RdpgfxClientContext* gfx, const RDPGFX_SURFACE_C
   LeaveCriticalSection(&s->lock);
   BOOL avc = command->codecId == RDPGFX_CODECID_AVC420 || command->codecId == RDPGFX_CODECID_AVC444 ||
              command->codecId == RDPGFX_CODECID_AVC444v2;
-#ifdef LRDP_LINUX_AUTO_H264
+#ifdef LRDP_AUTO_H264
   gdiGfxSurface* surface = avc && gfx->GetSurfaceData ? gfx->GetSurfaceData(gfx, command->surfaceId) : NULL;
   if (avc && !lrdp_h264_prepare_surface(surface)) {
     failure(s, "Unable to initialize remote graphics decoder");
@@ -737,7 +737,7 @@ static UINT gfx_surface_command(RdpgfxClientContext* gfx, const RDPGFX_SURFACE_C
     return status;
   }
   if (avc) {
-#ifdef LRDP_LINUX_AUTO_H264
+#ifdef LRDP_AUTO_H264
     int backend = lrdp_h264_surface_backend(surface);
 #else
     int backend = 1; /* This build uses the original software GDI codec. */

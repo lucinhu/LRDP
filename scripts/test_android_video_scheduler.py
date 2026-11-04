@@ -2,7 +2,7 @@
 """Run host-only Android video scheduling regressions with Python and JDK 11+.
 
 Compiles the current Java plugin against small Android/Flutter queue stubs,
-replacing only JNI declarations with a deterministic native-renderer mock.
+replacing JNI declarations and library loading with deterministic native mocks.
 The real Video implementation runs unchanged. This checks scheduling/state,
 not Android runtime, SurfaceProducer, JNI ABI, EGL, pixels, or device behavior.
 Run: python3 scripts/test_android_video_scheduler.py
@@ -121,6 +121,15 @@ public class MethodChannel {
     void notImplemented();
   }
 }''',
+    'dev/lrdp/lrdp_native/H264Decoder.java': '''package dev.lrdp.lrdp_native;
+import java.util.Map;
+public final class H264Decoder {
+  public static int initAttempts, testAttempts;
+  public static void nativeInitialize() { initAttempts++; throw new UnsatisfiedLinkError("older library"); }
+  static Map<String, Object> capabilities(boolean debug) { return Map.of("testHooksEnabled",false); }
+  static Map<String, Object> diagnostics(boolean debug) { return Map.of("activeDecoders",0L); }
+  static boolean nativeSetTestCodec(String name) { testAttempts++; throw new UnsatisfiedLinkError("test macro off"); }
+}''',
     'dev/lrdp/lrdp_native/Bridge.java': '''package dev.lrdp.lrdp_native;
 import android.view.Surface;
 public final class Bridge {
@@ -177,10 +186,11 @@ public final class IdleRegression {
     Fixture(int api) throws Exception {
       Bridge.fresh(); Build.VERSION.SDK_INT = api; Surface.failHint = false;
       plugin.onAttachedToEngine(binding);
-      // There is no liblrdp on this host classpath. JNI entry points below have
-      // been replaced with Bridge, so enable the mock capability explicitly.
+      // Native video works even if the optional H264 JNI entry is absent.
       Field loaded = plugin.getClass().getDeclaredField("loaded");
-      loaded.setAccessible(true); loaded.set(plugin, true);
+      loaded.setAccessible(true);
+      equal(1, Boolean.TRUE.equals(loaded.get(plugin)) ? 1 : 0, "optional H264 does not disable video");
+      equal(1, H264Decoder.initAttempts > 0 ? 1 : 0, "optional init attempted");
       Field g = plugin.getClass().getDeclaredField("gl");
       g.setAccessible(true); gl = ((Handler) g.get(plugin)).looper;
       call("create", Map.of("ticket", 1L));
@@ -301,9 +311,30 @@ public final class IdleRegression {
     f = new Fixture(26); Bridge.failed = 1; f.tick();
     equal(0, f.count("drawAttempts"), "native failure never draws"); f.close();
   }
+  static class Capture implements MethodChannel.Result {
+    boolean done; Object value; String error;
+    public void success(Object v) { done=true; value=v; }
+    public void error(String c, String m, Object d) { done=true; error=c; }
+    public void notImplemented() { throw new AssertionError("not implemented"); }
+  }
+  static void optionalH264Channels() throws Exception {
+    Fixture f=new Fixture(29);
+    for(String name:new String[]{"h264Capabilities","h264Diagnostics"}) {
+      Capture c=new Capture(); f.plugin.onMethodCall(new MethodCall(name,Map.of()),c); f.drain();
+      equal(1,c.done&&c.error==null&&c.value instanceof Map ? 1 : 0,"readonly H264 channel completes "+name);
+    }
+    H264Decoder.testAttempts=0; Capture c=new Capture();
+    f.plugin.onMethodCall(new MethodCall("testH264SoftwareCodec",Map.of("name","soft")),c); f.drain();
+    equal(1,"h264-test-unsupported".equals(c.error) ? 1 : 0,"missing native test symbol returns unsupported");
+    equal(1,H264Decoder.testAttempts,"Debug test hook attempted once");
+    Field debug=f.plugin.getClass().getDeclaredField("debug"); debug.setAccessible(true); debug.set(f.plugin,false);
+    c=new Capture(); f.plugin.onMethodCall(new MethodCall("testH264SoftwareCodec",Map.of("name","soft")),c); f.drain();
+    equal(1,"h264-test-unsupported".equals(c.error) ? 1 : 0,"Release app refuses software override");
+    equal(1,H264Decoder.testAttempts,"Release guard avoids calling native hook"); f.close();
+  }
   public static void main(String[] args) throws Exception {
     for (int api : new int[]{24, 26, 29, 30, 35}) staticFrames(api);
-    asyncGenerationAndResize(); epochRaces(); failures();
+    asyncGenerationAndResize(); epochRaces(); failures(); optionalH264Channels();
     System.out.println("PASS " + assertions + " host mock assertions: API24/26/29/30/35 idle, "
         + "fps, size, visibility, surface epochs, g1/g2 race, zero/failure retries. "
         + "Android device validation is separate.");
@@ -332,6 +363,10 @@ def main():
         if plugin.count(declaration) != 1:
             raise RuntimeError(f'JNI mock must match exactly one declaration: {signature}')
         plugin = plugin.replace(declaration, f'private static {signature} {{ {body} }}')
+    load = 'System.loadLibrary("lrdp");'
+    if plugin.count(load) != 1:
+        raise RuntimeError('Library-load mock must match exactly once')
+    plugin = plugin.replace(load, '// Native library loading is mocked for this host test.')
     sources = dict(SOURCES)
     sources['dev/lrdp/lrdp_native/LrdpNativePlugin.java'] = plugin
     with tempfile.TemporaryDirectory(prefix='lrdp-android-scheduler-') as temporary:

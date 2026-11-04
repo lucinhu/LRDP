@@ -165,6 +165,7 @@ class _SessionInfoSheetState extends State<SessionInfoSheet> {
     1 => 'CPU (FFmpeg)',
     2 => 'GPU (VA-API)',
     3 => 'GPU (CUDA)',
+    4 => context.tr('硬件（MediaCodec）'),
     _ => context.tr('解码路径未获取'),
   };
 

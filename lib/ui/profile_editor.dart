@@ -81,9 +81,9 @@ class _ProfileEditorState extends State<ProfileEditor> {
   };
   String get _qualityHelp => switch (_quality) {
     ConnectionQuality.automatic =>
-      "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码。修改后需重新连接。",
+      "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码；Android 10+ 在支持时使用硬件解码，否则使用 CPU。修改后需重新连接。",
     ConnectionQuality.saveBandwidth =>
-      "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码。修改后需重新连接。",
+      "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码；Android 10+ 在支持时使用硬件解码，否则使用 CPU。修改后需重新连接。",
     ConnectionQuality.sharpText => "使用位图更新以获得清晰文字，通常会增加流量。修改后需重新连接。",
   };
   late String _resolution = widget.profile?.automaticResolution ?? true

@@ -386,6 +386,63 @@ Release 构建必须显式选择签名：本地开发预览设置 `LRDP_ANDROID_
 未选择签名的 Release 任务会失败，Debug 开发构建不受影响。签名密码由 CI 密钥或进程环境
 提供，不放入命令行、配置导出、日志或源码；密钥库不进入源码包。
 
+### Android H.264 自动硬解（开发分支）
+
+仓库内 FreeRDP + H.264 构建默认开启 `LRDP_ANDROID_AUTO_H264`。Android 10 / API29
+及以上从系统列表中筛选 AVC decoder，必须同时满足 `isHardwareAccelerated()` 和
+`!isSoftwareOnly()`；按明确的组件名创建，不使用可能选中软件实现的 `createDecoderByType()`。
+API24–28 缺少同等公开硬件分类接口，目前保守使用 FFmpeg CPU。需要协商到 H.264；
+“清晰文字”关闭 H.264，此时不会启用视频硬解。
+
+Java MediaCodec 以无 Surface 模式输出 `Image`，JNI 根据 crop、每平面的 row/pixel stride
+及实际容量拷贝为 I420，再交由既有 FreeRDP GDI 合成、原生 Surface 上传。只有当前 AU 的
+准确时间戳输出完成并成功复制，信息面板才显示“硬件（MediaCodec）”（可选 ABI 后端值 4）。
+仅检测到组件或 configure 成功不表示已使用硬解；旧库不提供后端时显示未获取。
+
+输入/输出等待共用单调时钟 200 ms 期限，避免静止尾帧或 AVC444 的连续 luma/chroma
+回调借用上一帧。该期限不能中断厂商 configure / stop 的 Binder 实现，不是整个调用的硬实时保证。
+无可用组件、不可读 Image、未知布局、容量或尺寸异常、时间戳错误、等待超时都走 CPU 回退；
+首次候选失败可试下个组件，已实际出帧的后端失败则保持 CPU。回退复用与 Linux 相同的
+有界 SPS/PPS + IDR 历史重放，不同时维护 CPU shadow，也不需要下一帧来释放当前尾帧。
+
+新桥接使用已有 Android FFmpeg CPU 静态库，无需给 FFmpeg 启用 MediaCodec 或链接
+`mediandk`。Java 插件、JNI 库及新增 codec 类需要一起构建，不能只替换 Dart 代码。
+`-DLRDP_ANDROID_AUTO_H264=OFF` 可在原生 CMake 禁用适配；关闭后继续原软件解码。
+没有端到端零拷贝或固定 CPU / 功耗降幅保证，厂商设备仍需实际验收。
+
+H.264 独立回归不依赖 Xvnc 或个人桌面。需要系统 FreeRDP 3.32.2 服务端开发包、
+含 libx264 的 FFmpeg 命令、Python Pillow/numpy、JDK 17–24，以及前述 NDK27/双 ABI
+OpenSSL/FFmpeg 构建缓存。脚本从环境变量或 `android/local.properties` 发现 SDK 与 Flutter。
+
+```sh
+python3 scripts/test_android_h264_decoder.py
+python3 scripts/test_android_video_scheduler.py
+sdkmanager 'system-images;android-36;google_apis;x86_64' 'system-images;android-26;google_apis;x86_64'
+python3 scripts/run_android_h264_test.py --api 36 --prepare-only
+python3 scripts/run_android_h264_test.py --api 36 --mode normal
+python3 scripts/run_android_h264_test.py --api 36 --mode software-codec --reuse-apk
+python3 scripts/run_android_h264_test.py --api 26 --mode normal --reuse-apk
+```
+
+该脚本管理自己专用的 `LRDP_H264_API*` AVD、5556/5038 端口、私有证书和应用测试配置，
+退出时清理自建进程；发现端口属于其他 AVD 时拒绝接管。使用真实 TLS/RDPGFX AVC420 的
+9 个 IDR/P access unit、原生纹理与系统截图，逐像素对照 FFmpeg 解码结果，检查静止尾帧、
+输入、停止和 Java 资源计数。独立 fixture 的 `LRDP_H264_INITIAL_DELAY_MS` 与
+`LRDP_H264_FRAME_INTERVAL_MS` 可在 0–2000 ms 内调节截图观测窗口，默认保持 200/350 ms；
+Android runner 使用更长窗口，不改变应用的帧率或解码期限。
+
+测试 APK 显式启用 `-Plrdp.h264Testing=1`，只在 Android Debug 构建编入软件 codec 注入入口；
+Release + 测试开关会直接配置失败，正式库没有这两个 JNI 测试符号。`software-codec` 模式
+仅验证真实 Java/Image/JNI 链与像素，不能当作硬件验收。正常模式仍按严格硬件标记筛选；
+API36 的 Goldfish 虚拟组件可能被系统标记为硬件，报告同时保存候选、实际后端和成功帧数，
+全部模拟器结果都保持 `hardware_acceptance=false`，物理手机解码与功耗仍需单独测试。
+
+本轮 API26/36 正常模式通过，实际均为 CPU；API36 的 Goldfish 虚拟组件尝试后自动回退。
+强制软件桥接模式保留严格断言，目前返回非零：该镜像的 `c2.android.avc.decoder` 未在
+200 ms 内返回首个输出；`OMX.google.h264.decoder` 实际是同一 C2 组件的别名。
+独立移除 AUD 的诊断也得到同样结果。没有放宽期限、像素或后端判定来使它通过；
+真实 MediaCodec Image/JNI 成功链尚未验收，不能把编译成功或 CPU 回退通过当作硬解成功。
+
 Android 运行回归使用单独的 `LRDP_` 模拟器、ADB 5038 端口、私有桌面和回环
 服务，不使用个人手机或当前桌面。需要 Linux 上的系统 FreeRDP 3.32.2 服务端
 开发库、Xvnc、xsetroot、Python Pillow，以及 x86_64 OpenSSL 构建。示例：

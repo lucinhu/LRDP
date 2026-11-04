@@ -31,7 +31,7 @@ String buildDiagnostics({
     for (final key in keys)
       '  ${_singleLine(key)}: ${_singleLine('${settings[key]}')}',
     if (backends.isNotEmpty) ...[
-      'H.264 解码（各会话最近成功帧，0=未知，1=CPU/FFmpeg，2=GPU/VA-API，3=GPU/CUDA）:',
+      'H.264 解码（各会话最近成功帧，0=未知，1=CPU/FFmpeg，2=GPU/VA-API，3=GPU/CUDA，4=硬件/MediaCodec）:',
       for (var i = 0; i < backends.length; i++)
         '  session[${i + 1}].decoderBackend: ${backends[i]}',
     ],

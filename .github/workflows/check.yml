@@ -43,6 +43,14 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed lib test integration_test test_driver
       - run: flutter analyze
       - run: flutter test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android codec and renderer host regression
+        run: |
+          python3 scripts/test_android_h264_decoder.py
+          python3 scripts/test_android_video_scheduler.py
       - name: Native lifecycle regression
         run: |
           cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLRDP_BUILD_TESTS=ON

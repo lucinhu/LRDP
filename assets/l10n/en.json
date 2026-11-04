@@ -427,7 +427,7 @@
   "已暂停": "Paused",
   "已解码帧数": "Decoded frames",
   "帧率上限": "Frame rate limit",
-  "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码。修改后需重新连接。": "Use H.264 and disable remote wallpaper, themes and animations to save bandwidth. On Linux, decoding automatically uses the GPU or CPU. Reconnect to apply.",
+  "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码；Android 10+ 在支持时使用硬件解码，否则使用 CPU。修改后需重新连接。": "Use H.264 and disable remote wallpaper, themes and animations to save bandwidth. Linux automatically uses GPU or CPU decoding; Android 10+ uses hardware decoding when supported, otherwise CPU decoding. Reconnect to apply.",
   "截取远程屏幕（PrintScreen）": "Capture remote screen (PrintScreen)",
   "打开资源管理器（Win+E）": "Open File Explorer (Win+E)",
   "文件": "Files",
@@ -440,7 +440,7 @@
   "正在暂停": "Pausing",
   "清晰文字": "Sharp text",
   "渲染方式": "Renderer",
-  "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码。修改后需重新连接。": "Let the server choose the encoding. On Linux, H.264 automatically uses GPU or CPU decoding. Reconnect to apply.",
+  "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码；Android 10+ 在支持时使用硬件解码，否则使用 CPU。修改后需重新连接。": "Let the server choose the encoding. Linux automatically uses GPU or CPU decoding for H.264; Android 10+ uses hardware decoding when supported, otherwise CPU decoding. Reconnect to apply.",
   "画质": "Quality",
   "省流量": "Save bandwidth",
   "等待音频": "Waiting for audio",
@@ -457,5 +457,6 @@
   "锁定远程电脑（Win+L）": "Lock remote PC (Win+L)",
   "需要证书": "Certificate required",
   "音频状态": "Audio state",
-  "解码路径未获取": "Decoder unknown"
+  "解码路径未获取": "Decoder unknown",
+  "硬件（MediaCodec）": "Hardware (MediaCodec)"
 }

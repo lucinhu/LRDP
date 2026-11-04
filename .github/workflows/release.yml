@@ -43,6 +43,10 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
       - name: Toolchain
         run: |
           sudo apt-get update
@@ -84,6 +88,11 @@ jobs:
           set -o pipefail
           flutter test 2>&1 | tee build/release-logs/flutter-test.log
           python3 -m unittest discover -s scripts/tests -v 2>&1 | tee build/release-logs/python-tests.log
+      - name: Android codec and renderer host regression
+        run: |
+          set -o pipefail
+          python3 scripts/test_android_h264_decoder.py 2>&1 | tee build/release-logs/android-h264-host.log
+          python3 scripts/test_android_video_scheduler.py 2>&1 | tee build/release-logs/android-renderer-host.log
       - name: Native CTest
         run: |
           set -o pipefail
@@ -197,7 +206,7 @@ jobs:
           build_tools="$ANDROID_SDK_ROOT/build-tools/36.0.0"
           "$build_tools/aapt" dump badging "$apk" | head -2 | tee build/release-logs/android-badging.log
           python3 - "$apk" "$build_tools" "$RELEASE_TAG" <<'PY'
-          import json, re, subprocess, sys
+          import json, re, subprocess, sys, tempfile, zipfile
           from pathlib import Path
           apk, build_tools, tag = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
           badging = subprocess.check_output([str(build_tools / 'aapt'), 'dump', 'badging', str(apk)], text=True)
@@ -211,6 +220,18 @@ jobs:
           match = re.search(r'certificate SHA-256 digest:\s*([0-9a-f:]+)', certs)
           if match:
               meta['certificate_sha256'] = match.group(1).replace(':', '')
+          with zipfile.ZipFile(apk) as archive, tempfile.TemporaryDirectory() as temporary:
+              bridge = Path(temporary) / 'liblrdp.so'
+              bridge.write_bytes(archive.read('lib/arm64-v8a/liblrdp.so'))
+              symbols = subprocess.check_output(['nm', '-D', '--defined-only', str(bridge)], text=True)
+              exports = {line.split()[-1] for line in symbols.splitlines() if ' T ' in line}
+              jni = sorted(name for name in exports if name.startswith('Java_'))
+              assert len(jni) == 8, jni
+              assert 'Java_dev_lrdp_lrdp_1native_H264Decoder_nativeInitialize' in jni
+              assert not any('nativeSetTestCodec' in name or 'nativeTestCodec' in name for name in exports)
+              assert len([name for name in exports if name.startswith('lrdp_')]) == 31
+              meta['jni_exports'] = jni
+              meta['codec_test_hook_exports_absent'] = True
           (apk.parent / 'apk-meta.json').write_text(json.dumps(meta, indent=2) + '\n')
           PY
       - uses: actions/upload-artifact@v4

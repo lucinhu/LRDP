@@ -101,7 +101,8 @@ class RdpSession extends ChangeNotifier {
   bool get hasDecodedAvc => features & 4 != 0;
 
   /// Backend of the latest successfully decoded H.264 frame across surfaces:
-  /// 0 unknown (including older libraries), 1 FFmpeg, 2 VA-API, 3 CUDA.
+  /// 0 unknown (including older libraries), 1 FFmpeg, 2 VA-API, 3 CUDA,
+  /// 4 hardware MediaCodec.
   int get decoderBackend => _decoderBackend;
   int _decoderBackend = 0;
   String? remoteClipboard;

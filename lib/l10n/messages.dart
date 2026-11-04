@@ -443,8 +443,8 @@ const localizedMessages = <String, Map<String, String>>{
     "已暂停": "已暂停",
     "已解码帧数": "已解码帧数",
     "帧率上限": "帧率上限",
-    "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码。修改后需重新连接。":
-        "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码。修改后需重新连接。",
+    "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码；Android 10+ 在支持时使用硬件解码，否则使用 CPU。修改后需重新连接。":
+        "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码；Android 10+ 在支持时使用硬件解码，否则使用 CPU。修改后需重新连接。",
     "截取远程屏幕（PrintScreen）": "截取远程屏幕（PrintScreen）",
     "打开资源管理器（Win+E）": "打开资源管理器（Win+E）",
     "文件": "文件",
@@ -457,8 +457,8 @@ const localizedMessages = <String, Map<String, String>>{
     "正在暂停": "正在暂停",
     "清晰文字": "清晰文字",
     "渲染方式": "渲染方式",
-    "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码。修改后需重新连接。":
-        "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码。修改后需重新连接。",
+    "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码；Android 10+ 在支持时使用硬件解码，否则使用 CPU。修改后需重新连接。":
+        "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码；Android 10+ 在支持时使用硬件解码，否则使用 CPU。修改后需重新连接。",
     "画质": "画质",
     "省流量": "省流量",
     "等待音频": "等待音频",
@@ -476,6 +476,7 @@ const localizedMessages = <String, Map<String, String>>{
     "需要证书": "需要证书",
     "音频状态": "音频状态",
     "解码路径未获取": "解码路径未获取",
+    "硬件（MediaCodec）": "硬件（MediaCodec）",
   },
   "zh-TW": {
     "IPv6 地址格式不正确": "IPv6 地址格式不正確",
@@ -920,8 +921,8 @@ const localizedMessages = <String, Map<String, String>>{
     "已暂停": "已暫停",
     "已解码帧数": "已解碼影格數",
     "帧率上限": "影格率上限",
-    "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码。修改后需重新连接。":
-        "使用 H.264 並關閉遠端桌布、主題與動畫以節省流量。Linux 下自動選擇 GPU 或 CPU 解碼。修改後需重新連線。",
+    "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码；Android 10+ 在支持时使用硬件解码，否则使用 CPU。修改后需重新连接。":
+        "使用 H.264 並關閉遠端桌布、主題與動畫以節省流量。Linux 下自動選擇 GPU 或 CPU 解碼；Android 10+ 在支援時使用硬體解碼，否則使用 CPU。修改後需重新連線。",
     "截取远程屏幕（PrintScreen）": "擷取遠端畫面（PrintScreen）",
     "打开资源管理器（Win+E）": "開啟檔案總管（Win+E）",
     "文件": "檔案",
@@ -934,8 +935,8 @@ const localizedMessages = <String, Map<String, String>>{
     "正在暂停": "正在暫停",
     "清晰文字": "清晰文字",
     "渲染方式": "算繪方式",
-    "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码。修改后需重新连接。":
-        "由伺服器選擇編碼。Linux 下 H.264 自動選擇 GPU 或 CPU 解碼。修改後需重新連線。",
+    "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码；Android 10+ 在支持时使用硬件解码，否则使用 CPU。修改后需重新连接。":
+        "由伺服器選擇編碼。Linux 下 H.264 自動選擇 GPU 或 CPU 解碼；Android 10+ 在支援時使用硬體解碼，否則使用 CPU。修改後需重新連線。",
     "画质": "畫質",
     "省流量": "省流量",
     "等待音频": "等待音訊",
@@ -953,6 +954,7 @@ const localizedMessages = <String, Map<String, String>>{
     "需要证书": "需要憑證",
     "音频状态": "音訊狀態",
     "解码路径未获取": "解碼路徑未取得",
+    "硬件（MediaCodec）": "硬體（MediaCodec）",
   },
   "en": {
     "IPv6 地址格式不正确": "Invalid IPv6 address",
@@ -1481,8 +1483,8 @@ const localizedMessages = <String, Map<String, String>>{
     "已暂停": "Paused",
     "已解码帧数": "Decoded frames",
     "帧率上限": "Frame rate limit",
-    "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码。修改后需重新连接。":
-        "Use H.264 and disable remote wallpaper, themes and animations to save bandwidth. On Linux, decoding automatically uses the GPU or CPU. Reconnect to apply.",
+    "使用 H.264 并关闭远端壁纸、主题与动画以节省流量。Linux 下自动选择 GPU 或 CPU 解码；Android 10+ 在支持时使用硬件解码，否则使用 CPU。修改后需重新连接。":
+        "Use H.264 and disable remote wallpaper, themes and animations to save bandwidth. Linux automatically uses GPU or CPU decoding; Android 10+ uses hardware decoding when supported, otherwise CPU decoding. Reconnect to apply.",
     "截取远程屏幕（PrintScreen）": "Capture remote screen (PrintScreen)",
     "打开资源管理器（Win+E）": "Open File Explorer (Win+E)",
     "文件": "Files",
@@ -1495,8 +1497,8 @@ const localizedMessages = <String, Map<String, String>>{
     "正在暂停": "Pausing",
     "清晰文字": "Sharp text",
     "渲染方式": "Renderer",
-    "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码。修改后需重新连接。":
-        "Let the server choose the encoding. On Linux, H.264 automatically uses GPU or CPU decoding. Reconnect to apply.",
+    "由服务器选择编码。Linux 下 H.264 自动选择 GPU 或 CPU 解码；Android 10+ 在支持时使用硬件解码，否则使用 CPU。修改后需重新连接。":
+        "Let the server choose the encoding. Linux automatically uses GPU or CPU decoding for H.264; Android 10+ uses hardware decoding when supported, otherwise CPU decoding. Reconnect to apply.",
     "画质": "Quality",
     "省流量": "Save bandwidth",
     "等待音频": "Waiting for audio",
@@ -1514,5 +1516,6 @@ const localizedMessages = <String, Map<String, String>>{
     "需要证书": "Certificate required",
     "音频状态": "Audio state",
     "解码路径未获取": "Decoder unknown",
+    "硬件（MediaCodec）": "Hardware (MediaCodec)",
   },
 };

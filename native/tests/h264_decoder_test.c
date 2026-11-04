@@ -13,6 +13,70 @@
 
 #define CHECK(x) do { if (!(x)) { fprintf(stderr, "h264: %s at %d\n", #x, __LINE__); exit(1); } } while (0)
 
+#ifdef LRDP_H264_ANDROID_FAKE
+#ifndef __ANDROID__
+#error "Android fake requires __ANDROID__ for the engine platform branch"
+#endif
+#include "h264_android.h"
+/* Host-only transport double: the frames below are decoded by FFmpeg CPU.
+ * It validates engine transitions, never proves real Android/GPU capability. */
+struct lrdp_android_h264 { AVCodecContext* codec; int candidate, calls; };
+static int fake_candidates, fake_bad_candidates, fake_fault, fake_fail_after;
+static int fake_next_calls, fake_decode_calls, fake_live, fake_freed;
+static void fake_reset(int candidates) {
+  CHECK(fake_live == 0);
+  fake_candidates = candidates; fake_bad_candidates = 0;
+  fake_fault = fake_fail_after = fake_next_calls = fake_decode_calls = fake_freed = 0;
+}
+static enum AVPixelFormat fake_format(AVCodecContext* context, const enum AVPixelFormat* formats) {
+  (void)context;
+  for (; *formats != AV_PIX_FMT_NONE; ++formats)
+    if (*formats == AV_PIX_FMT_YUV420P) return *formats;
+  return AV_PIX_FMT_NONE;
+}
+lrdp_android_h264* lrdp_android_h264_new(void) {
+  if (!fake_candidates) return NULL;
+  lrdp_android_h264* d = calloc(1, sizeof(*d)); CHECK(d);
+  ++fake_live;
+  return d;
+}
+void lrdp_android_h264_free(lrdp_android_h264* d) {
+  if (!d) return;
+  avcodec_free_context(&d->codec);
+  free(d); --fake_live; ++fake_freed;
+}
+int lrdp_android_h264_next(lrdp_android_h264* d) {
+  ++fake_next_calls;
+  avcodec_free_context(&d->codec);
+  d->calls = 0;
+  return ++d->candidate < fake_candidates;
+}
+int lrdp_android_h264_decode(lrdp_android_h264* d, const uint8_t* data, size_t size, AVFrame* output) {
+  ++fake_decode_calls; ++d->calls;
+  if ((fake_bad_candidates & (1 << d->candidate)) ||
+      (fake_fail_after && d->calls >= fake_fail_after)) return AVERROR_EXTERNAL;
+  if (fake_fault == 1) { fake_fault = 0; return 0; } /* Illegal delayed output. */
+  if (!d->codec) {
+    const AVCodec* codec = avcodec_find_decoder(AV_CODEC_ID_H264); CHECK(codec);
+    d->codec = avcodec_alloc_context3(codec); CHECK(d->codec);
+    d->codec->get_format = fake_format;
+    d->codec->thread_count = 1;
+    CHECK(avcodec_open2(d->codec, codec, NULL) == 0);
+  }
+  AVPacket* p = av_packet_alloc(); CHECK(p);
+  CHECK(size < INT_MAX);
+  CHECK(av_new_packet(p, (int)size) == 0);
+  memcpy(p->data, data, size);
+  int rc = avcodec_send_packet(d->codec, p);
+  av_packet_free(&p);
+  if (rc < 0) return rc;
+  rc = avcodec_receive_frame(d->codec, output);
+  if (rc < 0) return rc;
+  if (fake_fault == 2) { fake_fault = 0; output->format = AV_PIX_FMT_YUV444P; }
+  return 1;
+}
+#endif
+
 typedef struct {
   AVPacket** packets;
   size_t count;
@@ -256,6 +320,72 @@ static void test_nv12(void) {
   CHECK(!lrdp_h264_decoder_frame(d));
   av_frame_free(&invalid); lrdp_h264_decoder_free(d);
 }
+#ifdef LRDP_H264_ANDROID_FAKE
+static void test_android_engine(const fixture* f) {
+  /* No JNI bridge/capability: construct and decode directly on CPU. */
+  fake_reset(0);
+  lrdp_h264_decoder* d = lrdp_h264_decoder_new(); CHECK(d);
+  CHECK(strcmp(lrdp_h264_decoder_backend(d), "software") == 0);
+  decode_index(d, f, 0);
+  CHECK(fake_decode_calls == 0);
+  lrdp_h264_decoder_free(d);
+
+  /* First candidate selected at new(), only next() after its actual failure. */
+  fake_reset(2); fake_bad_candidates = 1;
+  d = lrdp_h264_decoder_new(); CHECK(d);
+  CHECK(strcmp(lrdp_h264_decoder_backend(d), "pending") == 0);
+  CHECK(!lrdp_h264_decoder_frame(d)); CHECK(fake_next_calls == 0);
+  decode_index(d, f, 0);
+  CHECK(fake_next_calls == 1 && fake_decode_calls == 2);
+  CHECK(strcmp(lrdp_h264_decoder_backend(d), "mediacodec") == 0);
+  decode_index(d, f, 1);
+  CHECK(lrdp_h264_decoder_test_replayed(d) == 0);
+  lrdp_h264_decoder_free(d); CHECK(fake_freed == 1);
+
+  /* A confirmed decoder fails mid-GOP: replay CPU including the failing P AU,
+   * release platform state once and never try a new candidate on this stream. */
+  fake_reset(2); fake_fail_after = 3;
+  d = lrdp_h264_decoder_new(); CHECK(d);
+  decode_index(d, f, 0); decode_index(d, f, 1); decode_index(d, f, 2);
+  CHECK(strcmp(lrdp_h264_decoder_backend(d), "software") == 0);
+  CHECK(fake_freed == 1 && fake_next_calls == 0);
+  CHECK(lrdp_h264_decoder_test_replayed(d) == 3);
+  for (size_t i = 3; i < f->count; ++i) decode_index(d, f, i);
+  CHECK(fake_decode_calls == 3);
+  lrdp_h264_decoder_free(d); CHECK(fake_freed == 1);
+
+  /* Pending output and wrong pixel format are failures, not frame successes. */
+  for (int fault = 1; fault <= 2; ++fault) {
+    fake_reset(1); fake_fault = fault;
+    d = lrdp_h264_decoder_new(); CHECK(d);
+    decode_index(d, f, 0);
+    CHECK(strcmp(lrdp_h264_decoder_backend(d), "software") == 0);
+    CHECK(lrdp_h264_decoder_test_replayed(d) == 1);
+    CHECK(fake_freed == 1 && fake_next_calls == 1);
+    decode_index(d, f, 1);
+    lrdp_h264_decoder_free(d);
+  }
+
+  fake_reset(2); fake_bad_candidates = 3;
+  d = lrdp_h264_decoder_new(); CHECK(d);
+  decode_index(d, f, 0);
+  CHECK(strcmp(lrdp_h264_decoder_backend(d), "software") == 0);
+  CHECK(fake_decode_calls == 2 && fake_next_calls == 2 && fake_freed == 1);
+  lrdp_h264_decoder_free(d);
+
+  /* History limit also closes a working platform codec before CPU replay. */
+  fake_reset(1);
+  d = lrdp_h264_decoder_new(); CHECK(d);
+  lrdp_h264_decoder_test_limits(d, 0, 2);
+  decode_index(d, f, 0); decode_index(d, f, 1); decode_index(d, f, 2);
+  CHECK(lrdp_h264_decoder_test_replayed(d) == 2);
+  CHECK(fake_decode_calls == 2 && fake_freed == 1);
+  CHECK(strcmp(lrdp_h264_decoder_backend(d), "software") == 0);
+  lrdp_h264_decoder_free(d);
+  fake_reset(0);
+  puts("Android engine host transport double passed; no real MediaCodec/hardware tested");
+}
+#endif
 int main(int argc, char** argv) {
   CHECK(argc == 1 || (argc == 2 && strcmp(argv[1], "--software-only") == 0));
   av_log_set_level(AV_LOG_FATAL);
@@ -270,6 +400,9 @@ int main(int argc, char** argv) {
   test_bad_input(&small);
   test_full_packet_limit();
   test_nv12();
+#ifdef LRDP_H264_ANDROID_FAKE
+  test_android_engine(&small);
+#endif
   free_fixture(&small); free_fixture(&large);
   lrdp_h264_decoder_free(NULL);
   puts("h264 decoder: CPU pixels, multi-GOP, recovery, limits, resize, isolation and malformed input passed");

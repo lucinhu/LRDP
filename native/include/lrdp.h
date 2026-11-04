@@ -48,7 +48,8 @@ LRDP_API uint32_t lrdp_error_code(lrdp_session*);
  * 5 server negotiated file clipboard streams and this adapter supports them. */
 LRDP_API int lrdp_features(lrdp_session*);
 /* Optional additive ABI v5. Actual backend of the latest decoded H264 frame:
- * 0 not yet reported, 1 software CPU, 2 VA-API GPU, 3 CUDA GPU. Per-surface
+ * 0 not yet reported, 1 software CPU, 2 VA-API GPU, 3 CUDA GPU,
+ * 4 Android hardware MediaCodec. Per-surface
  * fallback can change this while connected. NULL returns 0. */
 LRDP_API int lrdp_get_decoder_backend(lrdp_session*);
 /* Fields: 0 error, 1 SHA256 fingerprint, 2 received clipboard (consumed),

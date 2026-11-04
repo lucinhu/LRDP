@@ -78,5 +78,6 @@ int lrdp_h264_surface_backend(const gdiGfxSurface* surface) {
   if (strcmp(backend, "software") == 0) return 1;
   if (strcmp(backend, "vaapi") == 0) return 2;
   if (strcmp(backend, "cuda") == 0) return 3;
+  if (strcmp(backend, "mediacodec") == 0) return 4;
   return 0;
 }

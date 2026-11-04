@@ -2,6 +2,67 @@
 
 记录日期：2026-10-22。当前为开发预览。构建、真实协议和平台设备验收分别记录。
 
+## Android H.264 自动 MediaCodec / CPU（2026-11-04 开发批次）
+
+本批为 0.5.0 预览发布之后的开发改动；已有 GitHub / AUR 0.5.0 包不包含此功能。
+Android API29+ 仅选择明确标记为硬件且非软件的 AVC 组件，以当前 AU 时间戳的实际
+`Image` 输出及 JNI I420 复制成功确认后端 4；API24–28 保守使用 CPU。无候选、输出不可读、
+超时、布局或尺寸变化等失败复用有界参数集与 IDR 历史重放，保持 CPU，无双路影子解码。
+会话信息和匿名诊断同步显示实际最近成功帧的后端。
+
+已完成的主机和构建检查：
+
+- 原生 Release CTest **8/8**，含 Android 传输替身故障恢复和纯 C 图像布局测试；
+  NV12/NV21、行填充、pixel stride、奇数尺寸、crop、容量与溢出拒绝通过。替身不证明 MediaCodec。
+- 软件路径及 Android 替身 ASan/UBSan/LSan、图像拷贝 ASan/UBSan、严格 C11 编译通过。
+- Java host mock 断言：H.264 核心 **304**、受保护软件测试入口 **19**、插件/静态绘制 **143**；
+  验证 API guard、严格候选、精确时间戳、共用等待期限、低延迟能力开关和资源关闭。
+- `flutter analyze` 无问题，完整 Flutter 测试 **289 passed / 11 skipped**。
+- 共用引擎的 Linux 私有 TLS/AVC420 继续实际选择 CUDA，9 个 IDR/P AU、完整三色像素、
+  静止尾帧、输入和停止通过；阻塞输入/停止回归通过。fixture 增加可调观测窗口后，默认
+  200/350 ms 的 Linux 协议回归再次通过。
+- NDK27.0.12077973、API24、x86_64 / arm64-v8a 的独立 Release 原生构建均通过。
+  两者恰好 31 个公共 C ABI + 8 个 JNI、LOAD 0x4000 对齐、仅 8 个 Android 系统动态依赖。
+  完整符号表不含 `nativeSetTestCodec` 或 `nativeTestCodec`；Release + codec 测试宏 ON 的
+  隔离负例在配置阶段明确失败。
+- 两架构原生库 SHA256 分别为
+  `0252f4284b62116c451154d3fe6228d9221d9c7cb9049d7d3ee96e0a027f946b`、
+  `af29b62da708a2d26c82888c47a1a5c7cd845ce99f0717d0dccb91a82047f9cb`。
+  复现、导出、ELF 和源码快照证据位于 `build/android-h264-build-validation/`。
+
+实际 Android 回环（私有 API26/36 x86_64 AVD，5556/5038）：
+
+| 场景 | 实际结果 |
+| --- | --- |
+| API26 正常模式 | **通过**；保守 CPU（1），不枚举硬件候选，Java 帧数 0；9 AU 三色完整像素、原生纹理、静止尾帧、输入 A 和停止通过，stop 0.004101 s |
+| API36 正常模式 | **通过 CPU 回退**；系统标记为硬件的 `c2.goldfish.h264.decoder` 尝试后超时，后端历史 `[0,1]`，Java 帧数 0；9 generation / uploads / draw，静止 1 s 无额外绘制或尺寸变化，三色、输入与 stop 0.004433 s 通过 |
+| API36 强制软件桥 | **未通过**成功出帧断言；C2 软件组件成功排队 input PTS 1，但 200298 µs 后 `output-wait` 超时、output PTS -1、Java 帧数 0，无 Java 异常；仍正确重放到 CPU，三色像素通过，不算 Image/JNI 正例 |
+| OMX 名称交叉诊断 | **同样未通过**；202162 µs 后超时；日志确认 `OMX.google.h264.decoder` 实际创建的仍是 `c2.android.avc.decoder`，不能算两个独立 decoder |
+| 去 AUD 独立实验 | **同样未通过**；仅从已切分的 9 AU 移除 AUD，全部 VCL 字节与像素 oracle 不变，APK/生产代码不变；200379 µs 后 output PTS 仍为 -1，排除该次 AUD 排列假设 |
+| 资源清理 | 两正常模式的 Java codec / Image 计数、原生 Surface / EGL / 注册计数在停止后均归零；正常 API36/26 使用同一 Debug 测试 APK |
+
+两个正常模式测试 APK SHA256 为
+`45d3455fd3f7057a281c6540195ce66e881fa704eb582ddad68650a1b2ad33b1`。
+完整逐像素、阶段和静止计数证据在 `build/android-h264-runtime/api36-normal/VERDICT.json`、
+`api26-normal/VERDICT.json`；失败尝试及日志保留于 `api36-software-codec/attempt-*`，
+去 AUD 实验单列 `diagnostic-no-aud/`。所有模拟器报告均为 `hardware_acceptance=false`。
+没有增加解码期限或放宽后端 / 像素标准来使强制桥测试通过。
+
+普通 `lib/main.dart` ARM64 Release 预览已构建并通过 APK、ELF/RELRO、16 KiB ZIP、签名、
+主入口和 non-debuggable 检查；codec 测试宏 OFF，无两个 codec 注入 JNI 符号。
+预览使用本地开发 debug key，未上传正式发布，未在 ARM64 设备运行：
+`build/android-h264-runtime/lrdp-main-arm64-release-preview.apk`，SHA256
+`3537b106360e875c3ab96097a38f399419c2f51572f7623a01eec7d4bf39b8d9`。
+其原生库 SHA256 为 `152c90381b68537c537640b5dbfecb53d689b1bf548a8fe999e7187e299864da`；
+源码 / 依赖构建前后快照一致，详见 `build/android-h264-runtime/MAIN_PREVIEW.json`。
+`build_verified=true` 不表示 `positive_tested` 或 `software_bridge_passed`，后二者仍为 false。
+
+限制：目前实现、构建和 CPU 回退已验证，**尚未验证到真实 MediaCodec Image/JNI 成功出帧**。
+模拟器的 Goldfish 组件也可能由 Android 标记为硬件，不能把组件元数据、创建成功或
+模拟器出帧当作物理手机加速验收。仍需 Android ARM64 真机、不同厂商 codec、真实服务端
+AVC444/v2、长时间运行、耗电与 CPU 测量。200 ms 为共用解码等待期限，不能中断厂商的
+configure/stop Binder 调用；当前仍有 Image→I420→BGRA 复制与纹理上传，不是零拷贝。
+
 ## Linux H.264 自动 GPU / CPU（2026-11-03 第三批）
 
 本批已完成实现和本机 Linux Release 构建，未发布新 AppImage。以下历史记录中的“未启用硬解”
