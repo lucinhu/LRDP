@@ -176,12 +176,35 @@ class RepeatKeyButton extends StatefulWidget {
   State<RepeatKeyButton> createState() => _RepeatKeyButtonState();
 }
 
-class _RepeatKeyButtonState extends State<RepeatKeyButton> {
+class _RepeatKeyButtonState extends State<RepeatKeyButton>
+    with WidgetsBindingObserver {
   Timer? _repeat;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) _stopRepeating();
+  }
+
+  @override
+  void didUpdateWidget(covariant RepeatKeyButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_repeatable) _stopRepeating();
+  }
 
   bool get _repeatable => widget.enabled && widget.onRepeat != null;
 
   void _startRepeating() {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (!_repeatable ||
+        (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
+      return;
+    }
     // A short haptic tick confirms that the key started auto-repeating.
     HapticFeedback.selectionClick();
     widget.onPressed();
@@ -201,6 +224,7 @@ class _RepeatKeyButtonState extends State<RepeatKeyButton> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _stopRepeating();
     super.dispose();
   }

@@ -62,7 +62,18 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
   late final _memory = widget.memory ?? RemoteViewMemory();
   final _pressed = <int>{};
   Timer? _clipboardTimer;
-  String? _lastClipboard;
+  (RdpSession, DateTime?, String?)? _clipboardSnapshot;
+  String? get _lastClipboard {
+    final snapshot = _clipboardSnapshot;
+    return snapshot != null &&
+            identical(snapshot.$1, session) &&
+            snapshot.$2 == session.connectedAt
+        ? snapshot.$3
+        : null;
+  }
+
+  set _lastClipboard(String? text) =>
+      _clipboardSnapshot = (session, session.connectedAt, text);
   bool _clipboardBusy = false;
   bool get _pan => _memory.pan;
   set _pan(bool value) => _memory.pan = value;
@@ -191,7 +202,8 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
         widget.active &&
         identical(session, target) &&
         target.state == SessionState.connected &&
-        target.connectedAt == connection;
+        target.connectedAt == connection &&
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     _clipboardBusy = true;
     try {
       if (target.remotePicture case final pending?) {
@@ -201,17 +213,10 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
             pending.bytes,
             kind: pending.kind,
           );
-          if (current() &&
-              target.remotePicture == pending &&
-              WidgetsBinding.instance.lifecycleState ==
-                  AppLifecycleState.resumed) {
+          if (current() && target.remotePicture == pending) {
             consumed = await ImageClipboard.write(
               picture,
-              isCurrent: () =>
-                  current() &&
-                  target.remotePicture == pending &&
-                  WidgetsBinding.instance.lifecycleState ==
-                      AppLifecycleState.resumed,
+              isCurrent: () => current() && target.remotePicture == pending,
             );
             if (consumed) _lastClipboard = null;
           }
@@ -223,9 +228,9 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
             target.discardRemotePicture();
           }
         }
-      } else if (session.remoteClipboard != null) {
-        _lastClipboard = session.remoteClipboard;
-        session.remoteClipboard = null;
+      } else if (target.remoteClipboard != null) {
+        _lastClipboard = target.remoteClipboard;
+        target.remoteClipboard = null;
         await Clipboard.setData(ClipboardData(text: _lastClipboard!));
       } else if (manual ||
           (_focus.hasFocus &&
@@ -235,13 +240,17 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                 TargetPlatform.macOS,
               }.contains(Theme.of(context).platform))) {
         final text = (await Clipboard.getData('text/plain'))?.text;
+        if (!current() ||
+            target.pasteInProgress ||
+            target.remoteClipboard != null ||
+            target.remotePicture != null) {
+          return;
+        }
         if (text != null &&
-            text != _lastClipboard &&
-            text.length <= 256 * 1024 &&
-            mounted &&
-            widget.active) {
+            (manual || text != _lastClipboard) &&
+            text.length <= 256 * 1024) {
           _lastClipboard = text;
-          session.clipboard(text);
+          target.clipboard(text);
         }
       }
     } on PlatformException {
@@ -660,6 +669,11 @@ class _RemoteViewState extends State<RemoteView> with WidgetsBindingObserver {
                                     : Icons.keyboard_outlined,
                                 context.tr("键盘"),
                                 connected ? _toggleKeyboard : null,
+                              ),
+                              _action(
+                                Icons.window,
+                                context.tr("Win"),
+                                connected ? () => session.chord([0x15b]) : null,
                               ),
                               _action(
                                 _trackpad

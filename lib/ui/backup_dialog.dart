@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -74,6 +76,11 @@ Future<void> _export(
     message('备份文件中没有连接');
     return;
   }
+  final bytes = utf8.encode(encodeBackup(profiles));
+  if (bytes.length > backupMaxBytes) {
+    message('备份文件不能大于 8 MiB');
+    return;
+  }
   final String? path;
   try {
     path = await pickPath(backupSuggestedFileName);
@@ -83,7 +90,7 @@ Future<void> _export(
   }
   if (path == null) return;
   try {
-    await File(path).writeAsString(encodeBackup(profiles));
+    await File(path).writeAsBytes(bytes);
   } catch (error) {
     message('操作未完成：{0}', [error]);
     return;
@@ -104,11 +111,15 @@ Future<void> _import(
     return;
   }
   if (path == null) return;
-  final String text;
+  final String? text;
   try {
-    text = await File(path).readAsString();
+    text = await _readBackupFile(File(path));
   } catch (error) {
     message('无法读取备份文件：{0}', [error]);
+    return;
+  }
+  if (text == null) {
+    message('备份文件不能大于 8 MiB');
     return;
   }
   final parsed = decodeBackup(text);
@@ -117,19 +128,24 @@ Future<void> _import(
     message(error == BackupError.empty ? '备份文件中没有连接' : '备份文件格式不正确');
     return;
   }
-  final merged = mergeBackup(
-    existing: store.profiles,
-    incoming: parsed.profiles,
-  );
   try {
-    for (final profile in merged.profiles) {
-      await store.save(profile);
-    }
+    final merged = await store.importBackup(parsed.profiles);
+    message('已导入 {0} 个连接，跳过 {1} 个重复连接', [merged.imported, merged.skipped]);
   } catch (error) {
     message('操作未完成：{0}', [error]);
-    return;
   }
-  message('已导入 {0} 个连接，跳过 {1} 个重复连接', [merged.imported, merged.skipped]);
+}
+
+/// null means too large. Bound both the initial size and every stream block so
+/// a file that grows after the stat cannot bypass the limit.
+Future<String?> _readBackupFile(File file) async {
+  if (await file.length() > backupMaxBytes) return null;
+  final bytes = BytesBuilder(copy: false);
+  await for (final block in file.openRead()) {
+    if (bytes.length + block.length > backupMaxBytes) return null;
+    bytes.add(block);
+  }
+  return utf8.decode(bytes.takeBytes());
 }
 
 enum _BackupAction { export, import }

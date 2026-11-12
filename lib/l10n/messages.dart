@@ -264,7 +264,7 @@ const localizedMessages = <String, Map<String, String>>{
     "返回电脑列表（保持连接）": "返回电脑列表（保持连接）",
     "还没有文件\n放入本地文件，或从远程电脑复制文件到此处。": "还没有文件\n放入本地文件，或从远程电脑复制文件到此处。",
     "这里还没有文件\n放入本地文件，或从远程电脑复制文件到此处。": "这里还没有文件\n放入本地文件，或从远程电脑复制文件到此处。",
-    "进入会话时全屏": "进入会话时全屏",
+    "连接时全屏": "连接时全屏",
     "远程会话": "远程会话",
     "远程会话已注销": "远程会话已注销",
     "远程分辨率": "远程分辨率",
@@ -286,7 +286,7 @@ const localizedMessages = <String, Map<String, String>>{
     "连接 ID 重复": "连接 ID 重复",
     "连接偏好": "连接偏好",
     "连接到 {0}": "连接到 {0}",
-    "连接后隐藏系统栏和导航，使用悬浮工具操作": "连接后隐藏系统栏和导航，使用悬浮工具操作",
+    "仅在建立连接时自动全屏，切换标签不改变窗口状态": "仅在建立连接时自动全屏，切换标签不改变窗口状态",
     "连接后，在远程 Windows 文件资源管理器中打开以下路径，即可双向复制文件。服务器需允许磁盘重定向。":
         "连接后，在远程 Windows 文件资源管理器中打开以下路径，即可双向复制文件。服务器需允许磁盘重定向。",
     "连接已移除或地址已变化": "连接已移除或地址已变化",
@@ -428,6 +428,7 @@ const localizedMessages = <String, Map<String, String>>{
     "剪贴板能力": "剪贴板能力",
     "原生纹理": "原生纹理",
     "备份包含所有连接配置，不含密码和证书指纹。": "备份包含所有连接配置，不含密码和证书指纹。",
+    "备份文件不能大于 8 MiB": "备份文件不能大于 8 MiB",
     "备份文件中没有连接": "备份文件中没有连接",
     "备份文件格式不正确": "备份文件格式不正确",
     "复制失败：{0}": "复制失败：{0}",
@@ -742,7 +743,7 @@ const localizedMessages = <String, Map<String, String>>{
     "返回电脑列表（保持连接）": "返回電腦列表（保持連線）",
     "还没有文件\n放入本地文件，或从远程电脑复制文件到此处。": "還沒有檔案\n放入本地檔案，或從遠端電腦複製檔案到此處。",
     "这里还没有文件\n放入本地文件，或从远程电脑复制文件到此处。": "這裡還沒有檔案\n放入本地檔案，或從遠端電腦複製檔案到此處。",
-    "进入会话时全屏": "進入會話時全屏",
+    "连接时全屏": "連線時全屏",
     "远程会话": "遠端會話",
     "远程会话已注销": "遠端會話已登出",
     "远程分辨率": "遠端解析度",
@@ -764,7 +765,7 @@ const localizedMessages = <String, Map<String, String>>{
     "连接 ID 重复": "連線 ID 重複",
     "连接偏好": "連線偏好",
     "连接到 {0}": "連線到 {0}",
-    "连接后隐藏系统栏和导航，使用悬浮工具操作": "連線後隱藏系統欄和導航，使用懸浮工具操作",
+    "仅在建立连接时自动全屏，切换标签不改变窗口状态": "僅在建立連線時自動全屏，切換標籤不改變視窗狀態",
     "连接后，在远程 Windows 文件资源管理器中打开以下路径，即可双向复制文件。服务器需允许磁盘重定向。":
         "連線後，在遠端 Windows 檔案資源管理器中開啟以下路徑，即可雙向複製檔案。伺服器需允許磁碟重定向。",
     "连接已移除或地址已变化": "連線已移除或地址已變化",
@@ -906,6 +907,7 @@ const localizedMessages = <String, Map<String, String>>{
     "剪贴板能力": "剪貼簿能力",
     "原生纹理": "原生紋理",
     "备份包含所有连接配置，不含密码和证书指纹。": "備份包含所有連線設定，不含密碼和憑證指紋。",
+    "备份文件不能大于 8 MiB": "備份檔案不能大於 8 MiB",
     "备份文件中没有连接": "備份檔案中沒有連線",
     "备份文件格式不正确": "備份檔案格式不正確",
     "复制失败：{0}": "複製失敗：{0}",
@@ -1263,7 +1265,7 @@ const localizedMessages = <String, Map<String, String>>{
         "No files yet\nAdd local files or copy files here from the remote computer.",
     "这里还没有文件\n放入本地文件，或从远程电脑复制文件到此处。":
         "No files yet\nAdd local files or copy files here from the remote computer.",
-    "进入会话时全屏": "Open sessions in full screen",
+    "连接时全屏": "Connect in full screen",
     "远程会话": "Remote session",
     "远程会话已注销": "Remote session signed out",
     "远程分辨率": "Remote resolution",
@@ -1291,8 +1293,8 @@ const localizedMessages = <String, Map<String, String>>{
     "连接 ID 重复": "Duplicate connection ID",
     "连接偏好": "Connection preferences",
     "连接到 {0}": "Connect to {0}",
-    "连接后隐藏系统栏和导航，使用悬浮工具操作":
-        "Hide system bars and navigation; use floating tools",
+    "仅在建立连接时自动全屏，切换标签不改变窗口状态":
+        "Only enter full screen when connecting; switching tabs keeps the window state",
     "连接后，在远程 Windows 文件资源管理器中打开以下路径，即可双向复制文件。服务器需允许磁盘重定向。":
         "After connecting, open this path in remote Windows File Explorer to copy files in either direction. The server must allow drive redirection.",
     "连接已移除或地址已变化": "The connection was removed or its address changed",
@@ -1467,6 +1469,7 @@ const localizedMessages = <String, Map<String, String>>{
     "原生纹理": "Native texture",
     "备份包含所有连接配置，不含密码和证书指纹。":
         "The backup holds every saved connection; it never contains passwords or certificate fingerprints.",
+    "备份文件不能大于 8 MiB": "Backup files must not exceed 8 MiB",
     "备份文件中没有连接": "The backup contains no connections",
     "备份文件格式不正确": "The backup format is invalid",
     "复制失败：{0}": "Copy failed: {0}",

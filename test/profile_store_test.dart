@@ -31,6 +31,23 @@ class MemoryVault extends Fake implements FlutterSecureStorage {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
+    'new connections default to windowed and respect saved choice',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final store = ProfileStore(preferences);
+      addTearDown(store.dispose);
+      expect(store.openFullscreen, isFalse);
+      for (final enabled in [true, false]) {
+        await store.setOpenFullscreen(enabled);
+        final reloaded = ProfileStore(preferences);
+        expect(reloaded.openFullscreen, enabled);
+        reloaded.dispose();
+      }
+    },
+  );
+
+  test(
     'input mode defaults safely and survives reload independently of profiles',
     () async {
       SharedPreferences.setMockInitialValues({'remoteInputMode': 'unknown'});

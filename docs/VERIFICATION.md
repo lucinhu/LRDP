@@ -2,6 +2,74 @@
 
 记录日期：2026-10-22。当前为开发预览。构建、真实协议和平台设备验收分别记录。
 
+## 配置与输入可靠性（2026-11-12 后续开发批次）
+
+本批仅修改 Flutter 配置、界面与输入调度，未修改原生桥接或 FreeRDP：
+
+- 备份账号按 host + port + domain + username 去重，保留同端点不同域的账号。
+  修复前新增的跨域导出/读取回归实际失败为 `BackupError.invalidFormat`，修复后通过；
+  格式仍为版本 1，旧备份可读，不导出密码或证书信任。
+- 批量导入在配置写入队列中按最新状态合并，统一一次写入/通知；100 条导入的替身测试
+  断言恰好一次写入和通知。失败不发布半批配置，重试与并发导入不重复；不读写密码库。
+  导入流分块限制 8 MiB，测试恰好 8 MiB 接受、超一字节拒绝且不改变现有配置；
+  导出也限制 8 MiB，并在选择文件前拒绝过大的文档。
+- 连接编辑器等待保存成功才关闭；失败显示本地化错误并保留字段、密码和选项，重试新连接
+  使用同一 ID。保存中禁用重复提交、编辑和关闭；普通编辑及 RDP 文件导入均成功保存后才连接。
+- 剪贴板去重缓存绑定会话和连接时间，重连后同文本可重新公告，显式同步允许同文本重发。
+  异步读取返回时复验连接、激活状态与生命周期，远端剪贴板更新优先；首个显式文字/图片粘贴
+  也登记缓存，避免随后自动轮询覆盖。桌面自动同步仍要求远端焦点，手机仍需手动同步。
+- 长按连发在应用失焦/后台立即取消，不因恢复前台自行继续，包括短于一次 repeat 间隔的失焦。
+
+本次检查及限制：
+
+- `dart format --output=none --set-exit-if-changed lib test integration_test test_driver`：
+  **118 个文件、无变更**；`flutter analyze --no-pub` 无问题；`git diff --check` 通过。
+- `flutter test --no-pub --reporter expanded`：**337 passed / 11 skipped**，
+  日志为 `build/reliability-flutter-tests.log`；相比前一批新增 37 个回归。
+- 定向备份/批量导入测试 **23 passed**，长按连发测试 **9 passed**，
+  编辑器与原有编辑/会话回归 **35 passed**，剪贴板/图片测试 **18 passed**（新剪贴板 14 项）；
+  模拟存储/剪贴板不是实际系统验证。
+- `cmake --build build/native --parallel 3 && ctest --test-dir build/native --output-on-failure`：
+  **8/8 passed**。
+- `python3 scripts/run_input_stop_test.py`：私有回环 TLS 的 normal / blocked 均通过。
+  本次正常停止 10 ms，背压停止 507 ms；正常模式实际收到扫描码/Unicode/鼠标释放，
+  堵塞模式不保证远端收到释放。记录为 `build/input-stop-runtime/native/VERDICT.json`；
+  此测试仅验证底层输入释放/取消，不证明 Flutter 长按或剪贴板的端到端行为。
+- 再次尝试 `python3 scripts/run_keyboard_test.py`，仍在启动私有显示前报
+  `FileNotFoundError: [Errno 2] No such file or directory: 'Xvnc'`。
+  因而新长按调度的完整键盘回环与真实系统剪贴板/重连行为仍待环境具备后复验。
+
+未构建/发布本批安装包。真机安全存储故障恢复、Android/iOS 剪贴板授权及输入法、
+Linux/Windows/macOS 系统窗口和系统剪贴板均未在本批验收；不使用现有工程或 mock 测试代替。
+
+## 会话全屏与 Win 快捷键（2026-11-12 开发批次）
+
+本批只调整 Flutter 界面与偏好默认值，未改原生桥接或 FreeRDP。新连接默认非全屏，
+设置中的“连接时全屏”保留已显式保存的选择；点击桌面标签、手机会话选择或打开已连接的
+电脑只切换视图，不再重新套用连接全屏偏好。会话内仍可手动进入/退出全屏。
+悬浮快捷面板新增 Win 单次按键，未连接时禁用；屏幕键盘的 Win 仍作为可按住的修饰键。
+
+本次主机检查：
+
+- `dart format --output=none --set-exit-if-changed lib test integration_test test_driver`：
+  115 个文件，无格式变更；`flutter analyze --no-pub` 无问题；`git diff --check` 通过。
+- `flutter test --no-pub --reporter expanded`：**300 passed / 11 skipped**。
+  日志为 `build/fullscreen-quick-win-flutter-tests.log`。新增回归覆盖偏好默认值及 true/false
+  保存恢复、手机/桌面默认非全屏与手动切换、保存全屏偏好后退出全屏再点击当前/其他标签、
+  从连接库打开已有连接及手机会话选择不重新全屏；桌面平台通道也断言不发出新的进入全屏请求。
+  快捷 Win 在两种布局中精确产生扩展扫描码 `0x5b` 的按下 `0x0100` / 释放 `0x8100`，
+  未连接无输入，并验证屏幕键盘 Win 原有按住/释放行为；这些属于 mock 会话与布局测试。
+- `cmake --build build/native --parallel 3 && ctest --test-dir build/native --output-on-failure`：
+  **8/8 passed**。
+- `python3 -m py_compile scripts/run_keyboard_test.py` 通过。实际协议测试已扩展为点击
+  RemoteView 快捷 Win，并要求隔离 X11 服务端恰好收到一对 Super_L 按下/释放，且无 Ctrl/Alt/Shift
+  粘连。尝试 `python3 scripts/run_keyboard_test.py` 时在启动私有显示前失败：
+  `FileNotFoundError: [Errno 2] No such file or directory: 'Xvnc'`；本环境未安装 Xvnc，
+  **本批真实 RDP 按键传输仍待验收**，没有把测试代码或编译通过当作协议通过。
+
+未构建/发布本批安装包；手机/桌面的布局测试不等同于 Android/iOS 真机或 Linux/Windows/macOS
+系统窗口验收。真实服务端 Windows 开始菜单、实际系统全屏和 Win 组合键仍需对应平台复验。
+
 ## Android H.264 自动 MediaCodec / CPU（2026-11-04 开发批次）
 
 本批为 0.5.0 预览发布之后的开发改动；已有 GitHub / AUR 0.5.0 包不包含此功能。

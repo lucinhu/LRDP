@@ -70,10 +70,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   final _windowFullscreen = SessionFullscreen();
   TargetPlatform _fullscreenPlatform = defaultTargetPlatform;
   Timer? _restoreFullscreen;
-  void _activate(String id) => setState(() {
-    _active = id;
-    _fullscreen = store.openFullscreen;
-  });
+  // Switching to an existing session must not reapply the connection preference.
+  void _activate(String id) => setState(() => _active = id);
   void _leaveSession() => setState(() {
     _active = null;
     _fullscreen = false;
@@ -202,10 +200,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       address: address,
       focusPassword: repairCredentials,
       notice: notice,
+      onSave: (result) => store.save(result.profile, password: result.password),
     );
     if (result == null || !mounted) return;
     try {
-      await store.save(result.profile, password: result.password);
       if (result.connect) {
         await _connect(result.profile, password: result.password);
       }
@@ -533,9 +531,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         ),
       );
       if (!mounted) return;
-      final result = await editProfile(context, profile: p);
-      if (result == null) return;
-      await store.save(result.profile, password: result.password);
+      final result = await editProfile(
+        context,
+        profile: p,
+        onSave: (result) =>
+            store.save(result.profile, password: result.password),
+      );
+      if (result == null || !mounted) return;
       if (result.connect) {
         await _connect(result.profile, password: result.password);
       }
@@ -1117,6 +1119,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
               child: InkWell(
+                key: ValueKey('sessionTab-${entry.key}'),
                 borderRadius: BorderRadius.circular(8),
                 onTap: () => _activate(entry.key),
                 child: Row(
@@ -1853,8 +1856,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
             ),
             SwitchListTile.adaptive(
               value: store.openFullscreen,
-              title: Text(context.tr('进入会话时全屏')),
-              subtitle: Text(context.tr('连接后隐藏系统栏和导航，使用悬浮工具操作')),
+              title: Text(context.tr('连接时全屏')),
+              subtitle: Text(context.tr('仅在建立连接时自动全屏，切换标签不改变窗口状态')),
               onChanged: (value) =>
                   _saveSetting(() => store.setOpenFullscreen(value)),
             ),

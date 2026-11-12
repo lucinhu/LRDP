@@ -162,7 +162,7 @@ void main() {
       expect(report, contains('  frameRateLimit: 0'));
       expect(report, contains('  imageScaling: smooth'));
       expect(report, contains('  pointerSpeed: 100'));
-      expect(report, contains('  openFullscreen: true'));
+      expect(report, contains('  openFullscreen: false'));
       expect(report, contains('  useSystemColors: true'));
       expect(report, contains('  includePreviewUpdates: true'));
     });

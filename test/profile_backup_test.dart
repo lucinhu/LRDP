@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -188,6 +189,33 @@ void main() {
       );
     });
 
+    test('round-trips accounts on the same endpoint in different domains', () {
+      final profiles = [
+        _profile(id: 'a').copyWith(domain: 'CORP_A'),
+        _profile(id: 'b').copyWith(domain: 'CORP_B'),
+        _profile(id: 'local'),
+      ];
+      final result = decodeBackup(encodeBackup(profiles));
+      expect(result.error, isNull);
+      expect(result.profiles.map((p) => p.domain), ['CORP_A', 'CORP_B', '']);
+    });
+
+    test('rejects duplicate domain accounts regardless of case', () {
+      final text = encodeBackup([
+        _profile(
+          id: 'a',
+          host: 'Office',
+          username: 'Alice',
+        ).copyWith(domain: 'CORP'),
+        _profile(
+          id: 'b',
+          host: 'office',
+          username: 'alice',
+        ).copyWith(domain: 'corp'),
+      ]);
+      expect(decodeBackup(text).error, BackupError.invalidFormat);
+    });
+
     test('rejects the same account listed twice inside one file', () {
       final text = encodeBackup([
         _profile(id: 'a', host: 'Office.Example', username: 'Alice'),
@@ -218,6 +246,23 @@ void main() {
       expect(merged.imported, merged.profiles.length);
       expect(merged.profiles.map((p) => p.name), ['实验室', '实验室 2']);
       expect(merged.profiles.map((p) => p.id), ['i2', 'i3']);
+    });
+
+    test('keeps different domains but skips the same domain account', () {
+      final merged = mergeBackup(
+        existing: [_profile(id: 'old').copyWith(domain: 'CORP_A')],
+        incoming: [
+          _profile(
+            id: 'duplicate',
+            username: 'ALICE',
+          ).copyWith(domain: 'corp_a'),
+          _profile(id: 'other').copyWith(domain: 'CORP_B'),
+          _profile(id: 'local'),
+        ],
+      );
+      expect(merged.imported, 2);
+      expect(merged.skipped, 1);
+      expect(merged.profiles.map((p) => p.domain), ['CORP_B', '']);
     });
 
     test('skips duplicates inside the incoming batch', () {
@@ -382,6 +427,32 @@ void main() {
       await _drainSnackBars(tester);
     });
 
+    testWidgets('export rejects an oversized document before choosing a file', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      final store = ProfileStore(await SharedPreferences.getInstance());
+      addTearDown(store.dispose);
+      await store.save(_profile(name: 'x' * backupMaxBytes));
+      var picks = 0;
+      await tester.pumpWidget(
+        _host(
+          store,
+          savePath: (_) async {
+            picks++;
+            return null;
+          },
+        ),
+      );
+      await tester.tap(find.text('打开配置备份'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('导出配置备份'));
+      await tester.pumpAndSettle();
+      expect(find.text('备份文件不能大于 8 MiB'), findsOneWidget);
+      expect(picks, 0);
+      await _drainSnackBars(tester);
+    });
+
     testWidgets(
       'export of an empty profile list explains nothing was written',
       (tester) async {
@@ -479,6 +550,59 @@ void main() {
       expect(prefs.getString('profiles.v1'), isNot(contains('重复连接')));
       await _drainSnackBars(tester);
     });
+
+    for (final oversized in [false, true]) {
+      testWidgets('backup file size boundary: oversized=$oversized', (
+        tester,
+      ) async {
+        SharedPreferences.setMockInitialValues({});
+        final store = ProfileStore(await SharedPreferences.getInstance());
+        addTearDown(store.dispose);
+        await store.save(_profile(id: 'existing'));
+        final snapshot = store.profiles.map((p) => p.toJson()).toList();
+        late Directory directory;
+        late String path;
+        await tester.runAsync(() async {
+          directory = await Directory.systemTemp.createTemp(
+            'lrdp-backup-limit-',
+          );
+          path = '${directory.path}/backup.json';
+          if (oversized) {
+            final handle = await File(path).open(mode: FileMode.write);
+            await handle.truncate(backupMaxBytes + 1);
+            await handle.close();
+          } else {
+            final data = utf8.encode(
+              encodeBackup([_profile(id: 'new', host: 'new.example')]),
+            );
+            final bytes = Uint8List(backupMaxBytes)
+              ..fillRange(0, backupMaxBytes, 32)
+              ..setRange(0, data.length, data);
+            await File(path).writeAsBytes(bytes);
+          }
+        });
+        addTearDown(() => directory.delete(recursive: true));
+        await tester.pumpWidget(_host(store, openPath: () async => path));
+        await tester.tap(find.text('打开配置备份'));
+        await tester.pumpAndSettle();
+        final expected = oversized ? '备份文件不能大于 8 MiB' : '已导入 1 个连接，跳过 0 个重复连接';
+        await tester.runAsync(() async {
+          await tester.tap(find.text('导入配置备份'));
+          await _pumpUntil(
+            tester,
+            () => find.text(expected).evaluate().isNotEmpty,
+          );
+          await tester.pump(const Duration(milliseconds: 300));
+        });
+        expect(find.text(expected), findsOneWidget);
+        if (oversized) {
+          expect(store.profiles.map((p) => p.toJson()), snapshot);
+        } else {
+          expect(store.profiles.map((p) => p.id), ['existing', 'new']);
+        }
+        await _drainSnackBars(tester);
+      });
+    }
 
     testWidgets('import reports a malformed backup without changing profiles', (
       tester,

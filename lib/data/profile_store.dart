@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/connection_profile.dart';
+import 'profile_backup.dart';
 import '../models/remote_input_mode.dart';
 import '../models/remote_image_scaling.dart';
 import '../app_version.dart';
@@ -95,7 +96,7 @@ class ProfileStore extends ChangeNotifier {
     }
     notifyListeners();
   });
-  bool get openFullscreen => _preferences.getBool('openFullscreen') ?? true;
+  bool get openFullscreen => _preferences.getBool('openFullscreen') ?? false;
   RemoteInputMode get remoteInputMode {
     final saved = _preferences.getString('remoteInputMode');
     return RemoteInputMode.values.firstWhere(
@@ -200,6 +201,23 @@ class ProfileStore extends ChangeNotifier {
     }
     await _save(next);
   });
+
+  /// Merge against the latest queued state and publish the entire import once.
+  /// Backups carry configuration only: never read or overwrite vault secrets.
+  Future<({int imported, int skipped})> importBackup(
+    List<ConnectionProfile> incoming,
+  ) async {
+    final snapshot = List<ConnectionProfile>.of(incoming);
+    late ({int imported, int skipped}) result;
+    await _serialize(() async {
+      final merged = mergeBackup(existing: _profiles, incoming: snapshot);
+      if (merged.profiles.isNotEmpty) {
+        await _save([..._profiles, ...merged.profiles]);
+      }
+      result = (imported: merged.imported, skipped: merged.skipped);
+    });
+    return result;
+  }
 
   Future<void> update(ConnectionProfile p) => _serialize(() async {
     final next = [..._profiles];

@@ -185,7 +185,9 @@ class _RemoteKeyboardState extends State<RemoteKeyboard>
 
   /// Repeats a held key. Returns false once repeating is no longer safe.
   bool _repeatKey(List<int> keys) {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
     if (!mounted ||
+        (lifecycle != null && lifecycle != AppLifecycleState.resumed) ||
         _sending ||
         widget.session.state != SessionState.connected) {
       return false;

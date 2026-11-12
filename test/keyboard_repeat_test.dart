@@ -130,6 +130,72 @@ void main() {
     );
   });
 
+  for (final lifecycle in [
+    AppLifecycleState.inactive,
+    AppLifecycleState.paused,
+  ]) {
+    testWidgets('auto-repeat stops on $lifecycle and never resumes itself', (
+      tester,
+    ) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+      final session = await mount(tester);
+      final key = find.byKey(const Key('remoteKey→'));
+      await reveal(tester, key);
+      final gesture = await tester.startGesture(tester.getCenter(key));
+      await tester.pump(keyRepeatStart + const Duration(milliseconds: 20));
+      expect(session.scans, hasLength(2));
+      if (lifecycle == AppLifecycleState.paused) {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      }
+      tester.binding.handleAppLifecycleStateChanged(lifecycle);
+      session.scans.clear();
+      await tester.pump(keyRepeatInterval * 4);
+      expect(session.scans, isEmpty);
+      if (lifecycle == AppLifecycleState.paused) {
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+      }
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump(keyRepeatInterval * 4);
+      expect(
+        session.scans,
+        isEmpty,
+        reason: 'Returning to the app must require a new press',
+      );
+      await gesture.up();
+      await tester.pump();
+    });
+  }
+
+  testWidgets('even a brief focus loss cancels an existing repeat timer', (
+    tester,
+  ) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final session = await mount(tester);
+    final key = find.byKey(const Key('remoteKey→'));
+    await reveal(tester, key);
+    final gesture = await tester.startGesture(tester.getCenter(key));
+    await tester.pump(keyRepeatStart + const Duration(milliseconds: 20));
+    expect(session.scans, hasLength(2));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    session.scans.clear();
+    await tester.pump(keyRepeatInterval * 4);
+    expect(session.scans, isEmpty);
+    await gesture.up();
+    await tester.pump();
+  });
+
   testWidgets('auto-repeat stops once the session is no longer connected', (
     tester,
   ) async {

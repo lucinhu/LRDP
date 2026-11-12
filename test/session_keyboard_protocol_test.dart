@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lrdp/models/connection_profile.dart';
 import 'package:lrdp/rdp/rdp_session.dart';
 import 'package:lrdp/ui/remote_keyboard.dart';
+import 'package:lrdp/ui/remote_view.dart';
 
 void main() {
   testWidgets('IME edits reach real RDP as Latin scan codes', (tester) async {
@@ -141,8 +142,25 @@ void main() {
       edit('c');
       await tester.tap(find.byKey(const Key('remoteModifierLock')));
       await tester.pump();
-      // Widget disposal must release a still-latched Alt before disconnect.
+      // Widget disposal must release a still-latched Alt before the quick key.
       await modifier('Alt');
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RemoteView(
+              session: session,
+              active: true,
+              reconnect: () {},
+              disconnect: () {},
+              toggleFullscreen: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Win'));
+      await tester.pump();
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 500)),
       );

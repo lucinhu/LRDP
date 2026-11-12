@@ -13,6 +13,9 @@ const backupVersion = 1;
 /// Suggested file name for the platform save dialog.
 const backupSuggestedFileName = 'lrdp-profiles.json';
 
+/// Bound file reads before allocating or decoding an untrusted backup document.
+const backupMaxBytes = 8 * 1024 * 1024;
+
 /// Serializes [profiles] as a deterministic JSON envelope.
 ///
 /// Only [ConnectionProfile.toJson] data is written, so the document never
@@ -45,7 +48,7 @@ class BackupParseResult {
 ///
 /// The envelope must carry [backupFormat], [backupVersion] and a non-empty
 /// `profiles` array whose entries all satisfy [ConnectionProfile.fromJson].
-/// A document that lists the same endpoint + username twice is rejected as
+/// A document that lists the same endpoint + domain + username twice is rejected as
 /// malformed: resolving that ambiguity is left to [mergeBackup] against the
 /// profiles already on this device, not to guessing inside one file.
 BackupParseResult decodeBackup(String text) {
@@ -77,7 +80,7 @@ BackupParseResult decodeBackup(String text) {
     return const BackupParseResult.failure(BackupError.empty);
   }
   final profiles = <ConnectionProfile>[];
-  final identities = <String>{};
+  final identities = <(String, int, String, String)>{};
   for (final entry in entries) {
     if (entry is! Map<String, dynamic>) {
       return const BackupParseResult.failure(BackupError.invalidFormat);
@@ -99,7 +102,7 @@ BackupParseResult decodeBackup(String text) {
 /// Decides which [incoming] profiles to save next to [existing] ones.
 ///
 /// A profile is skipped when an existing profile already uses the same
-/// host + port + username (host and username compared case-insensitively),
+/// host + port + domain + username (all strings compared case-insensitively),
 /// or when an earlier incoming profile in the same file does. Skipped entries
 /// are counted, accepted entries keep their [incoming] order, and an accepted
 /// profile whose id is already in use is cloned with a fresh, unique id such
@@ -134,9 +137,12 @@ BackupParseResult decodeBackup(String text) {
 
 /// Endpoint + account identity used for duplicate detection. Passwords and
 /// certificate pins are deliberately not part of it.
-String _identity(ConnectionProfile profile) =>
-    '${profile.host.toLowerCase()}\u0000${profile.port}\u0000'
-    '${profile.username.toLowerCase()}';
+(String, int, String, String) _identity(ConnectionProfile profile) => (
+  profile.host.toLowerCase(),
+  profile.port,
+  profile.domain.toLowerCase(),
+  profile.username.toLowerCase(),
+);
 
 /// [ConnectionProfile.copyWith] intentionally does not expose `id`, so clone
 /// through the stable JSON shape, which already carries every stored field.

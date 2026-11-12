@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +10,7 @@ import 'package:lrdp/rdp/rdp_session.dart';
 import 'package:lrdp/ui/certificate_dialog.dart';
 import 'package:lrdp/ui/remote_surface.dart';
 import 'package:lrdp/ui/remote_keyboard.dart';
+import 'package:lrdp/ui/remote_view.dart';
 import 'package:lrdp/ui/theme.dart';
 import 'package:lrdp/ui/workspace_screen.dart';
 
@@ -154,7 +156,7 @@ void main() {
       await tester.tap(find.byKey(const Key('expandSessionControls')));
       await tester.pumpAndSettle();
     }
-    await tester.tap(find.byTooltip('返回电脑列表（保持连接）'));
+    await tester.tap(find.byTooltip('返回电脑列表（保持连接）').hitTestable().first);
     await tester.pumpAndSettle();
   }
 
@@ -162,6 +164,144 @@ void main() {
     await tester.tap(find.text(name));
     await tester.pumpAndSettle();
   }
+
+  for (final desktop in [false, true]) {
+    testWidgets(
+      '${desktop ? 'desktop' : 'phone'} connections stay windowed by default and allow manual full screen',
+      (tester) async {
+        final store = await prepare([original]);
+        final sessions = <TestSession>[];
+        await mount(tester, store, sessions, desktop: desktop);
+        await open(tester, original.name);
+        bool fullscreen() =>
+            tester.widget<RemoteView>(find.byType(RemoteView)).fullscreen;
+        expect(fullscreen(), isFalse);
+        await tester.tap(find.text('全屏'));
+        await tester.pumpAndSettle();
+        expect(fullscreen(), isTrue);
+        expect(store.openFullscreen, isFalse);
+        await tester.tap(find.text('退出全屏'));
+        await tester.pumpAndSettle();
+        expect(fullscreen(), isFalse);
+        await library(tester);
+        if (desktop) {
+          await tester.tap(find.byKey(const ValueKey('sessionTab-live')));
+          await tester.pumpAndSettle();
+        } else {
+          await open(tester, original.name);
+        }
+        expect(fullscreen(), isFalse);
+        expect(sessions, hasLength(1));
+        expect(sessions.single.passwords, hasLength(1));
+        await tester.pumpWidget(const SizedBox());
+        store.dispose();
+      },
+    );
+  }
+
+  testWidgets(
+    'desktop tabs never reapply the full screen connection preference',
+    (tester) async {
+      const other = ConnectionProfile(
+        id: 'other',
+        name: '第二台电脑',
+        host: '192.0.2.2',
+        username: 'tester',
+        rememberPassword: true,
+      );
+      final store = await prepare([original, other]);
+      await store.setOpenFullscreen(true);
+      final requests = <bool>[];
+      const channel = MethodChannel('dev.lrdp/window');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'fullscreen');
+        requests.add(call.arguments as bool);
+        return null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final sessions = <TestSession>[];
+      await mount(tester, store, sessions, desktop: true);
+      bool fullscreen() =>
+          tester.widget<RemoteView>(find.byType(RemoteView)).fullscreen;
+      await open(tester, original.name);
+      expect(fullscreen(), isTrue);
+      expect(requests.last, isTrue);
+      await library(tester);
+      await open(tester, other.name);
+      expect(fullscreen(), isTrue);
+      await tester.tap(find.text('退出全屏'));
+      await tester.pumpAndSettle();
+      expect(requests.last, isFalse);
+      requests.clear();
+      for (final id in ['other', 'live', 'other', 'live']) {
+        await tester.tap(find.byKey(ValueKey('sessionTab-$id')));
+        await tester.pumpAndSettle();
+        expect(fullscreen(), isFalse);
+      }
+      await library(tester);
+      await tester.tap(find.byKey(const ValueKey('sessionTab-live')));
+      await tester.pumpAndSettle();
+      expect(fullscreen(), isFalse);
+      // Reopening a live connection from the library also only switches views.
+      await library(tester);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(Card),
+          matching: find.text(original.name),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(fullscreen(), isFalse);
+      expect(requests, isNot(contains(true)));
+      expect(sessions, hasLength(2));
+      expect(sessions.every((s) => s.passwords.length == 1), isTrue);
+      await tester.pumpWidget(const SizedBox());
+      store.dispose();
+    },
+  );
+
+  testWidgets('phone session picker does not reenter full screen', (
+    tester,
+  ) async {
+    const other = ConnectionProfile(
+      id: 'other',
+      name: '第二台电脑',
+      host: '192.0.2.2',
+      username: 'tester',
+      rememberPassword: true,
+    );
+    final store = await prepare([original, other]);
+    await store.setOpenFullscreen(true);
+    final sessions = <TestSession>[];
+    await mount(tester, store, sessions);
+    await open(tester, original.name);
+    await library(tester);
+    await open(tester, other.name);
+    expect(
+      tester.widget<RemoteView>(find.byType(RemoteView)).fullscreen,
+      isTrue,
+    );
+    await tester.tap(find.text('退出全屏'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('切换会话'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(original.name));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<RemoteView>(find.byType(RemoteView)).fullscreen,
+      isFalse,
+    );
+    await library(tester);
+    await open(tester, original.name);
+    expect(
+      tester.widget<RemoteView>(find.byType(RemoteView)).fullscreen,
+      isFalse,
+    );
+    expect(sessions, hasLength(2));
+    await tester.pumpWidget(const SizedBox());
+    store.dispose();
+  });
 
   testWidgets('each open phone session retains its viewport and input mode', (
     tester,
@@ -318,8 +458,6 @@ void main() {
     expect(second.trackpad, isFalse);
     expect(second.pan, isFalse);
     expect(second.transform.value.getMaxScaleOnAxis(), 1);
-    await tester.tap(find.text('退出全屏'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text(original.name));
     await tester.pumpAndSettle();
     final restored = tester.widget<RemoteSurface>(find.byType(RemoteSurface));

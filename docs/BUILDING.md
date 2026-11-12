@@ -22,12 +22,30 @@ flutter test
 桌面分组键盘面板、收起后偏好恢复与全屏释放布局。
 显示偏好与指针速度另运行 `flutter test test/display_controls_test.dart`，
 覆盖纹理/图像采样、缩放后的光标坐标，以及三种语言在 200% 字号下的设置操作。
-实际按键传输使用 `python3 scripts/run_keyboard_test.py`，
+连接全屏与快捷面板回归运行
+`flutter test test/profile_store_test.dart test/workspace_sessions_test.dart test/session_fullscreen_test.dart test/session_quick_keys_test.dart`，
+覆盖默认非全屏、已保存的连接全屏选择、桌面标签/手机会话切换不重新全屏、手动全屏切换，
+以及快捷面板 Win 的扩展按下/释放、未连接禁用和屏幕键盘 Win 修饰键保持原行为。
+设置中的“连接时全屏”只在建立连接时应用，默认关闭；保留用户以前显式保存的选择。
+实际按键传输使用 `python3 scripts/run_keyboard_test.py`（需 `Xvnc` 和 `freerdp-shadow-cli3`，
+也断言快捷面板 Win 在服务端产生一对 Super_L 按下/释放），
 指针速度与双指滚动的实际 PDU 使用 `python3 scripts/run_trackpad_test.py`，
 输入释放与堵塞取消使用 `python3 scripts/run_input_stop_test.py`；这些脚本只使用隔离回环服务。
 桌面系统级验证需先构建主入口 Release，再运行 `scripts/run_linux_mouse_test.py`，
 可用 `--window-manager /path/to/openbox` 在私有 X11 内验证真实全屏与快捷键恢复。
 上述 Flutter/协议检查不替代手机厂商输入法、Wayland 或其他桌面系统验收。
+
+配置/剪贴板可靠性回归可运行：
+
+```sh
+flutter test test/profile_backup_test.dart test/backup_transaction_test.dart test/profile_editor_save_test.dart test/clipboard_sync_test.dart test/keyboard_repeat_test.dart
+```
+
+覆盖备份的跨域账号识别、8 MiB 导入/导出边界、批量导入单次写入与失败不发布部分结果、
+并发导入去重、保存失败保留表单和重试、保存中防重复提交、重连后剪贴板重发和异步读取过期丢弃，
+以及后台/失焦立即停止长按连发。配置备份格式版本不变，备份不包含密码；大于 8 MiB 的旧备份
+需先分拆后导入。组件测试中的剪贴板通道与保存失败使用替身，不代表系统剪贴板、真实安全存储
+或远端输入已实测；真实输入仍需上面的私有回环键盘脚本，系统剪贴板需下文对应平台脚本/真机验收。
 
 系统配色依赖 `dynamic_color` 固定为 1.8.1，版本和下载摘要见 `pubspec.lock`；
 源码由 Pub 缓存管理，不复制到仓库，也不修改 Pub 缓存。1.9.0 的 Android Kotlin DSL

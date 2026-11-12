@@ -74,8 +74,13 @@ with tempfile.TemporaryDirectory(prefix='lrdp-keys-') as temporary, ExitStack() 
     # Shift changes lookup of alphabetic releases, so compare physical pairing
     # through sorted keysyms; all modifiers must have a matching release.
     assert sorted(pressed) == sorted(released), desktop.keys
+    # The floating quick-panel Win action must send one real extended key pair.
+    win_events = [e for e in desktop.keys if e['symbol'] == 65515]
+    assert [e['type'] for e in win_events] == [2, 3], desktop.keys
+    assert all(not e['state'] & 13 for e in win_events), desktop.keys
     report = {'passed': True, 'library_sha256': hashlib.sha256((root/'build/native/liblrdp.so').read_bytes()).hexdigest(),
         'typed': typed, 'events': desktop.keys, 'composing_commit_duplicated': False, 'latched_ctrl_space': True, 'sticky_shift_preserved': True, 'function_keys': list(range(1, 13)), 'held_alt_released_on_dispose': True,
+        'quick_panel_win_extended_press_release': True,
         'ime_empty_backspace': True, 'raw_enter_backspace': True, 'raw_arrow_keys': ['Left','Right','Up','Down'],
         'one_shot_ctrl_space': True, 'one_shot_shift_ime_batch': True, 'one_shot_raw_ctrl_left': True, 'modifier_lock_enabled': True, 'disable_lock_releases_modifiers': True, 'number_symbol_toolbar': ['1', '!'],
         'platform': 'Flutter headless + actual TLS RDP + isolated X11, not Android IME'}

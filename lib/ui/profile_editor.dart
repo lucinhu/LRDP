@@ -19,6 +19,7 @@ Future<ProfileEditResult?> editProfile(
   String? address,
   bool focusPassword = false,
   String? notice,
+  Future<void> Function(ProfileEditResult)? onSave,
 }) => showDialog<ProfileEditResult>(
   context: context,
   builder: (_) => ProfileEditor(
@@ -27,6 +28,7 @@ Future<ProfileEditResult?> editProfile(
     address: address,
     focusPassword: focusPassword,
     notice: notice,
+    onSave: onSave,
   ),
 );
 
@@ -38,17 +40,23 @@ class ProfileEditor extends StatefulWidget {
     this.address,
     this.focusPassword = false,
     this.notice,
+    this.onSave,
   });
   final ConnectionProfile? profile;
   final String password;
   final String? address, notice;
   final bool focusPassword;
+  final Future<void> Function(ProfileEditResult)? onSave;
   @override
   State<ProfileEditor> createState() => _ProfileEditorState();
 }
 
 class _ProfileEditorState extends State<ProfileEditor> {
   final _form = GlobalKey<FormState>();
+  // A retry must overwrite the same secure-storage key, even for a new profile.
+  late final _id = widget.profile?.id ?? ConnectionProfile.newId();
+  bool _saving = false;
+  Object? _saveError;
   late final _name = TextEditingController(text: widget.profile?.name ?? '');
   late final _address = TextEditingController(
     text: widget.address ?? widget.profile?.address ?? '',
@@ -98,13 +106,13 @@ class _ProfileEditorState extends State<ProfileEditor> {
     super.dispose();
   }
 
-  void _submit(bool connect) {
-    if (!_form.currentState!.validate()) return;
+  Future<void> _submit(bool connect) async {
+    if (_saving || !_form.currentState!.validate()) return;
     final endpoint = Endpoint.parse(_address.text);
     final automatic = _resolution == _automatic;
     final size = automatic ? null : _resolution.split('×');
     final p = ConnectionProfile(
-      id: widget.profile?.id ?? ConnectionProfile.newId(),
+      id: _id,
       name: _name.text.trim().isEmpty ? endpoint.host : _name.text.trim(),
       host: endpoint.host,
       port: endpoint.port,
@@ -125,7 +133,27 @@ class _ProfileEditorState extends State<ProfileEditor> {
       rememberPassword: _remember,
       lastConnectedAt: widget.profile?.lastConnectedAt,
     );
-    Navigator.pop(context, ProfileEditResult(p, _password.text, connect));
+    final result = ProfileEditResult(p, _password.text, connect);
+    final save = widget.onSave;
+    if (save == null) {
+      Navigator.pop(context, result);
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+    try {
+      await save(result);
+      if (mounted) Navigator.pop(context, result);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _saveError = error;
+      });
+    }
   }
 
   @override
@@ -418,56 +446,69 @@ class _ProfileEditorState extends State<ProfileEditor> {
         ),
       ),
     );
+    Widget guardSaving(Widget dialog) => PopScope(
+      canPop: !_saving,
+      child: AbsorbPointer(
+        absorbing: _saving,
+        child: ExcludeFocus(excluding: _saving, child: dialog),
+      ),
+    );
     if (phone) {
-      return Dialog.fullscreen(
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // A landscape IME can leave less space than a separate title and
-              // footer need. Keep both actions and a usable field viewport.
-              final compact = constraints.maxHeight < 260;
-              return Column(
-                children: [
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      compact ? 8 : 20,
-                      compact ? 0 : 8,
-                      8,
-                      0,
-                    ),
-                    child: compact
-                        ? Row(
-                            children: [
-                              IconButton(
-                                onPressed: () => Navigator.pop(context),
-                                icon: const Icon(Icons.close),
-                                tooltip: context.tr("关闭"),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(child: _actions()),
-                            ],
-                          )
-                        : _header(),
-                  ),
-                  Expanded(child: content(compact: compact)),
-                  if (!compact) ...[
-                    const Divider(height: 1),
+      return guardSaving(
+        Dialog.fullscreen(
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // A landscape IME can leave less space than a separate title and
+                // footer need. Keep both actions and a usable field viewport.
+                final compact = constraints.maxHeight < 260;
+                return Column(
+                  children: [
                     Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: _actions(),
+                      padding: EdgeInsets.fromLTRB(
+                        compact ? 8 : 20,
+                        compact ? 0 : 8,
+                        8,
+                        0,
+                      ),
+                      child: compact
+                          ? Row(
+                              children: [
+                                IconButton(
+                                  onPressed: _saving
+                                      ? null
+                                      : () => Navigator.pop(context),
+                                  icon: const Icon(Icons.close),
+                                  tooltip: context.tr("关闭"),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(child: _actions()),
+                              ],
+                            )
+                          : _header(),
                     ),
+                    Expanded(child: content(compact: compact)),
+                    if (!compact) ...[
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: _actions(),
+                      ),
+                    ],
                   ],
-                ],
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       );
     }
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620),
-        child: content(),
+    return guardSaving(
+      Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: content(),
+        ),
       ),
     );
   }
@@ -481,28 +522,45 @@ class _ProfileEditorState extends State<ProfileEditor> {
         ),
       ),
       IconButton(
-        onPressed: () => Navigator.pop(context),
+        onPressed: _saving ? null : () => Navigator.pop(context),
         icon: const Icon(Icons.close),
         tooltip: context.tr("关闭"),
       ),
     ],
   );
 
-  Widget _actions() => Row(
+  Widget _actions() => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Expanded(
-        child: OutlinedButton(
-          onPressed: () => _submit(false),
-          child: Text(context.tr("保存连接")),
+      if (_saveError case final error?) ...[
+        Text(
+          context.tr("保存失败：{0}", [error]),
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
-      ),
-      const SizedBox(width: 12),
-      Expanded(
-        child: FilledButton(
-          key: const Key('saveAndConnect'),
-          onPressed: () => _submit(true),
-          child: Text(context.tr("保存并连接")),
-        ),
+        const SizedBox(height: 8),
+      ],
+      if (_saving) ...[
+        const LinearProgressIndicator(),
+        const SizedBox(height: 8),
+      ],
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _saving ? null : () => _submit(false),
+              child: Text(context.tr("保存连接")),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton(
+              key: const Key('saveAndConnect'),
+              onPressed: _saving ? null : () => _submit(true),
+              child: Text(context.tr("保存并连接")),
+            ),
+          ),
+        ],
       ),
     ],
   );

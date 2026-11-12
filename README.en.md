@@ -4,9 +4,9 @@
 
 LRDP (Lightweight RDP) is a lightweight, local-first RDP client built with **Flutter + FreeRDP**. FreeRDP runs embedded in the app, so no external RDP client is involved.
 
-The current version is a **0.6.0 development preview**, targeting Linux, Android, Windows, macOS and iOS. Build and verification progress for each platform is listed in the table below.
+The current version is a **0.7.0 development preview**, targeting Linux, Android, Windows, macOS and iOS. Build and verification progress for each platform is listed in the table below.
 
-[Download preview](https://github.com/lucinhu/LRDP/releases/tag/v0.6.0-preview.1) · [Usage guide](docs/USAGE.md) · [Building guide](docs/BUILDING.md) · [Clipboard and files](docs/CLIPBOARD.md) · [Verification record](docs/VERIFICATION.md)
+[Download preview](https://github.com/lucinhu/LRDP/releases/tag/v0.7.0-preview.1) · [Usage guide](docs/USAGE.md) · [Building guide](docs/BUILDING.md) · [Clipboard and files](docs/CLIPBOARD.md) · [Verification record](docs/VERIFICATION.md)
 
 ![LRDP desktop connection library with an example profile](docs/screenshots/workspace.png)
 
@@ -41,6 +41,8 @@ The screenshots above were taken on the Android emulator using a local loopback 
 - **Credentials and certificates**: passwords use the system secure storage, and exported profiles contain no passwords. Certificate fingerprints must be confirmed explicitly, and can be trusted for this session only or saved.
 - **Profiles and diagnostics**: back up and restore all connection profiles from Settings (passwords and certificate fingerprints are not included), and copy a diagnostics report that only contains the version, platform, language and display settings.
 
+The 0.7.0 preview starts new connections outside full screen, keeps the window state when switching session tabs, and adds a Win key to the quick panel. It also improves save retries, batch backup imports, clipboard synchronization after reconnecting, and cancellation of key repeat on focus loss. An explicitly saved full-screen connection preference is preserved.
+
 The 0.6.0 preview adds an experimental MediaCodec H.264 path on Android 10+: it selects components reported as hardware, confirms output for the current frame, and replays reference frames on CPU after failure. Android 7–9 conservatively uses CPU. Builds and emulator CPU fallback are verified; successful MediaCodec output has not yet been verified, and physical-phone validation and power measurements remain pending; see the [Android build and validation notes](docs/BUILDING.md#android-h264-自动硬解开发分支).
 
 Dynamic resolution, clipboard, file and audio features require server support and the corresponding redirection to be enabled. The display frame-rate cap can be set up to 240 fps; the actual frame rate depends on the remote output, screen, network and device performance.
@@ -62,19 +64,19 @@ Verification scope differs between features; exact versions, test methods and li
 On Linux x86_64, download the `.AppImage` from Releases and run it directly after making it executable:
 
 ```sh
-chmod +x lrdp-0.6.0-linux-x64.AppImage
-./lrdp-0.6.0-linux-x64.AppImage
+chmod +x lrdp-0.7.0-linux-x64.AppImage
+./lrdp-0.7.0-linux-x64.AppImage
 ```
 
 The AppImage bundles application runtime libraries such as GTK and OpenSSL; it requires glibc ≥ 2.35 and a working OpenGL/EGL environment.
-If the system has no FUSE, start it with `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.6.0-linux-x64.AppImage`.
+If the system has no FUSE, start it with `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.7.0-linux-x64.AppImage`.
 Android users download the ARM64 preview APK. Each package is released together with the full source, build information and SHA-256 checksum files.
 
 1. Tap “Add computer” and enter the address, username, password and domain information if needed. The address can include the port directly, for example `192.168.1.10:3390`; for IPv6 use `[2001:db8::1]:3389`.
 2. In “Connection preferences”, enable shared clipboard, file transfer or remote audio as needed. Remote resolution defaults to automatic and can also be set manually.
 3. The first time a certificate needs confirmation, check the server's SHA-256 fingerprint and then choose how to trust it. After saving the connection, tap the computer card to enter the session.
 
-Sessions start full screen, and common actions are collected in the floating toolbar. Returning to the connection list keeps the session; on desktop, switch connections with tabs. In desktop full screen, release-control and exit buttons are at the top left; `Ctrl + Alt + Home` releases the mouse and keyboard, and `Ctrl + Alt + Enter` toggles full screen.
+New connections start outside full screen. Enable “Connect in full screen” in Settings or toggle full screen from the floating toolbar; switching tabs keeps the window state. Common actions, including a Win key, are collected in the floating toolbar. Returning to the connection list keeps the session; on desktop, switch connections with tabs. In desktop full screen, release-control and exit buttons are at the top left; `Ctrl + Alt + Home` releases the mouse and keyboard, and `Ctrl + Alt + Enter` toggles full screen.
 
 ## Touch and keyboard input on phones
 
