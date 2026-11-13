@@ -25,10 +25,18 @@
 - 本批未改原生桥接、FreeRDP、协议、证书或输入代码，未重跑 CTest 与回环协议测试；
   上一批（2026-11-12）的 8/8 原生检查覆盖的是未变动的原生代码。
 
-本批将随 **0.7.1 开发预览**（`v0.7.1-preview.1`，Android versionCode 11）发布；
-发布流水线会重新执行 Flutter / Python / Java host / 原生测试并校验安装包。桌面与手机默认值
-来自 widget 测试，不是 Android/iOS 真机或 Linux/Windows/macOS 系统窗口验收。手机系统栏、
-导航手势在真机上的实际全屏行为，以及锁屏与旋转后的全屏状态仍需真机复验。
+本批随 **0.7.1 开发预览** 发布（tag `v0.7.1-preview.1`，release commit
+`620285e17b46044148a731b061329981f2d9cd08`，Android versionCode 11，Android versionName
+0.7.1）。发布流水线 run 43479059681 重新执行 Flutter / Python / Java host / 原生测试，
+成功创建 Release；下载后复核通过：8 个资产齐全、7 个文件摘要与 `SHA256SUMS` 一致、
+tag/commit 与源码压缩包 `pubspec.yaml` 版本对应、Android 签名证书与上一版相同、
+native ABI 5、FreeRDP 提交未变、AppImage glibc 上限 2.35。AppImage 摘要
+`943cd01a859fd1a1f4888f0752c10ec12aaf93bfee8d5aba286edc14eb0cda37`，APK 摘要
+`b9fc9a6bdaf904b5f0ce17bbba8063a6d7875e6653a2dd5693c90aa6c2a8dc28`，源码摘要
+`d265c82e993fdf331fe54f076dccf8bd0b66761ddcc10d41c59de8730215651e`。
+
+桌面与手机默认值来自 widget 测试，不是 Android/iOS 真机或 Linux/Windows/macOS 系统窗口
+验收。手机系统栏、导航手势在真机上的实际全屏行为，以及锁屏与旋转后的全屏状态仍需真机复验。
 
 ## 配置与输入可靠性（2026-11-12 后续开发批次）
 
