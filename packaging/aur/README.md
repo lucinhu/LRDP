@@ -5,8 +5,8 @@
 分发上游 GitHub Release 中预编译的 Linux x64 Flutter 应用（AppImage），不重新编译
 Flutter / FreeRDP 代码。
 
-上游版本：tag `v0.7.0-preview.1`（release commit `5dcf31c…`），应用版本 `0.7.0+10`，
-`applicationId` 为 `dev.lrdp.lrdp`。`pkgver` 取上游应用版本 `0.7.0`；`pkgrel=1`。
+上游版本：tag `v0.7.1-preview.1`（release commit `620285e…`），应用版本 `0.7.1+11`，
+`applicationId` 为 `dev.lrdp.lrdp`。`pkgver` 取上游应用版本 `0.7.1`；`pkgrel=1`。
 `package()` 继续移除 AppImage AppRun hook 里的 `GDK_BACKEND=x11`（见下文
 “HiDPI 与 Wayland 缩放”）；从 0.3.0 起上游 AppImage 自身已不带该行，补丁是幂等的空操作。
 
@@ -14,7 +14,7 @@ Flutter / FreeRDP 代码。
 
 | 文件 | 说明 |
 | --- | --- |
-| `lrdp-bin/PKGBUILD` | 打包脚本：`source` 指向 release 的 `lrdp-0.7.0-linux-x64.AppImage` + 品牌图标；`build()` 用 `--appimage-extract` 解包（无需 FUSE），`package()` 安装到 `/opt/lrdp`。 |
+| `lrdp-bin/PKGBUILD` | 打包脚本：`source` 指向 release 的 `lrdp-0.7.1-linux-x64.AppImage` + 品牌图标；`build()` 用 `--appimage-extract` 解包（无需 FUSE），`package()` 安装到 `/opt/lrdp`。 |
 | `lrdp-bin/.SRCINFO` | 由 `makepkg --printsrcinfo` 生成，提交 AUR 时必须与 PKGBUILD 一致。 |
 | `lrdp-bin/LICENSE` | 0BSD，仅覆盖本目录的 AUR 打包文件；LRDP 应用本身为 Apache-2.0（安装后的 `/usr/share/licenses/lrdp-bin/LICENSE`）。 |
 | `lrdp-bin/.gitignore` | 忽略 `makepkg` 的 `src/`、`pkg/` 与 `*.pkg.tar.zst`。 |
@@ -36,7 +36,7 @@ Flutter / FreeRDP 代码。
 路径用 `pacman -Qo` 映射为 Arch 包名：
 
 ```
-./lrdp-0.7.0-linux-x64.AppImage --appimage-extract
+./lrdp-0.7.1-linux-x64.AppImage --appimage-extract
 ldd squashfs-root/usr/bin/lrdp | grep -E '=> /usr/lib/'
 pacman -Qoq /usr/lib/libharfbuzz.so.0      # => harfbuzz
 ```
@@ -65,12 +65,12 @@ Intel 核显 VA-API）及 `nvidia-utils`（支持 H.264 的 NVIDIA CUDA/NVDEC）
 
 ## 来源校验
 
-1. **主产物 AppImage**：`https://github.com/lucinhu/LRDP/releases/download/v0.7.0-preview.1/lrdp-0.7.0-linux-x64.AppImage`
-   - `sha256 = e7e724fec29153b62e99ec7c26667698a5194dfc60d6cb732fcc459c78b1a4de`
+1. **主产物 AppImage**：`https://github.com/lucinhu/LRDP/releases/download/v0.7.1-preview.1/lrdp-0.7.1-linux-x64.AppImage`
+   - `sha256 = 943cd01a859fd1a1f4888f0752c10ec12aaf93bfee8d5aba286edc14eb0cda37`
    - 与 release 资产 `SHA256SUMS` 中的同名条目一致（本地实测 `sha256sum -c` 通过）；
-   - release 另有 `SOURCE_SHA256`（`4c905e68…`，源码快照指纹；归档文件摘要见 `SHA256SUMS`）和 `RELEASE_INFO.json`
+   - release 另有 `SOURCE_SHA256`（`d265c82…`，源码快照指纹；归档文件摘要见 `SHA256SUMS`）和 `RELEASE_INFO.json`
      （`release_commit`、`application_runtime_commit`、`native_abi=5`）可供核对。
-2. **品牌图标**：取自 tag `v0.7.0-preview.1` 的 `assets/branding/`，sha256 写在 `sha256sums` 中；
+2. **品牌图标**：取自 tag `v0.7.1-preview.1` 的 `assets/branding/`，sha256 写在 `sha256sums` 中；
    其中 256x256 直接使用 AppImage 内 `usr/share/icons/hicolor/256x256/apps/dev.lrdp.lrdp.png`，
    并与 `assets/branding/lrdp-256.png` 完全一致（`638641bb…`），用作交叉校验。
 3. **完整性**：`build()` 里校验解包结果必须有 `AppRun` 与 `usr/bin/lrdp`，否则构建失败。
@@ -196,6 +196,31 @@ SRCDEST=/home/lucinhu/workspace/flutter/LRDP/build/aur/src PKGDEST=/tmp/aurpkg04
 - 未安装到本机，未做本批真实图形界面、真实连接或 GPU 解码验收。
   构建日志和报告在 `build/aur-0.7.0/`，不提交到 AUR。
 
+### 本地验证记录（2026-11-14，0.7.1 版本，pkgrel=1）
+
+```bash
+(
+  cd build/aur-0.7.1/work
+  SRCDEST="$PWD/../sources" PKGDEST="$PWD/../packages" BUILDDIR="$PWD" \
+    makepkg --log --noconfirm
+)
+```
+
+- 运行/编译依赖检查及 6 个 source 的 sha256 校验全部通过；使用已下载并核对 Release
+  摘要的 AppImage（`943cd01a…`），以及与发布标签一致的品牌文件，未修改应用二进制。
+- 产物：`lrdp-bin-0.7.1-1-x86_64.pkg.tar.zst`，66,451,218 B，2,205 个归档条目，
+  `sha256 = 89edfa64bffd0f079f507e2949622db9ef9ae45fef04907372019a121b0eac20`。
+- 包元数据为 `0.7.1-1`；入口、desktop、5 个尺寸图标 + SVG、许可证和安装目录权限通过检查；
+  保留 Wayland 后端选择，不强制 X11。
+- 两份捆绑 libva loader 已移除；`ldd` 确认入口和原生库均使用 Arch 的
+  `/usr/lib/libva.so.2`、`libva-drm.so.2`、`libdrm.so.2`，无 `not found`。
+  现有系统依赖足够，无需新增。
+- 原生库摘要与本次 Release 元数据一致：
+  `bbfe482b6b97576fab7c4ff194efd4fc2accb3ca9850c76040616ba599ab6875`
+  （与 0.7.0 相同，本批未修改原生桥接与 FreeRDP）。
+- 未安装到本机，未做本批真实图形界面、真实连接或 GPU 解码验收。
+  构建日志和报告在 `build/aur-0.7.1/`，不提交到 AUR。
+
 ### 已知限制（继承上游 AppImage，不是打包引入）
 
 - AppImage 内 gdk-pixbuf 的 TIFF loader 与 GTK 的 IBus 输入模块没有把自带依赖库放进
@@ -228,7 +253,7 @@ sed -i '/^export GDK_BACKEND=x11/d' \
 
 ## AUR 推送步骤
 
-前置：release `v0.7.0-preview.1` 已公开，asset 可匿名下载且与 `SHA256SUMS` 一致。
+前置：release `v0.7.1-preview.1` 已公开，asset 可匿名下载且与 `SHA256SUMS` 一致。
 
 ```bash
 # 1) 首次 clone AUR 仓库
@@ -246,7 +271,7 @@ makepkg -Ccf
 
 # 5) 提交并推送
 git add PKGBUILD .SRCINFO LICENSE .gitignore
-git commit -m "upgpkg: lrdp-bin 0.7.0-1"
+git commit -m "upgpkg: lrdp-bin 0.7.1-1"
 git push
 ```
 
