@@ -167,7 +167,9 @@ void main() {
 
   for (final desktop in [false, true]) {
     testWidgets(
-      '${desktop ? 'desktop' : 'phone'} connections stay windowed by default and allow manual full screen',
+      desktop
+          ? 'desktop connections start windowed by default and allow manual full screen'
+          : 'phone connections start full screen by default and allow manual windowed mode',
       (tester) async {
         final store = await prepare([original]);
         final sessions = <TestSession>[];
@@ -175,14 +177,14 @@ void main() {
         await open(tester, original.name);
         bool fullscreen() =>
             tester.widget<RemoteView>(find.byType(RemoteView)).fullscreen;
-        expect(fullscreen(), isFalse);
-        await tester.tap(find.text('全屏'));
+        expect(fullscreen(), desktop ? isFalse : isTrue);
+        await tester.tap(find.text(desktop ? '全屏' : '退出全屏'));
         await tester.pumpAndSettle();
-        expect(fullscreen(), isTrue);
-        expect(store.openFullscreen, isFalse);
-        await tester.tap(find.text('退出全屏'));
+        expect(fullscreen(), desktop ? isTrue : isFalse);
+        expect(store.openFullscreenPreference, isNull);
+        await tester.tap(find.text(desktop ? '退出全屏' : '全屏'));
         await tester.pumpAndSettle();
-        expect(fullscreen(), isFalse);
+        expect(fullscreen(), desktop ? isFalse : isTrue);
         await library(tester);
         if (desktop) {
           await tester.tap(find.byKey(const ValueKey('sessionTab-live')));
@@ -190,6 +192,9 @@ void main() {
         } else {
           await open(tester, original.name);
         }
+        // Leaving to the connection list keeps the connection and resets the
+        // window state; reopening the same connection must not force full
+        // screen on either platform.
         expect(fullscreen(), isFalse);
         expect(sessions, hasLength(1));
         expect(sessions.single.passwords, hasLength(1));
@@ -198,6 +203,66 @@ void main() {
       },
     );
   }
+
+  testWidgets('phone honours an explicit windowed connection preference', (
+    tester,
+  ) async {
+    final store = await prepare([original]);
+    await store.setOpenFullscreen(false);
+    final sessions = <TestSession>[];
+    await mount(tester, store, sessions);
+    bool fullscreen() =>
+        tester.widget<RemoteView>(find.byType(RemoteView)).fullscreen;
+    await open(tester, original.name);
+    expect(fullscreen(), isFalse);
+    await library(tester);
+    await open(tester, original.name);
+    expect(fullscreen(), isFalse);
+    await library(tester);
+    await open(tester, original.name);
+    expect(fullscreen(), isFalse);
+    expect(sessions, hasLength(1));
+    await tester.pumpWidget(const SizedBox());
+    store.dispose();
+  });
+
+  testWidgets('phone settings switch defaults on and saves a windowed choice', (
+    tester,
+  ) async {
+    final store = await prepare([original]);
+    final sessions = <TestSession>[];
+    await mount(tester, store, sessions);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('设置'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final tile = find.ancestor(
+      of: find.text('连接时全屏'),
+      matching: find.byType(SwitchListTile),
+    );
+    expect(tester.widget<SwitchListTile>(tile).value, isTrue);
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+    expect(store.openFullscreenPreference, isFalse);
+    expect(tester.widget<SwitchListTile>(tile).value, isFalse);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('电脑'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await open(tester, original.name);
+    expect(
+      tester.widget<RemoteView>(find.byType(RemoteView)).fullscreen,
+      isFalse,
+    );
+    await tester.pumpWidget(const SizedBox());
+    store.dispose();
+  });
 
   testWidgets(
     'desktop tabs never reapply the full screen connection preference',
@@ -317,6 +382,8 @@ void main() {
     final sessions = <TestSession>[];
     await mount(tester, store, sessions);
     await open(tester, original.name);
+    await tester.tap(find.text('退出全屏'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('触控板'));
     await tester.tap(find.text('移动画面'));
     await tester.pumpAndSettle();

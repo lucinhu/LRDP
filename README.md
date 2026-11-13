@@ -4,9 +4,9 @@
 
 LRDP（Lightweight RDP）是基于 **Flutter + FreeRDP** 的轻量级开源 RDP 客户端，面向手机和桌面的日常远程连接。Flutter 提供界面与交互，内嵌 FreeRDP 处理远程连接、画面、输入和虚拟通道，不依赖外部 RDP 客户端。
 
-当前版本为 **0.7.0 开发预览**，目标平台为 Linux、Android、Windows、macOS 和 iOS。各平台的构建与验证进度见下表。
+当前版本为 **0.7.1 开发预览**，目标平台为 Linux、Android、Windows、macOS 和 iOS。各平台的构建与验证进度见下表。
 
-[下载预览版](https://github.com/lucinhu/LRDP/releases/tag/v0.7.0-preview.1) · [使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
+[下载预览版](https://github.com/lucinhu/LRDP/releases/tag/v0.7.1-preview.1) · [使用指南](docs/USAGE.md) · [构建指南](docs/BUILDING.md) · [剪贴板与文件](docs/CLIPBOARD.md) · [验收记录](docs/VERIFICATION.md)
 
 ![LRDP 桌面连接库，使用示例配置](docs/screenshots/workspace.png)
 
@@ -41,7 +41,7 @@ LRDP（Lightweight RDP）是基于 **Flutter + FreeRDP** 的轻量级开源 RDP 
 - **凭据与证书**：密码使用系统安全存储；配置导出不含密码。证书指纹需明确确认，可选择仅本次信任或保存指纹。
 - **配置与诊断**：在设置中备份和恢复全部连接配置（不含密码与证书指纹），并复制只含版本、平台、语言与显示设置的诊断信息。
 
-0.7.0 预览让新连接默认非全屏，切换会话标签保留窗口状态，并在快捷面板加入 Win 键；同时改进保存失败重试、批量备份导入、剪贴板重连同步和后台停止按键连发。已有的“连接时全屏”选择会保留。
+0.7.1 预览把手机端新连接改为默认全屏，桌面端仍默认窗口；用户显式保存的“连接时全屏”选择优先，切换标签和重新打开已连接的电脑保持当前窗口状态。0.7.0 预览让新连接默认非全屏，切换会话标签保留窗口状态，并在快捷面板加入 Win 键；同时改进保存失败重试、批量备份导入、剪贴板重连同步和后台停止按键连发。
 
 0.6.0 预览新增实验性的 Android 10+ MediaCodec 自动硬解路径：按系统硬件标记筛选并确认当前帧成功输出，失败重放回退 CPU；Android 7–9 保守使用 CPU。当前已验证构建和模拟器 CPU 回退，尚未验证到 MediaCodec 成功出帧，手机真机与功耗仍待验收，构建和验证范围见 [Android 硬解说明](docs/BUILDING.md#android-h264-自动硬解开发分支)。
 
@@ -64,19 +64,19 @@ LRDP（Lightweight RDP）是基于 **Flutter + FreeRDP** 的轻量级开源 RDP 
 Linux x86_64 可下载 Release 中的 `.AppImage`，赋予执行权限后直接运行：
 
 ```sh
-chmod +x lrdp-0.7.0-linux-x64.AppImage
-./lrdp-0.7.0-linux-x64.AppImage
+chmod +x lrdp-0.7.1-linux-x64.AppImage
+./lrdp-0.7.1-linux-x64.AppImage
 ```
 
 AppImage 已包含 GTK、OpenSSL 等应用运行库；需要 glibc ≥ 2.35 与可用的 OpenGL/EGL 环境。
-如果系统没有 FUSE，可用 `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.7.0-linux-x64.AppImage` 启动。
+如果系统没有 FUSE，可用 `APPIMAGE_EXTRACT_AND_RUN=1 ./lrdp-0.7.1-linux-x64.AppImage` 启动。
 Android 下载 ARM64 预览 APK。各包与完整源码、构建信息及 SHA-256 校验文件一同发布。
 
 1. 点击“添加电脑”，填写地址、用户名、密码，以及需要的域信息。地址可直接包含端口，例如 `192.168.1.10:3390`；IPv6 使用 `[2001:db8::1]:3389`。
 2. 在“连接偏好”中按需开启共享剪贴板、文件传输或远程声音。远程分辨率默认自动，也可手动指定。
 3. 首次遇到需要确认的证书时，核对服务器的 SHA-256 指纹，再选择信任方式。保存连接后点击电脑卡片进入会话。
 
-新连接默认非全屏，可在设置中开启“连接时全屏”，也可用悬浮工具栏随时切换；切换标签不改变窗口状态。常用功能集中在悬浮工具栏，Win 可直接点击发送。返回连接列表可保留会话，桌面端可通过标签切换连接。桌面全屏左上角提供释放控制和退出按钮；`Ctrl + Alt + Home` 释放鼠标与键盘，`Ctrl + Alt + Enter` 切换全屏。
+新连接默认桌面为窗口、手机为全屏，可在设置中开启或关闭“连接时全屏”，也可用悬浮工具栏随时切换；切换标签不改变窗口状态，返回列表后重新打开已连接的电脑也保持窗口状态。常用功能集中在悬浮工具栏，Win 可直接点击发送。返回连接列表可保留会话，桌面端可通过标签切换连接。桌面全屏左上角提供释放控制和退出按钮；`Ctrl + Alt + Home` 释放鼠标与键盘，`Ctrl + Alt + Enter` 切换全屏。
 
 ## 手机触控与输入
 

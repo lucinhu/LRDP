@@ -31,17 +31,23 @@ class MemoryVault extends Fake implements FlutterSecureStorage {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
-    'new connections default to windowed and respect saved choice',
+    'open full screen resolves per platform and respects saved choice',
     () async {
       SharedPreferences.setMockInitialValues({});
       final preferences = await SharedPreferences.getInstance();
       final store = ProfileStore(preferences);
       addTearDown(store.dispose);
+      expect(store.openFullscreenPreference, isNull);
       expect(store.openFullscreen, isFalse);
+      expect(store.resolveOpenFullscreen(mobile: false), isFalse);
+      expect(store.resolveOpenFullscreen(mobile: true), isTrue);
       for (final enabled in [true, false]) {
         await store.setOpenFullscreen(enabled);
         final reloaded = ProfileStore(preferences);
+        expect(reloaded.openFullscreenPreference, enabled);
         expect(reloaded.openFullscreen, enabled);
+        expect(reloaded.resolveOpenFullscreen(mobile: true), enabled);
+        expect(reloaded.resolveOpenFullscreen(mobile: false), enabled);
         reloaded.dispose();
       }
     },

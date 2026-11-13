@@ -286,7 +286,7 @@ const localizedMessages = <String, Map<String, String>>{
     "连接 ID 重复": "连接 ID 重复",
     "连接偏好": "连接偏好",
     "连接到 {0}": "连接到 {0}",
-    "仅在建立连接时自动全屏，切换标签不改变窗口状态": "仅在建立连接时自动全屏，切换标签不改变窗口状态",
+    "手机默认全屏，桌面默认窗口；切换标签不改变窗口状态": "手机默认全屏，桌面默认窗口；切换标签不改变窗口状态",
     "连接后，在远程 Windows 文件资源管理器中打开以下路径，即可双向复制文件。服务器需允许磁盘重定向。":
         "连接后，在远程 Windows 文件资源管理器中打开以下路径，即可双向复制文件。服务器需允许磁盘重定向。",
     "连接已移除或地址已变化": "连接已移除或地址已变化",
@@ -765,7 +765,7 @@ const localizedMessages = <String, Map<String, String>>{
     "连接 ID 重复": "連線 ID 重複",
     "连接偏好": "連線偏好",
     "连接到 {0}": "連線到 {0}",
-    "仅在建立连接时自动全屏，切换标签不改变窗口状态": "僅在建立連線時自動全屏，切換標籤不改變視窗狀態",
+    "手机默认全屏，桌面默认窗口；切换标签不改变窗口状态": "手機預設全屏，桌面預設視窗；切換標籤不改變視窗狀態",
     "连接后，在远程 Windows 文件资源管理器中打开以下路径，即可双向复制文件。服务器需允许磁盘重定向。":
         "連線後，在遠端 Windows 檔案資源管理器中開啟以下路徑，即可雙向複製檔案。伺服器需允許磁碟重定向。",
     "连接已移除或地址已变化": "連線已移除或地址已變化",
@@ -1293,8 +1293,8 @@ const localizedMessages = <String, Map<String, String>>{
     "连接 ID 重复": "Duplicate connection ID",
     "连接偏好": "Connection preferences",
     "连接到 {0}": "Connect to {0}",
-    "仅在建立连接时自动全屏，切换标签不改变窗口状态":
-        "Only enter full screen when connecting; switching tabs keeps the window state",
+    "手机默认全屏，桌面默认窗口；切换标签不改变窗口状态":
+        "Full screen by default on phones and windowed on desktop; switching tabs keeps the window state",
     "连接后，在远程 Windows 文件资源管理器中打开以下路径，即可双向复制文件。服务器需允许磁盘重定向。":
         "After connecting, open this path in remote Windows File Explorer to copy files in either direction. The server must allow drive redirection.",
     "连接已移除或地址已变化": "The connection was removed or its address changed",

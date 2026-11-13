@@ -314,7 +314,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     session.addListener(() => _sessionChanged(session));
     setState(() {
       _active = p.id;
-      _fullscreen = store.openFullscreen;
+      _fullscreen = store.resolveOpenFullscreen(mobile: _mobile);
       _recorded.remove(p.id);
     });
     // Let the remote surface report its actual available size before the first
@@ -1855,9 +1855,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               ),
             ),
             SwitchListTile.adaptive(
-              value: store.openFullscreen,
+              value: store.resolveOpenFullscreen(mobile: _mobile),
               title: Text(context.tr('连接时全屏')),
-              subtitle: Text(context.tr('仅在建立连接时自动全屏，切换标签不改变窗口状态')),
+              subtitle: Text(context.tr('手机默认全屏，桌面默认窗口；切换标签不改变窗口状态')),
               onChanged: (value) =>
                   _saveSetting(() => store.setOpenFullscreen(value)),
             ),

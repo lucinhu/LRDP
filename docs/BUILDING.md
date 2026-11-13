@@ -24,9 +24,10 @@ flutter test
 覆盖纹理/图像采样、缩放后的光标坐标，以及三种语言在 200% 字号下的设置操作。
 连接全屏与快捷面板回归运行
 `flutter test test/profile_store_test.dart test/workspace_sessions_test.dart test/session_fullscreen_test.dart test/session_quick_keys_test.dart`，
-覆盖默认非全屏、已保存的连接全屏选择、桌面标签/手机会话切换不重新全屏、手动全屏切换，
+覆盖桌面默认窗口、手机默认全屏、已保存的连接全屏选择、桌面标签/手机会话切换不重新全屏、
+返回列表后重新打开已有连接保持窗口状态、手动全屏切换，
 以及快捷面板 Win 的扩展按下/释放、未连接禁用和屏幕键盘 Win 修饰键保持原行为。
-设置中的“连接时全屏”只在建立连接时应用，默认关闭；保留用户以前显式保存的选择。
+设置中的“连接时全屏”只在建立连接时应用，未保存时桌面默认关闭、手机默认开启；保留用户以前显式保存的选择。
 实际按键传输使用 `python3 scripts/run_keyboard_test.py`（需 `Xvnc` 和 `freerdp-shadow-cli3`，
 也断言快捷面板 Win 在服务端产生一对 Super_L 按下/释放），
 指针速度与双指滚动的实际 PDU 使用 `python3 scripts/run_trackpad_test.py`，

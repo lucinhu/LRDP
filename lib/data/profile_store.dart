@@ -96,7 +96,17 @@ class ProfileStore extends ChangeNotifier {
     }
     notifyListeners();
   });
-  bool get openFullscreen => _preferences.getBool('openFullscreen') ?? false;
+
+  /// The full-screen choice explicitly saved by the user, if any.
+  bool? get openFullscreenPreference => _preferences.getBool('openFullscreen');
+  bool get openFullscreen => openFullscreenPreference ?? false;
+
+  /// Resolves the full-screen behavior for a new connection.
+  ///
+  /// Phone platforms start sessions full screen; desktop starts windowed. An
+  /// explicitly saved choice always wins on every platform.
+  bool resolveOpenFullscreen({required bool mobile}) =>
+      openFullscreenPreference ?? mobile;
   RemoteInputMode get remoteInputMode {
     final saved = _preferences.getString('remoteInputMode');
     return RemoteInputMode.values.firstWhere(

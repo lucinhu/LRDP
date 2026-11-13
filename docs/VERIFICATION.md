@@ -2,6 +2,34 @@
 
 记录日期：2026-10-22。当前为开发预览。构建、真实协议和平台设备验收分别记录。
 
+## 手机端默认全屏（2026-11-13 后续开发批次）
+
+本批只调整 Flutter 偏好解析、设置界面与诊断文本，未修改原生桥接或 FreeRDP：
+
+- `ProfileStore` 区分“已显式保存的全屏选择”和未保存状态：未保存时桌面新连接默认窗口，
+  Android/iOS 新连接默认全屏；已保存的 true/false 在两端都优先。设置开关按当前平台
+  显示有效默认值，但只有用户切换开关才写入显式选择。
+- 只有建立新连接时解析该默认值；点击桌面标签、手机会话选择或重新打开已连接的电脑仍只
+  切换视图，不重新套用偏好。返回连接列表会退出全屏，重新打开已有连接保持窗口状态；
+  手机端再次新建连接仍按默认全屏。诊断信息报告当前平台解析后的有效值。
+- 设置说明更新为“手机默认全屏，桌面默认窗口；切换标签不改变窗口状态”，三种语言目录
+  同步并重新生成消息代码。
+
+本次主机检查：
+
+- `dart format --output=none --set-exit-if-changed lib test integration_test test_driver`：
+  **118 个文件、无变更**；`flutter analyze --no-pub` 无问题；`git diff --check` 通过。
+- `flutter test --no-pub --reporter expanded`：**339 passed / 11 skipped**，
+  日志为 `build/mobile-default-fullscreen-tests.log`；相比上一批新增 2 个回归。
+  其中全屏/偏好/诊断/本地化定向测试 **31 passed**。
+- 本批未改原生桥接、FreeRDP、协议、证书或输入代码，未重跑 CTest 与回环协议测试；
+  上一批（2026-11-12）的 8/8 原生检查覆盖的是未变动的原生代码。
+
+本批将随 **0.7.1 开发预览**（`v0.7.1-preview.1`，Android versionCode 11）发布；
+发布流水线会重新执行 Flutter / Python / Java host / 原生测试并校验安装包。桌面与手机默认值
+来自 widget 测试，不是 Android/iOS 真机或 Linux/Windows/macOS 系统窗口验收。手机系统栏、
+导航手势在真机上的实际全屏行为，以及锁屏与旋转后的全屏状态仍需真机复验。
+
 ## 配置与输入可靠性（2026-11-12 后续开发批次）
 
 本批仅修改 Flutter 配置、界面与输入调度，未修改原生桥接或 FreeRDP：

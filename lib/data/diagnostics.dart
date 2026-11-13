@@ -60,7 +60,9 @@ Future<String> collectDiagnostics(
       'frameRateLimit': store.frameRateLimit,
       'imageScaling': store.imageScaling.name,
       'pointerSpeed': store.pointerSpeed,
-      'openFullscreen': store.openFullscreen,
+      'openFullscreen': store.resolveOpenFullscreen(
+        mobile: Platform.isAndroid || Platform.isIOS,
+      ),
       'useSystemColors': store.useSystemColors,
       'includePreviewUpdates': store.includePreviewUpdates,
     },
